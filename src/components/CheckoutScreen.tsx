@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import type { SalesReport } from '../main/sales/salesReportService';
 import type { CrmCustomer } from '../main/crm/crmService';
 import type { EmployeeSummary } from '../main/employees/employeeService';
+import logoUrl from '../../Images/bakeAlley-Logo.jpg';
 
 export interface CheckoutProductPrice {
     tierId: string;
@@ -267,9 +268,12 @@ export function CheckoutScreen({
         <main className="min-h-screen bg-[#FAF6F0] p-6 text-amber-950">
             <div className="mx-auto max-w-7xl space-y-6">
                 <header className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-600">Bake Alley POS</p>
-                        <h1 className="font-bakery text-3xl font-bold tracking-tight text-amber-950">Checkout</h1>
+                    <div className="flex items-center gap-3">
+                        <img alt="Bake Alley logo" className="h-12 w-12 rounded-xl border border-amber-200/80 object-cover shadow-sm" src={logoUrl} />
+                        <div>
+                            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-600">Bake Alley POS</p>
+                            <h1 className="font-bakery text-3xl font-bold tracking-tight text-amber-950">Checkout</h1>
+                        </div>
                     </div>
                     <label className="w-full max-w-md text-sm font-semibold sm:w-auto">
                         Customer pricing
