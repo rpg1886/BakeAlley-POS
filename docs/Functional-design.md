@@ -81,7 +81,7 @@ Customer CRM contact fields `email` and `phone` are nullable and are added throu
 
 CRM supports adding a customer with company, contact name, email, phone, and pricing tier. The current demo seed includes ten additional customers. Sales reports use local calendar-day bounds converted to ISO timestamps, preventing transactions near UTC midnight from disappearing from the selected day.
 
-Customer deletion is admin-only and blocked when a customer has non-voided orders. Employee management is admin-only; the employee table exposes only the access role and sales count, while a selected-date shift calendar shows clock-in and clock-out times. Admins can create users with either `admin` or `cashier` access, backed by the same salted password hashing and role checks as login.
+Customer deletion is admin-only and blocked when a customer has non-voided orders. The Employee tab is visible to all authenticated users: cashiers see only their own access role, current shift, and clock controls; admins see the team, selected-day sales amounts, access roles, employee creation, and the shift calendar. Admins can create users with either `admin` or `cashier` access, backed by the same salted password hashing and role checks as login.
 
 Inventory starts from all product variants rather than only existing lots. It displays aggregated quantity on hand, initial capital per sellable variant, retail-tier price, markup amount, and markup percentage. The valuation rule is `retail price = initial capital + markup amount`; variants without stock lots remain visible with zero quantity.
 

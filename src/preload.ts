@@ -25,7 +25,7 @@ export interface BakeAlleyCheckoutBridge extends CheckoutDataSource {
         report: (token: string, selectedDate: string, markupPercent: number) => Promise<SalesReport>;
     };
     crm: { listCustomers: (token: string) => Promise<CrmCustomer[]>; addTag: (token: string, customerId: string, tag: string) => Promise<void>; createCustomer: (token: string, input: CreateCustomerInput) => Promise<{ customerId: string }>; deleteCustomer: (token: string, customerId: string) => Promise<void> };
-    employees: { list: (token: string) => Promise<EmployeeSummary[]>; clockIn: (token: string) => Promise<void>; clockOut: (token: string) => Promise<void>; recordSale: (token: string, orderId: string) => Promise<void>; shifts: (token: string, date: string) => Promise<ShiftSummary[]>; create: (token: string, input: CreateEmployeeInput) => Promise<{ userId: string }> };
+    employees: { list: (token: string, date?: string) => Promise<EmployeeSummary[]>; clockIn: (token: string) => Promise<void>; clockOut: (token: string) => Promise<void>; recordSale: (token: string, orderId: string) => Promise<void>; shifts: (token: string, date: string) => Promise<ShiftSummary[]>; create: (token: string, input: CreateEmployeeInput) => Promise<{ userId: string }> };
 }
 
 const checkoutBridge: BakeAlleyCheckoutBridge = {
@@ -58,7 +58,7 @@ const checkoutBridge: BakeAlleyCheckoutBridge = {
         deleteCustomer: (token, customerId) => ipcRenderer.invoke(crmIpcChannels.delete, token, customerId),
     },
     employees: {
-        list: (token) => ipcRenderer.invoke(employeeIpcChannels.list, token),
+        list: (token, date) => ipcRenderer.invoke(employeeIpcChannels.list, token, date),
         clockIn: (token) => ipcRenderer.invoke(employeeIpcChannels.clockIn, token),
         clockOut: (token) => ipcRenderer.invoke(employeeIpcChannels.clockOut, token),
         recordSale: (token, orderId) => ipcRenderer.invoke(employeeIpcChannels.recordSale, token, orderId),

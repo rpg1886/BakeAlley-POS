@@ -4,9 +4,9 @@ import { employeeIpcChannels } from '../../shared/ipcChannels';
 
 export function registerEmployeeIpcHandlers(ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>, service: EmployeeService): void {
     for (const channel of Object.values(employeeIpcChannels)) ipcMain.removeHandler(channel);
-    ipcMain.handle(employeeIpcChannels.list, (_event, token: unknown) => {
-        if (typeof token !== 'string') throw new Error('Authentication token is required');
-        return service.listEmployees(token);
+    ipcMain.handle(employeeIpcChannels.list, (_event, token: unknown, date: unknown) => {
+        if (typeof token !== 'string' || (date !== undefined && typeof date !== 'string')) throw new Error('Invalid employee list request');
+        return service.listEmployees(token, date as string | undefined);
     });
     ipcMain.handle(employeeIpcChannels.clockIn, (_event, token: unknown) => {
         if (typeof token !== 'string') throw new Error('Authentication token is required');
