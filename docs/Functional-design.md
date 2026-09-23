@@ -65,6 +65,8 @@ The runnable desktop entry point is `src/main/main.ts`. It opens the SQLite data
 
 The Electron window uses `contextIsolation: true`, `nodeIntegration: false`, and a non-sandboxed local preload because the CommonJS preload bundle loads shared IPC channel code. This keeps Node APIs out of the renderer while allowing the preload bridge to resolve its local modules.
 
+The Vite renderer uses relative asset URLs because Electron loads the UI from `file://`; absolute `/assets/...` URLs would resolve to the filesystem root and produce a blank window. The renderer HTML also defines a local Content Security Policy.
+
 Use `npm start` to build and launch the Electron POS. The app works offline for local checkout; set `BAKE_ALLEY_SCALE_PORT` to a serial port such as `COM3` to enable physical scale connection attempts. PostgreSQL sync remains an optional server integration and is not required for local transactions.
 
 ## Current Implementation Baseline
