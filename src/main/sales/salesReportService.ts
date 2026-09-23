@@ -54,7 +54,7 @@ export class SalesReportService {
         const date = this.validateDate(selectedDate);
         const markupPercent = user.role === 'admin' ? this.validateMarkup(requestedMarkupPercent) : 0;
         const periods = this.periodsFor(date);
-        const bounds = this.localDayBounds(date);
+        const bounds = this.philippineDayBounds(date);
         const items = this.database.prepare(`
                         SELECT order_record.order_id AS orderId,
                                      order_record.created_at AS soldAt,
@@ -106,8 +106,8 @@ export class SalesReportService {
     }
 
     private aggregate(startDate: string, endDate: string, markupPercent: number): Omit<SalesPeriodSummary, 'startDate' | 'endDate'> {
-        const startBounds = this.localDayBounds(startDate).start;
-        const endBounds = this.localDayBounds(endDate).start;
+        const startBounds = this.philippineDayBounds(startDate).start;
+        const endBounds = this.philippineDayBounds(endDate).start;
         const row = this.database.prepare(`
             SELECT COALESCE(SUM(total_amount), 0) AS grossTotal,
                    COUNT(order_id) AS orderCount
@@ -142,10 +142,11 @@ export class SalesReportService {
         return this.formatDate(next);
     }
 
-    private localDayBounds(date: string): { start: string; end: string } {
+    private philippineDayBounds(date: string): { start: string; end: string } {
         const [year, month, day] = date.split('-').map(Number);
-        const start = new Date(year, month - 1, day);
-        const end = new Date(year, month - 1, day + 1);
+        // Philippines uses UTC+08:00 year-round; persist/query bounds as UTC ISO timestamps.
+        const start = new Date(Date.UTC(year, month - 1, day, -8, 0, 0));
+        const end = new Date(Date.UTC(year, month - 1, day + 1, -8, 0, 0));
         return { start: start.toISOString(), end: end.toISOString() };
     }
 

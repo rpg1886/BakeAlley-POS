@@ -7,8 +7,13 @@ interface SalesViewProps {
     getReport: (token: string, selectedDate: string, markupPercent: number) => Promise<SalesReport>;
 }
 
-const today = (): string => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
-const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const PHILIPPINE_TIME_ZONE = 'Asia/Manila';
+const today = (): string => {
+    const parts = new Intl.DateTimeFormat('en-PH', { timeZone: PHILIPPINE_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+};
+const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
 
 function PeriodCard({ label, report }: { label: string; report: SalesReport['week'] }): JSX.Element {
     return <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
