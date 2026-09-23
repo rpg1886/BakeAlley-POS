@@ -264,17 +264,17 @@ export function CheckoutScreen({
     };
 
     return (
-        <main className="min-h-screen bg-slate-100 p-6 text-slate-900">
+        <main className="min-h-screen bg-[#FAF6F0] p-6 text-amber-950">
             <div className="mx-auto max-w-7xl space-y-6">
                 <header className="flex flex-wrap items-end justify-between gap-4">
                     <div>
-                        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-orange-600">Bake Alley POS</p>
-                        <h1 className="text-3xl font-bold tracking-tight">Checkout</h1>
+                        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-600">Bake Alley POS</p>
+                        <h1 className="font-bakery text-3xl font-bold tracking-tight text-amber-950">Checkout</h1>
                     </div>
                     <label className="w-full max-w-md text-sm font-semibold sm:w-auto">
                         Customer pricing
                         <select
-                            className="mt-2 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal shadow-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+                            className="mt-2 block w-full rounded-lg border border-amber-200/80 bg-white px-3 py-2 font-normal shadow-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
                             value={customerId ?? ''}
                             onChange={(event) => setCustomerId(event.target.value || null)}
                         >
@@ -290,7 +290,7 @@ export function CheckoutScreen({
                         ref={searchInputRef}
                         id="product-search"
                         autoComplete="off"
-                        className="w-full rounded-xl border border-slate-300 bg-white px-5 py-4 text-lg shadow-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+                        className="w-full rounded-xl border border-amber-200/80 bg-white px-5 py-4 text-lg shadow-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
                         placeholder="Scan barcode or search SKU..."
                         value={query}
                         onChange={(event) => void search(event.target.value)}
@@ -301,16 +301,16 @@ export function CheckoutScreen({
                         }}
                     />
                     {results.length > 0 && (
-                        <div className="absolute z-10 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                        <div className="absolute z-10 mt-2 grid w-full gap-2 rounded-2xl border border-amber-200/80 bg-white p-2 shadow-xl sm:grid-cols-2">
                             {results.slice(0, 8).map((product) => (
                                 <button
                                     key={product.variantId}
                                     type="button"
-                                    className="flex w-full items-center justify-between border-b border-slate-100 px-5 py-3 text-left last:border-0 hover:bg-orange-50"
+                                    className="flex flex-col items-start gap-2 rounded-2xl border border-amber-200/80 bg-white px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-amber-400 hover:shadow-md"
                                     onClick={() => addProduct(product)}
                                 >
-                                    <span><strong>{product.name}</strong><span className="ml-3 text-sm text-slate-500">{product.sku}</span></span>
-                                    <span className="text-sm text-slate-500">{product.unit}</span>
+                                    <span className="flex w-full items-center justify-between gap-2"><strong className="text-amber-950">{product.name}</strong><span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">{product.unit}</span></span>
+                                    <span className="flex w-full items-center justify-between text-sm text-amber-700"><span>{product.sku}</span>{product.soldByWeight && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Sold by weight</span>}</span>
                                 </button>
                             ))}
                         </div>
@@ -318,19 +318,19 @@ export function CheckoutScreen({
                 </section>
 
                 <section className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                        <div className="border-b border-slate-200 px-5 py-4"><h2 className="font-semibold">Current transaction</h2></div>
-                        {cart.length === 0 ? <p className="px-5 py-16 text-center text-slate-500">Scan an item to begin.</p> : (
+                    <div className="overflow-hidden rounded-xl border border-amber-200/80 bg-white shadow-sm">
+                        <div className="border-b border-amber-200/80 px-5 py-4"><h2 className="font-semibold">Current transaction</h2></div>
+                        {cart.length === 0 ? <p className="px-5 py-16 text-center text-amber-700">Scan an item to begin.</p> : (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Item</th><th className="px-3 py-3">Qty</th><th className="px-3 py-3">Price</th><th className="px-5 py-3 text-right">Total</th><th><span className="sr-only">Remove</span></th></tr></thead>
+                                    <thead className="bg-amber-50/60 text-xs uppercase tracking-wide text-amber-700"><tr><th className="px-5 py-3">Item</th><th className="px-3 py-3">Qty</th><th className="px-3 py-3">Price</th><th className="px-5 py-3 text-right">Total</th><th><span className="sr-only">Remove</span></th></tr></thead>
                                     <tbody>
-                                        {cart.map((line) => <tr key={line.lineId} className="border-t border-slate-100">
-                                            <td className="px-5 py-4"><strong>{line.product.name}</strong><div className="text-xs text-slate-500">{line.product.sku}</div></td>
-                                            <td className="px-3 py-4"><input aria-label={`Quantity for ${line.product.name}`} className="w-24 rounded border border-slate-300 px-2 py-1" min="0.0001" step="0.0001" type="number" value={line.quantity} onChange={(event) => updateQuantity(line.lineId, Number(event.target.value))} /></td>
-                                            <td className="px-3 py-4">{money.format(line.unitPrice)} / {line.product.unit}</td>
-                                            <td className="px-5 py-4 text-right font-semibold">{money.format(line.quantity * line.unitPrice)}</td>
-                                            <td className="pr-4"><button className="text-slate-400 hover:text-red-600" title="Remove item" type="button" onClick={() => setCart((currentCart) => currentCart.filter((item) => item.lineId !== line.lineId))}>×</button></td>
+                                        {cart.map((line) => <tr key={line.lineId} className="border-t border-amber-100/60">
+                                            <td className="px-5 py-4"><strong>{line.product.name}</strong><div className="text-xs text-amber-700">{line.product.sku}</div></td>
+                                            <td className="px-3 py-4"><input aria-label={`Quantity for ${line.product.name}`} className="w-24 rounded border border-amber-200/80 px-2 py-1" min="0.0001" step="0.0001" type="number" value={line.quantity} onChange={(event) => updateQuantity(line.lineId, Number(event.target.value))} /></td>
+                                            <td className="px-3 py-4 tabular-nums">{money.format(line.unitPrice)} / {line.product.unit}</td>
+                                            <td className="px-5 py-4 text-right font-semibold tabular-nums">{money.format(line.quantity * line.unitPrice)}</td>
+                                            <td className="pr-4"><button className="text-amber-600 hover:text-red-600" title="Remove item" type="button" onClick={() => setCart((currentCart) => currentCart.filter((item) => item.lineId !== line.lineId))}>×</button></td>
                                         </tr>)}
                                     </tbody>
                                 </table>
@@ -339,30 +339,30 @@ export function CheckoutScreen({
                     </div>
 
                     <aside className="space-y-4">
-                        {scaleEnabled && <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                        {scaleEnabled && <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
                             <div className="mb-5 flex items-center justify-between"><h2 className="font-semibold">Scale</h2><span className={`rounded-full px-2 py-1 text-xs font-semibold ${scaleReading?.stable ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{activeWeightLine ? (scaleReading?.stable ? 'Stable' : 'Waiting') : 'Idle'}</span></div>
                             <p className="text-3xl font-bold tabular-nums">{activeWeightLine && scaleReading ? formatWeight(scaleReading.grams) : '0 g'}</p>
-                            <p className="mt-1 text-sm text-slate-500">{activeWeightLine ? `Reading for ${activeWeightLine.product.name}` : 'Add a weight-based item to read the scale.'}</p>
+                            <p className="mt-1 text-sm text-amber-700">{activeWeightLine ? `Reading for ${activeWeightLine.product.name}` : 'Add a weight-based item to read the scale.'}</p>
                         </div>}
-                        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                            <div className="flex justify-between text-sm text-slate-600"><span>Subtotal</span><span>{money.format(subtotal)}</span></div>
-                            <div className="mt-2 flex justify-between text-sm text-slate-600"><span>Tax</span><span>{money.format(taxAmount)}</span></div>
-                            <div className="mt-4 flex justify-between border-t border-slate-200 pt-4 text-xl font-bold"><span>Total</span><span>{money.format(totalAmount)}</span></div>
-                            <button className="mt-5 w-full rounded-lg bg-orange-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={cart.length === 0 || busy} type="button" onClick={() => setPaymentOpen(true)}>Take payment</button>
+                        <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
+                            <div className="flex justify-between text-sm text-amber-800"><span>Subtotal</span><span className="font-semibold tabular-nums">{money.format(subtotal)}</span></div>
+                            <div className="mt-2 flex justify-between text-sm text-amber-800"><span>Tax</span><span className="font-semibold tabular-nums">{money.format(taxAmount)}</span></div>
+                            <div className="mt-4 flex justify-between border-t border-amber-200/80 pt-4 text-xl font-bold"><span>Total</span><span className="tabular-nums">{money.format(totalAmount)}</span></div>
+                            <button className="mt-5 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={cart.length === 0 || busy} type="button" onClick={() => setPaymentOpen(true)}>Take payment</button>
                         </div>
                     </aside>
                 </section>
 
-                {message && <p className="rounded-lg bg-slate-900 px-4 py-3 text-sm text-white" role="status">{message}</p>}
+                {message && <p className="rounded-lg bg-amber-950 px-4 py-3 text-sm text-white" role="status">{message}</p>}
             </div>
 
-            {paymentOpen && <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/50 p-4" role="presentation">
+            {paymentOpen && <div className="fixed inset-0 z-20 flex items-center justify-center bg-amber-950/50 p-4" role="presentation">
                 <section aria-labelledby="payment-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" role="dialog">
-                    <div className="flex items-start justify-between"><div><p className="text-sm font-semibold uppercase tracking-wide text-orange-600">Payment</p><h2 className="mt-1 text-2xl font-bold" id="payment-title">{money.format(totalAmount)}</h2></div><button aria-label="Close payment dialog" className="text-2xl text-slate-400 hover:text-slate-700" type="button" onClick={() => setPaymentOpen(false)}>×</button></div>
-                    <fieldset className="mt-6"><legend className="text-sm font-semibold">Payment method</legend><div className="mt-3 grid grid-cols-3 gap-2">{(['cash', 'card', 'account'] as const).map((method) => <button className={`rounded-lg border px-3 py-3 text-sm font-semibold capitalize ${paymentMethod === method ? 'border-orange-600 bg-orange-50 text-orange-700' : 'border-slate-300 text-slate-600'}`} key={method} type="button" onClick={() => { setPaymentMethod(method); if (method !== 'cash') setCashReceived(''); }}>{method}</button>)}</div></fieldset>
-                    {paymentMethod === 'cash' && <div className="mt-5"><label className="text-sm font-semibold">Cash received<input autoFocus className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 text-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200" min={totalAmount.toFixed(2)} step="0.01" type="number" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} /></label><div className={`mt-3 flex justify-between rounded-lg px-3 py-3 text-sm font-semibold ${changeDue >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}><span>{changeDue >= 0 ? 'Change due' : 'Still needed'}</span><span>{money.format(Math.abs(changeDue))}</span></div></div>}
+                    <div className="flex items-start justify-between"><div><p className="text-sm font-semibold uppercase tracking-wide text-amber-600">Payment</p><h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(totalAmount)}</h2></div><button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setPaymentOpen(false)}>×</button></div>
+                    <fieldset className="mt-6"><legend className="text-sm font-semibold">Payment method</legend><div className="mt-3 grid grid-cols-3 gap-2">{(['cash', 'card', 'account'] as const).map((method) => <button className={`rounded-lg border px-3 py-3 text-sm font-semibold capitalize ${paymentMethod === method ? 'border-amber-600 bg-amber-50 text-amber-700' : 'border-amber-200/80 text-amber-800'}`} key={method} type="button" onClick={() => { setPaymentMethod(method); if (method !== 'cash') setCashReceived(''); }}>{method}</button>)}</div></fieldset>
+                    {paymentMethod === 'cash' && <div className="mt-5"><label className="text-sm font-semibold">Cash received<input autoFocus className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40" min={totalAmount.toFixed(2)} step="0.01" type="number" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} /></label><div className={`mt-3 flex justify-between rounded-lg px-3 py-3 text-sm font-semibold ${changeDue >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}><span>{changeDue >= 0 ? 'Change due' : 'Still needed'}</span><span>{money.format(Math.abs(changeDue))}</span></div></div>}
                     {paymentError && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{paymentError}</p>}
-                    <button className="mt-6 w-full rounded-lg bg-orange-600 px-4 py-3 font-semibold text-white hover:bg-orange-700 disabled:opacity-50" disabled={busy || (paymentMethod === 'cash' && changeDue < 0)} type="button" onClick={() => void submitOrder()}>{busy ? 'Saving...' : 'Confirm payment'}</button>
+                    <button className="mt-6 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50" disabled={busy || (paymentMethod === 'cash' && changeDue < 0)} type="button" onClick={() => void submitOrder()}>{busy ? 'Saving...' : 'Confirm payment'}</button>
                 </section>
             </div>}
         </main>
