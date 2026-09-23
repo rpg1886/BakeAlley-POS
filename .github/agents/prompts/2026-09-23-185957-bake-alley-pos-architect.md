@@ -75,6 +75,8 @@ Authentication and inventory administration were added. The app now gates checko
 
 Added a separate Inventory tab backed by an authenticated `inventory:list` IPC query. It displays live product variants, SKUs, lot numbers, expiration dates, units, and quantities on hand without granting cashiers inventory modification rights.
 
+Moved the admin inventory import panel into the Inventory tab so checkout remains focused on sales while admin stock management stays with inventory viewing.
+
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
 
 ## Follow-up Implementation
