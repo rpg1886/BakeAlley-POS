@@ -159,9 +159,9 @@ export class CheckoutService {
             this.database.prepare(`
                 INSERT INTO orders (
                     order_id, customer_id, pricing_tier_id, order_type, status,
-                    subtotal, tax_amount, total_amount, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?)
-            `).run(orderId, input.customerId, input.pricingTierId, input.orderType, subtotal, taxAmount, totalAmount, createdAt, createdAt);
+                    subtotal, tax_amount, total_amount, payment_method, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?)
+            `).run(orderId, input.customerId, input.pricingTierId, input.orderType, subtotal, taxAmount, totalAmount, input.paymentMethod, createdAt, createdAt);
 
             const insertOrderItem = this.database.prepare(`
                 INSERT INTO order_items (

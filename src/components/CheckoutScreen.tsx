@@ -97,6 +97,7 @@ export function CheckoutScreen({
     const [scaleReading, setScaleReading] = useState<CheckoutScaleReading | null>(null);
     const [paymentOpen, setPaymentOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<CheckoutOrderPayload['paymentMethod']>('cash');
+    const [cashReceived, setCashReceived] = useState('');
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -106,6 +107,8 @@ export function CheckoutScreen({
     const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
     const taxAmount = subtotal * taxRate;
     const totalAmount = subtotal + taxAmount;
+    const cashTendered = Number(cashReceived);
+    const changeDue = paymentMethod === 'cash' && Number.isFinite(cashTendered) ? cashTendered - totalAmount : 0;
     const activeWeightLine = cart.find((line) => line.product.soldByWeight);
 
     const orderItems = cart.map((line) => ({
@@ -212,6 +215,10 @@ export function CheckoutScreen({
     const submitOrder = async (): Promise<void> => {
         if (orderItems.length === 0 || orderItems.some((item) => item.quantity <= 0)) {
             setMessage('Add a valid quantity before taking payment.');
+            return;
+        }
+        if (paymentMethod === 'cash' && (!Number.isFinite(cashTendered) || cashTendered < totalAmount)) {
+            setMessage('Cash received must be at least the total amount.');
             return;
         }
 
@@ -334,8 +341,9 @@ export function CheckoutScreen({
             {paymentOpen && <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/50 p-4" role="presentation">
                 <section aria-labelledby="payment-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" role="dialog">
                     <div className="flex items-start justify-between"><div><p className="text-sm font-semibold uppercase tracking-wide text-orange-600">Payment</p><h2 className="mt-1 text-2xl font-bold" id="payment-title">{money.format(totalAmount)}</h2></div><button aria-label="Close payment dialog" className="text-2xl text-slate-400 hover:text-slate-700" type="button" onClick={() => setPaymentOpen(false)}>×</button></div>
-                    <fieldset className="mt-6"><legend className="text-sm font-semibold">Payment method</legend><div className="mt-3 grid grid-cols-3 gap-2">{(['cash', 'card', 'account'] as const).map((method) => <button className={`rounded-lg border px-3 py-3 text-sm font-semibold capitalize ${paymentMethod === method ? 'border-orange-600 bg-orange-50 text-orange-700' : 'border-slate-300 text-slate-600'}`} key={method} type="button" onClick={() => setPaymentMethod(method)}>{method}</button>)}</div></fieldset>
-                    <button className="mt-6 w-full rounded-lg bg-orange-600 px-4 py-3 font-semibold text-white hover:bg-orange-700 disabled:opacity-50" disabled={busy} type="button" onClick={() => void submitOrder()}>{busy ? 'Saving...' : 'Confirm payment'}</button>
+                    <fieldset className="mt-6"><legend className="text-sm font-semibold">Payment method</legend><div className="mt-3 grid grid-cols-3 gap-2">{(['cash', 'card', 'account'] as const).map((method) => <button className={`rounded-lg border px-3 py-3 text-sm font-semibold capitalize ${paymentMethod === method ? 'border-orange-600 bg-orange-50 text-orange-700' : 'border-slate-300 text-slate-600'}`} key={method} type="button" onClick={() => { setPaymentMethod(method); if (method !== 'cash') setCashReceived(''); }}>{method}</button>)}</div></fieldset>
+                    {paymentMethod === 'cash' && <div className="mt-5"><label className="text-sm font-semibold">Cash received<input autoFocus className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 text-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200" min={totalAmount.toFixed(2)} step="0.01" type="number" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} /></label><div className={`mt-3 flex justify-between rounded-lg px-3 py-3 text-sm font-semibold ${changeDue >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}><span>{changeDue >= 0 ? 'Change due' : 'Still needed'}</span><span>{money.format(Math.abs(changeDue))}</span></div></div>}
+                    <button className="mt-6 w-full rounded-lg bg-orange-600 px-4 py-3 font-semibold text-white hover:bg-orange-700 disabled:opacity-50" disabled={busy || (paymentMethod === 'cash' && changeDue < 0)} type="button" onClick={() => void submitOrder()}>{busy ? 'Saving...' : 'Confirm payment'}</button>
                 </section>
             </div>}
         </main>

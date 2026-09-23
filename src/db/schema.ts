@@ -106,6 +106,8 @@ CREATE TABLE IF NOT EXISTS orders (
         CHECK (tax_amount >= 0 AND tax_amount = round(tax_amount, 2)),
     total_amount NUMERIC NOT NULL DEFAULT 0.00
         CHECK (total_amount >= 0 AND total_amount = round(total_amount, 2)),
+    payment_method TEXT NOT NULL DEFAULT 'cash'
+        CHECK (payment_method IN ('cash', 'card', 'account')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE SET NULL,
@@ -195,6 +197,10 @@ export function initializeSchema(database: Database.Database): void {
 
     const initialize = database.transaction(() => {
         database.exec(schemaSql);
+        const orderColumns = database.prepare('PRAGMA table_info(orders)').all() as Array<{ name: string }>;
+        if (!orderColumns.some((column) => column.name === 'payment_method')) {
+            database.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('cash', 'card', 'account'))");
+        }
     });
 
     initialize();

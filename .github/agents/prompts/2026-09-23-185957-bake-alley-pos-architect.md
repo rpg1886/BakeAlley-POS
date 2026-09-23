@@ -79,6 +79,8 @@ Moved the admin inventory import panel into the Inventory tab so checkout remain
 
 Added a Sales tab with authenticated daily item detail, gross/net totals, calendar week/month/year summaries, date selection, and admin-only markup input. Reports read completed local orders without modifying checkout behavior.
 
+Updated checkout payment confirmation to require cash received, calculate change due, persist payment method on orders, and show cash/card/account on Sales item rows. Existing SQLite databases receive the payment column with a cash default through the schema migration.
+
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
 
 ## Follow-up Implementation

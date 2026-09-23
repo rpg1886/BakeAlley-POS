@@ -6,6 +6,7 @@ export interface SalesItemSummary {
     itemName: string;
     quantity: number;
     amount: number;
+    paymentMethod: 'cash' | 'card' | 'account';
 }
 
 export interface SalesPeriodSummary {
@@ -54,21 +55,23 @@ export class SalesReportService {
             SELECT variant.sku AS sku,
                    variant.variant_name AS itemName,
                    SUM(item.quantity) AS quantity,
-                   SUM(item.total_price) AS amount
+                   SUM(item.total_price) AS amount,
+                   order_record.payment_method AS paymentMethod
             FROM order_items AS item
             JOIN orders AS order_record ON order_record.order_id = item.order_id
             JOIN product_variants AS variant ON variant.variant_id = item.variant_id
             WHERE order_record.status = 'completed'
               AND date(order_record.created_at) = ?
-            GROUP BY variant.variant_id, variant.sku, variant.variant_name
+            GROUP BY variant.variant_id, variant.sku, variant.variant_name, order_record.payment_method
             ORDER BY amount DESC, itemName ASC
         `).all(date).map((row) => {
-            const item = row as { sku: string; itemName: string; quantity: number; amount: number };
+            const item = row as { sku: string; itemName: string; quantity: number; amount: number; paymentMethod: 'cash' | 'card' | 'account' };
             return {
                 sku: item.sku,
                 itemName: item.itemName,
                 quantity: roundQuantity(item.quantity),
                 amount: roundMoney(item.amount),
+                paymentMethod: item.paymentMethod,
             };
         });
         const day = this.aggregate(date, this.nextDate(date), markupPercent);
