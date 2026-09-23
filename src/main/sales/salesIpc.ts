@@ -8,6 +8,11 @@ export function registerSalesIpcHandlers(ipcMain: Pick<IpcMain, 'handle' | 'remo
         if (typeof token !== 'string' || typeof selectedDate !== 'string' || typeof markupPercent !== 'number') {
             throw new Error('Invalid sales report request');
         }
-        return service.getReport(token, selectedDate, markupPercent);
+        try {
+            return service.getReport(token, selectedDate, markupPercent);
+        } catch (error) {
+            console.error('Sales report failed:', error);
+            throw error;
+        }
     });
 }

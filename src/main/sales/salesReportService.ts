@@ -68,9 +68,10 @@ export class SalesReportService {
             JOIN product_variants AS variant ON variant.variant_id = item.variant_id
                         LEFT JOIN customers AS customer ON customer.customer_id = order_record.customer_id
             WHERE order_record.status = 'completed'
-              AND date(order_record.created_at) = ?
+              AND order_record.created_at >= ?
+              AND order_record.created_at < ?
                         ORDER BY order_record.created_at ASC, order_record.order_id ASC, item.order_item_id ASC
-        `).all(date).map((row) => {
+        `).all(date, this.nextDate(date)).map((row) => {
                         const item = row as { orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: 'cash' | 'card' | 'account' };
             return {
                                 orderId: item.orderId,
@@ -109,8 +110,8 @@ export class SalesReportService {
                    COUNT(order_id) AS orderCount
             FROM orders
             WHERE status = 'completed'
-              AND date(created_at) >= ?
-              AND date(created_at) < ?
+              AND created_at >= ?
+              AND created_at < ?
         `).get(startDate, endDate) as { grossTotal: number; orderCount: number };
         const grossTotal = roundMoney(row.grossTotal);
         const netTotal = roundMoney(grossTotal / (1 + markupPercent / 100));
