@@ -77,6 +77,8 @@ The authenticated renderer now has separate `Checkout` and `Inventory` tabs. The
 
 The authenticated renderer also includes a CRM tab and an admin-only Employee management tab. CRM displays customer contact information, tier, completed order count, lifetime value, last purchase, tags, and loyalty points. Employee management displays roles, open shift status, sales count, and sales total, and supports clock in/out. Completed checkout orders are attributed to the signed-in employee for performance reporting. CRM tagging is admin-only; employee records and permissions are admin-only.
 
+Customer CRM contact fields `email` and `phone` are nullable and are added through an upgrade-safe SQLite migration so existing customer records remain valid.
+
 Inventory starts from all product variants rather than only existing lots. It displays aggregated quantity on hand, initial capital per sellable variant, retail-tier price, markup amount, and markup percentage. The valuation rule is `retail price = initial capital + markup amount`; variants without stock lots remain visible with zero quantity.
 
 The local demo seed includes stock lots for every catalog product. Lot-tracked products use expiration dates for FEFO; non-lot-tracked products also receive demo quantity so they are visible and testable in the Inventory tab. Seed inserts are idempotent and do not overwrite existing stock.

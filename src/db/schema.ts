@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS customers (
     customer_id TEXT PRIMARY KEY NOT NULL,
     company_name TEXT,
     contact_name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
     tier_id TEXT NOT NULL,
     credit_limit NUMERIC NOT NULL DEFAULT 0.00
         CHECK (credit_limit >= 0 AND credit_limit = round(credit_limit, 2)),
@@ -262,6 +264,13 @@ export function initializeSchema(database: Database.Database): void {
         const variantColumns = database.prepare('PRAGMA table_info(product_variants)').all() as Array<{ name: string }>;
         if (!variantColumns.some((column) => column.name === 'initial_cost')) {
             database.exec("ALTER TABLE product_variants ADD COLUMN initial_cost NUMERIC NOT NULL DEFAULT 0.00 CHECK (initial_cost >= 0 AND initial_cost = round(initial_cost, 2))");
+        }
+        const customerColumns = database.prepare('PRAGMA table_info(customers)').all() as Array<{ name: string }>;
+        if (!customerColumns.some((column) => column.name === 'email')) {
+            database.exec('ALTER TABLE customers ADD COLUMN email TEXT');
+        }
+        if (!customerColumns.some((column) => column.name === 'phone')) {
+            database.exec('ALTER TABLE customers ADD COLUMN phone TEXT');
         }
     });
 
