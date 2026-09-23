@@ -238,6 +238,7 @@ export function CheckoutScreen({
                 cashReceived: paymentMethod === 'cash' ? Number(cashTendered.toFixed(2)) : 0,
             });
             setCart([]);
+            setCashReceived('');
             setPaymentOpen(false);
             setMessage(`Order ${result.orderId} saved and queued for sync.`);
         } catch (error) {
