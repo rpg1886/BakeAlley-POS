@@ -69,6 +69,8 @@ The checkout now has the requested `src/renderer/components/Checkout.tsx` entry 
 
 The POS is now launchable offline through `npm start`. Added the Electron main entry, Vite/Tailwind renderer entry, local SQLite seed data, customer loading IPC, and build configuration. Seed validation passed for three products, one commercial customer, and six prices; the production main and renderer builds completed successfully.
 
+The blank-window startup issue was fixed by disabling Electron's preload sandbox while retaining context isolation and disabled Node integration. Electron logging confirmed the preload now loads without the previous `module not found: ./shared/ipcChannels` error.
+
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
 
 ## Follow-up Implementation

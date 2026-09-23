@@ -63,6 +63,8 @@ The Electron boundary is implemented by `src/main/checkout/checkoutService.ts`, 
 
 The runnable desktop entry point is `src/main/main.ts`. It opens the SQLite database under Electron's user-data directory, initializes the schema, seeds demo baking-supply data once, registers the checkout and scale IPC services, and loads the Vite-built renderer. The seed includes bread flour with lot-tracked stock, vanilla extract, cake boxes, retail and wholesale pricing, and a Sunrise Bakery commercial customer.
 
+The Electron window uses `contextIsolation: true`, `nodeIntegration: false`, and a non-sandboxed local preload because the CommonJS preload bundle loads shared IPC channel code. This keeps Node APIs out of the renderer while allowing the preload bridge to resolve its local modules.
+
 Use `npm start` to build and launch the Electron POS. The app works offline for local checkout; set `BAKE_ALLEY_SCALE_PORT` to a serial port such as `COM3` to enable physical scale connection attempts. PostgreSQL sync remains an optional server integration and is not required for local transactions.
 
 ## Current Implementation Baseline
