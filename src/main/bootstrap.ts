@@ -7,6 +7,8 @@ import { AuthService } from './auth/authService';
 import { registerAuthIpcHandlers } from './auth/authIpc';
 import { InventoryImportService } from './inventory/inventoryImportService';
 import { registerInventoryIpcHandlers } from './inventory/inventoryIpc';
+import { SalesReportService } from './sales/salesReportService';
+import { registerSalesIpcHandlers } from './sales/salesIpc';
 
 export interface MainProcessServicesOptions extends Omit<CheckoutServiceOptions, 'database'> {
     ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>;
@@ -17,6 +19,7 @@ export interface MainProcessServicesOptions extends Omit<CheckoutServiceOptions,
 export function registerMainProcessServices(options: MainProcessServicesOptions): CheckoutService {
     const authService = new AuthService(options.database);
     const inventoryImportService = new InventoryImportService(options.database, authService);
+    const salesReportService = new SalesReportService(options.database, authService);
     const checkoutService = new CheckoutService({
         database: options.database,
         taxRate: options.taxRate,
@@ -26,5 +29,6 @@ export function registerMainProcessServices(options: MainProcessServicesOptions)
     registerScaleIpcHandlers(options.ipcMain, options.scaleService);
     registerAuthIpcHandlers(options.ipcMain, authService);
     registerInventoryIpcHandlers(options.ipcMain, inventoryImportService);
+    registerSalesIpcHandlers(options.ipcMain, salesReportService);
     return checkoutService;
 }

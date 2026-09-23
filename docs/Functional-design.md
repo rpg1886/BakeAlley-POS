@@ -75,6 +75,8 @@ The admin panel accepts CSV, XLSX, and XLS files with these columns: `sku`, `lot
 
 The authenticated renderer now has separate `Checkout` and `Inventory` tabs. The Inventory tab reads live lot data through `inventory:list`, showing SKU, product, lot, expiration, unit, and on-hand quantity to both roles. The admin-only CSV/XLSX/XLS import panel is displayed inside the Inventory tab; checkout contains no inventory-management controls. Inventory mutations remain restricted to the admin import workflow.
 
+The authenticated renderer also has a `Sales` tab backed by `sales:report`. It reports completed orders for a selected calendar day, item quantities and amounts, and calendar week/month/year summaries. Gross totals are the stored order selling totals. Admins may enter a markup percentage; net is calculated as `gross / (1 + markup / 100)`. Cashiers receive reports with zero markup and cannot change the calculation basis. No checkout pricing or order persistence logic is changed by reporting.
+
 Use `npm start` to build and launch the Electron POS. The app works offline for local checkout; set `BAKE_ALLEY_SCALE_PORT` to a serial port such as `COM3` to enable physical scale connection attempts. PostgreSQL sync remains an optional server integration and is not required for local transactions.
 
 ## Current Implementation Baseline

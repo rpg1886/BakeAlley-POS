@@ -77,6 +77,8 @@ Added a separate Inventory tab backed by an authenticated `inventory:list` IPC q
 
 Moved the admin inventory import panel into the Inventory tab so checkout remains focused on sales while admin stock management stays with inventory viewing.
 
+Added a Sales tab with authenticated daily item detail, gross/net totals, calendar week/month/year summaries, date selection, and admin-only markup input. Reports read completed local orders without modifying checkout behavior.
+
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
 
 ## Follow-up Implementation

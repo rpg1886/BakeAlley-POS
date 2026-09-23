@@ -21,3 +21,7 @@ export const inventoryIpcChannels = {
     list: 'inventory:list',
     import: 'inventory:import',
 } as const;
+
+export const salesIpcChannels = {
+    report: 'sales:report',
+} as const;

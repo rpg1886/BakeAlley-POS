@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
+import type { SalesReport } from '../main/sales/salesReportService';
 
 export interface CheckoutProductPrice {
     tierId: string;
@@ -352,6 +353,9 @@ declare global {
             };
             inventory: {
                 import: (token: string, fileBytes: Uint8Array, fileName: string) => Promise<{ importedRows: number; createdLots: number; updatedLots: number }>;
+            };
+            sales: {
+                report: (token: string, selectedDate: string, markupPercent: number) => Promise<SalesReport>;
             };
         };
     }
