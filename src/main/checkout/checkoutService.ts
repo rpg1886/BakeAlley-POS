@@ -38,6 +38,7 @@ export interface CreateOrderInput {
     taxAmount: number;
     totalAmount: number;
     paymentMethod: 'cash' | 'card' | 'account';
+    cashReceived: number;
 }
 
 export interface CheckoutServiceOptions {
@@ -155,13 +156,16 @@ export class CheckoutService {
             const subtotal = cents(orderItems.reduce((total, item) => total + item.totalPrice, 0));
             const taxAmount = cents(subtotal * this.taxRate);
             const totalAmount = cents(subtotal + taxAmount);
+            if (input.paymentMethod === 'cash' && input.cashReceived < totalAmount) {
+                throw new Error('Cash received must be at least the order total');
+            }
 
             this.database.prepare(`
                 INSERT INTO orders (
                     order_id, customer_id, pricing_tier_id, order_type, status,
-                    subtotal, tax_amount, total_amount, payment_method, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?)
-            `).run(orderId, input.customerId, input.pricingTierId, input.orderType, subtotal, taxAmount, totalAmount, input.paymentMethod, createdAt, createdAt);
+                    subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(orderId, input.customerId, input.pricingTierId, input.orderType, subtotal, taxAmount, totalAmount, input.paymentMethod, input.cashReceived, input.paymentMethod === 'cash' ? cents(input.cashReceived - totalAmount) : 0, createdAt, createdAt);
 
             const insertOrderItem = this.database.prepare(`
                 INSERT INTO order_items (
@@ -185,6 +189,8 @@ export class CheckoutService {
                 pricingTierId: input.pricingTierId,
                 orderType: input.orderType,
                 paymentMethod: input.paymentMethod,
+                cashReceived: input.cashReceived,
+                changeDue: input.paymentMethod === 'cash' ? cents(input.cashReceived - totalAmount) : 0,
                 subtotal,
                 taxAmount,
                 totalAmount,
@@ -273,6 +279,9 @@ export class CheckoutService {
             if (!Number.isFinite(item.quantity) || item.quantity <= 0 || quantity(item.quantity) !== item.quantity) {
                 throw new Error('Invalid item quantity');
             }
+        }
+        if (!Number.isFinite(input.cashReceived) || input.cashReceived < 0 || Number(input.cashReceived.toFixed(2)) !== input.cashReceived) {
+            throw new Error('Invalid cash received amount');
         }
     }
 }

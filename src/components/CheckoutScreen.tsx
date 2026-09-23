@@ -44,6 +44,7 @@ export interface CheckoutOrderPayload {
     taxAmount: number;
     totalAmount: number;
     paymentMethod: 'cash' | 'card' | 'account';
+    cashReceived: number;
 }
 
 export interface CheckoutDataSource {
@@ -234,6 +235,7 @@ export function CheckoutScreen({
                 taxAmount: Number(taxAmount.toFixed(2)),
                 totalAmount: Number(totalAmount.toFixed(2)),
                 paymentMethod,
+                cashReceived: paymentMethod === 'cash' ? Number(cashTendered.toFixed(2)) : 0,
             });
             setCart([]);
             setPaymentOpen(false);

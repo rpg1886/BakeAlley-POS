@@ -110,6 +110,10 @@ CREATE TABLE IF NOT EXISTS orders (
         CHECK (total_amount >= 0 AND total_amount = round(total_amount, 2)),
     payment_method TEXT NOT NULL DEFAULT 'cash'
         CHECK (payment_method IN ('cash', 'card', 'account')),
+    cash_received NUMERIC NOT NULL DEFAULT 0.00
+        CHECK (cash_received >= 0 AND cash_received = round(cash_received, 2)),
+    change_due NUMERIC NOT NULL DEFAULT 0.00
+        CHECK (change_due >= 0 AND change_due = round(change_due, 2)),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE SET NULL,
@@ -202,6 +206,13 @@ export function initializeSchema(database: Database.Database): void {
         const orderColumns = database.prepare('PRAGMA table_info(orders)').all() as Array<{ name: string }>;
         if (!orderColumns.some((column) => column.name === 'payment_method')) {
             database.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('cash', 'card', 'account'))");
+        }
+        const migratedOrderColumns = database.prepare('PRAGMA table_info(orders)').all() as Array<{ name: string }>;
+        if (!migratedOrderColumns.some((column) => column.name === 'cash_received')) {
+            database.exec("ALTER TABLE orders ADD COLUMN cash_received NUMERIC NOT NULL DEFAULT 0.00 CHECK (cash_received >= 0 AND cash_received = round(cash_received, 2))");
+        }
+        if (!migratedOrderColumns.some((column) => column.name === 'change_due')) {
+            database.exec("ALTER TABLE orders ADD COLUMN change_due NUMERIC NOT NULL DEFAULT 0.00 CHECK (change_due >= 0 AND change_due = round(change_due, 2))");
         }
         const variantColumns = database.prepare('PRAGMA table_info(product_variants)').all() as Array<{ name: string }>;
         if (!variantColumns.some((column) => column.name === 'initial_cost')) {

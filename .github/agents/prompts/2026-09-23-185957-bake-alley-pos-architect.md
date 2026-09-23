@@ -83,6 +83,8 @@ Updated checkout payment confirmation to require cash received, calculate change
 
 Sales detail rows now remain transaction-level with customer, order, timestamp, item, quantity, amount, and payment method. Added five idempotent demo catalog products: Cocoa Powder, Baking Soda, Active Dry Yeast, Rainbow Sprinkles, and Parchment Paper.
 
+Fixed Confirm payment by sending the cash tender amount through IPC, validating it again in the main process, and persisting cash received/change due. Existing orders remain intact through a safe migration.
+
 Expanded Inventory to show every catalog product, not only products with lots. Added initial capital migration/seed values and displayed quantity, markup amount and percentage, and retail price using `retail = initial capital + markup`.
 
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
