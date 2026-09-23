@@ -33,7 +33,7 @@ Step 4: Checkout UI Compnonent
 
 The existing code can be tested through isolated in-memory SQLite and fake hardware/API smoke tests
 
-To launch the already-built Windows desktop app without typing `npm start`, double-click `run-pos.bat`. After source changes, rebuild once with `npm run build`, then use the batch file for subsequent launches.
+To launch the already-built Windows desktop app without typing `npm start`, double-click `run-pos.bat`. It delegates to `run-pos.ps1` for reliable Windows path handling. After source changes, rebuild once with `npm run build`, then use the batch file for subsequent launches.
 
 
 Admin: admin / BakeAlleyAdmin123!
