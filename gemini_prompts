@@ -1,0 +1,32 @@
+I want to redesign the UI of the cloud-based POS frontend (web/CloudApp.tsx, src/renderer/styles.css, and src/components/CheckoutScreen.tsx) to give it a warm, presentable, artisan bake shop aesthetic (warm breads, golden crusts, pastries, espresso typography) without breaking any existing logic or features.
+
+### MANDATORY GUARDRAILS (DO NOT BREAK EXISTING LOGIC):
+1. DO NOT change, rename, or remove any TypeScript interfaces, props, or function signatures (e.g., `CheckoutDataSource`, `CheckoutOrderPayload`, `CheckoutProduct`, `CloudSession`, `CloudCustomer`).
+2. DO NOT modify or remove any state hooks (`useState`, `useEffect`), event handlers (`onClick`, `onChange`), API calls (`api.createOrder`, `api.searchProducts`), or currency calculation logic.
+3. DO NOT alter the payment workflow, tender calculations (`cashReceived - totalAmount`), or UUID generation (`crypto.randomUUID()`).
+4. Keep the multi-tab navigation state structure fully intact so active carts and views survive tab switching without losing state.
+
+### VISUAL DESIGN OVERHAUL INSTRUCTIONS:
+
+1. CSS Theme & Typography (`src/renderer/styles.css`):
+   - Import Google Fonts: 'Playfair Display' (for titles/headers) and 'Plus Jakarta Sans' (for body/UI text).
+   - Establish a warm artisan bakery color palette using Tailwind or CSS variables:
+     * Background: Soft sourdough cream (`#FAF6F0` / `bg-[#FAF6F0]`)
+     * Primary Accent: Warm crust amber (`#D97706` / `text-amber-700` / `bg-amber-600`)
+     * Text/Headings: Dark espresso brown (`#2C1A11` / `text-amber-950`)
+     * Card Backgrounds: Clean white with warm subtle amber borders (`border-amber-200/80`)
+   - Style headers (`h1`, `h2`, `h3`, `.font-bakery`) to use 'Playfair Display', serif.
+
+2. Cloud Navigation & Header (`web/CloudApp.tsx`):
+   - Redesign the top bar into a sticky warm header with subtle glassmorphism (`backdrop-blur-md bg-white/90 border-b border-amber-200/60`).
+   - Add a warm bakery brand mark icon (e.g., 🥖) alongside "Bake Alley Cloud POS".
+   - Render user roles and session details inside clean, pill-style badges (`bg-amber-100 text-amber-900`).
+   - Style the main navigation tab buttons as rounded warm segments (`bg-amber-100/50 p-1` container, with active tab in `bg-amber-700 text-white`).
+
+3. Checkout & Product Catalog Grid (`src/components/CheckoutScreen.tsx`):
+   - Transform search results/product lists into clean, visual display cards with rounded corners (`rounded-2xl`), subtle hover elevation (`hover:-translate-y-0.5 hover:shadow-md`), and warm amber borders.
+   - Display category and lot expiration tags as soft badges (`bg-amber-100 text-amber-800`).
+   - Format prices clearly in Philippine Pesos (`₱`) with bold tabular numbers.
+   - Ensure input fields (search, tender amount, quantity adjustments) have warm focus rings (`focus:ring-2 focus:ring-amber-500 focus:border-amber-500`).
+
+Apply these CSS and Tailwind updates cleanly across `src/renderer/styles.css`, `web/CloudApp.tsx`, and `src/components/CheckoutScreen.tsx`. Keep all functional TypeScript code completely intact.
