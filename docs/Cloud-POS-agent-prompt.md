@@ -360,3 +360,9 @@ Before making code changes, produce a migration assessment for the existing Bake
 - The smallest first vertical slice for web checkout plus remote sales monitoring
 
 Do not edit existing desktop code until the assessment is complete and the first migration slice is explicitly defined.
+
+Create a design document under docs named Function-Design-POS.md. if already created then update the document everytime you make changes
+
+tracking file wiht user prompts, reasoning summary, and generated artifacts should be created under .github/agents/prompts with a filename Cloud-POS-(current timestamp)
+
+agent name should be bake-alley-cloud-pos-architect.agent.md
