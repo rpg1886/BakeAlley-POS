@@ -69,4 +69,11 @@ export class CrmService {
         this.database.prepare(`INSERT INTO customers (customer_id, company_name, contact_name, email, phone, tier_id, credit_limit, current_balance, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`).run(customerId, input.companyName?.trim() || null, input.contactName.trim(), input.email?.trim() || null, input.phone?.trim() || null, input.tierId, now, now);
         return { customerId };
     }
+
+    public deleteCustomer(token: string, customerId: string): void {
+        this.auth.requireAdmin(token);
+        const hasOrders = this.database.prepare("SELECT 1 FROM orders WHERE customer_id = ? AND status <> 'voided' LIMIT 1").get(customerId);
+        if (hasOrders) throw new Error('Customers with completed or open orders cannot be deleted');
+        this.database.prepare('DELETE FROM customers WHERE customer_id = ?').run(customerId);
+    }
 }

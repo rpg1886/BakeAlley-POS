@@ -97,6 +97,8 @@ Added CRM and Employee management tabs. CRM exposes customer profiles, purchase 
 
 Added CRM customer creation with company/contact/email/phone fields, seeded ten additional demo customers, and fixed Sales daily filtering to use local calendar-day boundaries.
 
+Added admin-only customer deletion with order protection, employee creation with admin/cashier access role, daily shift calendar, and removed the employee sales-total column while retaining sales count and checkout attribution.
+
 Expanded Inventory to show every catalog product, not only products with lots. Added initial capital migration/seed values and displayed quantity, markup amount and percentage, and retail price using `retail = initial capital + markup`.
 
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.

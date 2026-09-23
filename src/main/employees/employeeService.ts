@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, scryptSync } from 'node:crypto';
 import Database from 'better-sqlite3';
 import type { AuthService } from '../auth/authService';
 
@@ -11,6 +11,21 @@ export interface EmployeeSummary {
     openShiftStart: string | null;
     salesCount: number;
     salesTotal: number;
+}
+
+export interface ShiftSummary {
+    userId: string;
+    displayName: string;
+    role: 'admin' | 'cashier';
+    clockIn: string;
+    clockOut: string | null;
+}
+
+export interface CreateEmployeeInput {
+    username: string;
+    displayName: string;
+    role: 'admin' | 'cashier';
+    password: string;
 }
 
 export class EmployeeService {
@@ -48,4 +63,31 @@ export class EmployeeService {
         const user = this.auth.requireUser(token);
         this.database.prepare('INSERT OR IGNORE INTO employee_sales (employee_sale_id, user_id, order_id, created_at) VALUES (?, ?, ?, ?)').run(randomUUID(), user.userId, orderId, new Date().toISOString());
     }
+
+    public listShifts(token: string, date: string): ShiftSummary[] {
+        this.auth.requireAdmin(token);
+        return this.database.prepare(`
+            SELECT u.user_id AS userId, u.display_name AS displayName, u.role,
+                   s.clock_in AS clockIn, s.clock_out AS clockOut
+            FROM employee_shifts s JOIN users u ON u.user_id = s.user_id
+            WHERE s.clock_in >= ? AND s.clock_in < ?
+            ORDER BY s.clock_in ASC
+        `).all(`${date}T00:00:00.000Z`, `${date}T23:59:59.999Z`) as ShiftSummary[];
+    }
+
+    public createEmployee(token: string, input: CreateEmployeeInput): { userId: string } {
+        this.auth.requireAdmin(token);
+        if (!input.username.trim() || !input.displayName.trim() || input.password.length < 8) throw new Error('Username, display name, and an 8-character password are required');
+        if (this.database.prepare('SELECT 1 FROM users WHERE username = ?').get(input.username.trim().toLowerCase())) throw new Error('Username already exists');
+        const { salt, hash } = createPasswordRecord(input.password);
+        const userId = randomUUID();
+        const now = new Date().toISOString();
+        this.database.prepare('INSERT INTO users (user_id, username, display_name, role, password_salt, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(userId, input.username.trim().toLowerCase(), input.displayName.trim(), input.role, salt, hash, now, now);
+        return { userId };
+    }
+}
+
+function createPasswordRecord(password: string): { salt: string; hash: string } {
+    const salt = randomBytes(16).toString('hex');
+    return { salt, hash: scryptSync(password, salt, 64).toString('hex') };
 }

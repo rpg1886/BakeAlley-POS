@@ -20,4 +20,12 @@ export function registerEmployeeIpcHandlers(ipcMain: Pick<IpcMain, 'handle' | 'r
         if (typeof token !== 'string' || typeof orderId !== 'string') throw new Error('Invalid employee sale request');
         return service.recordSale(token, orderId);
     });
+    ipcMain.handle(employeeIpcChannels.shifts, (_event, token: unknown, date: unknown) => {
+        if (typeof token !== 'string' || typeof date !== 'string') throw new Error('Invalid shift report request');
+        return service.listShifts(token, date);
+    });
+    ipcMain.handle(employeeIpcChannels.create, (_event, token: unknown, input: unknown) => {
+        if (typeof token !== 'string' || typeof input !== 'object' || input === null) throw new Error('Invalid employee request');
+        return service.createEmployee(token, input as never);
+    });
 }
