@@ -17,6 +17,10 @@ export interface InventoryRow {
     expirationDate: string | null;
     quantityOnHand: number;
     unit: string;
+    initialCapital: number;
+    retailPrice: number;
+    markupAmount: number;
+    markupPercent: number | null;
 }
 
 interface InventoryImportRow {
@@ -99,21 +103,30 @@ export class InventoryImportService {
     public listInventory(token: string): InventoryRow[] {
         this.auth.requireUser(token);
         return this.database.prepare(`
-            SELECT variant.sku AS sku,
+                 SELECT variant.sku AS sku,
                    product.name AS productName,
                    variant.variant_name AS variantName,
-                   lot.lot_number AS lotNumber,
-                   lot.expiration_date AS expirationDate,
-                   lot.quantity_on_hand AS quantityOnHand,
-                   uom.symbol AS unit
-            FROM inventory_lots AS lot
-            JOIN product_variants AS variant ON variant.variant_id = lot.variant_id
+                     COALESCE(GROUP_CONCAT(lot.lot_number, ', '), 'No lot assigned') AS lotNumber,
+                     MIN(lot.expiration_date) AS expirationDate,
+                     COALESCE(SUM(lot.quantity_on_hand), 0) AS quantityOnHand,
+                     uom.symbol AS unit,
+                     variant.initial_cost AS initialCapital,
+                     COALESCE(retail.price_per_unit, 0) AS retailPrice,
+                       COALESCE(retail.price_per_unit, 0) - variant.initial_cost AS markupAmount,
+                     CASE WHEN variant.initial_cost > 0 AND retail.price_per_unit IS NOT NULL
+                       THEN ((retail.price_per_unit - variant.initial_cost) / variant.initial_cost) * 100
+                       ELSE NULL END AS markupPercent
+                 FROM product_variants AS variant
             JOIN products AS product ON product.product_id = variant.product_id
             JOIN units_of_measure AS uom ON uom.uom_id = product.base_uom_id
-            ORDER BY CASE WHEN lot.expiration_date IS NULL THEN 1 ELSE 0 END,
-                     lot.expiration_date ASC,
-                     variant.variant_name ASC,
-                     lot.lot_number ASC
+                 LEFT JOIN inventory_lots AS lot ON lot.variant_id = variant.variant_id
+                 LEFT JOIN product_prices AS retail ON retail.variant_id = variant.variant_id
+                  AND retail.tier_id = (SELECT tier_id FROM price_tiers WHERE tier_name = 'Retail' LIMIT 1)
+                  AND retail.min_quantity = (SELECT MIN(min_quantity) FROM product_prices WHERE variant_id = variant.variant_id AND tier_id = retail.tier_id)
+                GROUP BY variant.variant_id, variant.sku, product.name, variant.variant_name, uom.symbol, variant.initial_cost, retail.price_per_unit
+                 ORDER BY CASE WHEN MIN(lot.expiration_date) IS NULL THEN 1 ELSE 0 END,
+                    MIN(lot.expiration_date) ASC,
+                    variant.variant_name ASC
         `).all() as InventoryRow[];
     }
 

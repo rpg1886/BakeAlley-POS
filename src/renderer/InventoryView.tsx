@@ -8,6 +8,10 @@ export interface InventoryViewRow {
     expirationDate: string | null;
     quantityOnHand: number;
     unit: string;
+    initialCapital: number;
+    retailPrice: number;
+    markupAmount: number;
+    markupPercent: number | null;
 }
 
 interface InventoryViewProps {
@@ -31,6 +35,7 @@ export function InventoryView({ token, listInventory }: InventoryViewProps): JSX
         refresh();
     }, [token]);
 
+    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
     return <section className="min-h-[calc(100vh-9rem)] bg-slate-100 px-6 pb-8 pt-6">
         <div className="mx-auto max-w-7xl">
             <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -39,7 +44,7 @@ export function InventoryView({ token, listInventory }: InventoryViewProps): JSX
             </div>
             {error && <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</p>}
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                {loading ? <p className="px-5 py-12 text-center text-slate-500">Loading inventory...</p> : rows.length === 0 ? <p className="px-5 py-12 text-center text-slate-500">No inventory lots found.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Product</th><th className="px-3 py-3">SKU</th><th className="px-3 py-3">Lot</th><th className="px-3 py-3">Expiration</th><th className="px-5 py-3 text-right">On hand</th></tr></thead><tbody>{rows.map((row) => <tr className="border-t border-slate-100" key={`${row.sku}-${row.lotNumber}`}><td className="px-5 py-4"><strong>{row.variantName}</strong><div className="text-xs text-slate-500">{row.productName}</div></td><td className="px-3 py-4 font-mono text-xs">{row.sku}</td><td className="px-3 py-4">{row.lotNumber}</td><td className="px-3 py-4">{row.expirationDate ?? 'No expiry'}</td><td className="px-5 py-4 text-right font-semibold tabular-nums">{row.quantityOnHand.toFixed(4)} {row.unit}</td></tr>)}</tbody></table></div>}
+                {loading ? <p className="px-5 py-12 text-center text-slate-500">Loading inventory...</p> : rows.length === 0 ? <p className="px-5 py-12 text-center text-slate-500">No products found.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Product</th><th className="px-3 py-3">SKU</th><th className="px-3 py-3">Lot / expiration</th><th className="px-3 py-3 text-right">Quantity</th><th className="px-3 py-3 text-right">Initial capital</th><th className="px-3 py-3 text-right">Markup</th><th className="px-5 py-3 text-right">Retail price</th></tr></thead><tbody>{rows.map((row) => <tr className="border-t border-slate-100" key={row.sku}><td className="px-5 py-4"><strong>{row.variantName}</strong><div className="text-xs text-slate-500">{row.productName}</div></td><td className="px-3 py-4 font-mono text-xs">{row.sku}</td><td className="px-3 py-4"><div>{row.lotNumber}</div><div className="text-xs text-slate-500">{row.expirationDate ?? 'No expiry'}</div></td><td className="px-3 py-4 text-right font-semibold tabular-nums">{row.quantityOnHand.toFixed(4)} {row.unit}</td><td className="px-3 py-4 text-right tabular-nums">{money.format(row.initialCapital)}</td><td className="px-3 py-4 text-right tabular-nums"><div>{money.format(row.markupAmount)}</div><div className="text-xs text-slate-500">{row.markupPercent === null ? '—' : `${row.markupPercent.toFixed(2)}%`}</div></td><td className="px-5 py-4 text-right font-semibold tabular-nums">{money.format(row.retailPrice)}</td></tr>)}</tbody></table></div>}
             </div>
         </div>
     </section>;

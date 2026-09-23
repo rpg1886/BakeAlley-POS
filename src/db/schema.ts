@@ -43,6 +43,8 @@ CREATE TABLE IF NOT EXISTS product_variants (
     barcode TEXT UNIQUE,
     variant_name TEXT NOT NULL,
     attributes TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(attributes)),
+    initial_cost NUMERIC NOT NULL DEFAULT 0.00
+        CHECK (initial_cost >= 0 AND initial_cost = round(initial_cost, 2)),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (product_id) REFERENCES products (product_id) ON DELETE CASCADE
@@ -200,6 +202,10 @@ export function initializeSchema(database: Database.Database): void {
         const orderColumns = database.prepare('PRAGMA table_info(orders)').all() as Array<{ name: string }>;
         if (!orderColumns.some((column) => column.name === 'payment_method')) {
             database.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('cash', 'card', 'account'))");
+        }
+        const variantColumns = database.prepare('PRAGMA table_info(product_variants)').all() as Array<{ name: string }>;
+        if (!variantColumns.some((column) => column.name === 'initial_cost')) {
+            database.exec("ALTER TABLE product_variants ADD COLUMN initial_cost NUMERIC NOT NULL DEFAULT 0.00 CHECK (initial_cost >= 0 AND initial_cost = round(initial_cost, 2))");
         }
     });
 

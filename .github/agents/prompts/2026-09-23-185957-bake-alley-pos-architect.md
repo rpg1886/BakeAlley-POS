@@ -81,6 +81,8 @@ Added a Sales tab with authenticated daily item detail, gross/net totals, calend
 
 Updated checkout payment confirmation to require cash received, calculate change due, persist payment method on orders, and show cash/card/account on Sales item rows. Existing SQLite databases receive the payment column with a cash default through the schema migration.
 
+Expanded Inventory to show every catalog product, not only products with lots. Added initial capital migration/seed values and displayed quantity, markup amount and percentage, and retail price using `retail = initial capital + markup`.
+
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
 
 ## Follow-up Implementation

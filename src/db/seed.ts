@@ -22,6 +22,7 @@ export function seedDatabase(database: Database.Database): void {
         insertUser.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e902', 'cashier', 'Front Counter', 'cashier', cashierPassword.salt, cashierPassword.hash, SEED_TIMESTAMP, SEED_TIMESTAMP);
 
         if (database.prepare('SELECT 1 FROM products LIMIT 1').get()) {
+            database.prepare('UPDATE product_variants SET initial_cost = CASE sku WHEN ? THEN ? WHEN ? THEN ? WHEN ? THEN ? ELSE initial_cost END WHERE initial_cost = 0').run('FLOUR-25KG', 1.75, 'VANILLA-118', 6.00, 'BOX-CAKE-10', 8.00);
             return;
         }
 
@@ -45,12 +46,12 @@ export function seedDatabase(database: Database.Database): void {
         insertProduct.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e403', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e302', 'White Cake Boxes', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e202', 0, 0, SEED_TIMESTAMP, SEED_TIMESTAMP);
 
         const insertVariant = database.prepare(`
-            INSERT INTO product_variants (variant_id, product_id, sku, barcode, variant_name, attributes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO product_variants (variant_id, product_id, sku, barcode, variant_name, attributes, initial_cost, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        insertVariant.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e501', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e401', 'FLOUR-25KG', '100000000001', 'Bread Flour 25 kg', '{}', SEED_TIMESTAMP, SEED_TIMESTAMP);
-        insertVariant.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e502', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e402', 'VANILLA-118', '100000000002', 'Vanilla Extract 118 ml', '{}', SEED_TIMESTAMP, SEED_TIMESTAMP);
-        insertVariant.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e503', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e403', 'BOX-CAKE-10', '100000000003', 'White Cake Box, 10 pack', '{}', SEED_TIMESTAMP, SEED_TIMESTAMP);
+        insertVariant.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e501', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e401', 'FLOUR-25KG', '100000000001', 'Bread Flour 25 kg', '{}', 1.75, SEED_TIMESTAMP, SEED_TIMESTAMP);
+        insertVariant.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e502', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e402', 'VANILLA-118', '100000000002', 'Vanilla Extract 118 ml', '{}', 6.00, SEED_TIMESTAMP, SEED_TIMESTAMP);
+        insertVariant.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e503', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e403', 'BOX-CAKE-10', '100000000003', 'White Cake Box, 10 pack', '{}', 8.00, SEED_TIMESTAMP, SEED_TIMESTAMP);
 
         const insertPrice = database.prepare('INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity) VALUES (?, ?, ?, ?, ?)');
         insertPrice.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e601', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e501', RETAIL_TIER_ID, 2.49, 0);
