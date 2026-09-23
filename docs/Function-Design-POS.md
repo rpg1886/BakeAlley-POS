@@ -199,3 +199,38 @@ A cloud feature is complete when it works on desktop and tablet browsers, has a 
 ## Change Rule
 
 Any cloud implementation that changes behavior, contracts, schema, synchronization, security, deployment, or hardware integration must update this document in the same change set.
+
+## Initial Cloud Slice Implementation
+
+The first cloud slice now includes a PostgreSQL migration at `server/migrations/001_cloud_pos.sql`, a pooled database/migration helper at `server/db.js`, authentication middleware at `server/auth.js`, and an Express API bootstrap at `server/app.js`.
+
+Implemented API behavior:
+
+- User login/logout with bearer sessions
+- Product search
+- Customer lookup
+- Inventory lookup
+- Server-authoritative order creation
+- Cash validation and payment persistence
+- FEFO inventory deduction with row locks
+- Idempotent order creation by `order_id`
+- Philippine timezone-compatible daily sales query
+- Health and version endpoints
+
+The cloud API is started with `npm run cloud:start` after `DATABASE_URL` is configured. The existing Electron startup and local SQLite workflow remain unchanged. PostgreSQL user/product seed data and production deployment secrets are still required before a remote pilot.
+
+Cloud prerequisite scaffolding is now present: `.env.example`, the `cloud:seed-admin` command, `web/apiClient.ts`, and `web/offlineStore.ts`. The browser adapters are intentionally separate from the Electron build; they provide typed API access and an IndexedDB outbox foundation without exposing SQLite or Node APIs to browser code.
+
+The first browser-facing PWA slice is now present under `web/`: a Vite entry, cloud login, API-backed customer/product access, and an adapted checkout surface. Its build is separate from the Electron renderer through `npm run cloud:build`. Hardware readings currently require the optional local companion; PostgreSQL credentials and a deployed API are still required for runtime use.
+
+An additive local-data bridge is now available as `npm run cloud:import-local`. It reads the existing Electron SQLite database (or `SQLITE_PATH`) and idempotently imports units, categories, tiers, products, variants, prices, customers, and inventory lots into PostgreSQL. It does not modify or delete the SQLite source and does not overwrite cloud user credentials.
+
+The cloud browser shell now includes responsive Checkout, Sales, Inventory, CRM, and Employees tabs. Cloud CRM supports customer creation and protected admin deletion; Employees supports role-filtered listing, admin creation, clock in/out, sales totals, and recent shifts. The API migration adds `employee_shifts`; the existing Electron tabs and SQLite workflows remain unchanged.
+
+The cloud dashboard now supports manual inventory maintenance for admins. Inventory exposes a refresh action, CSV export, retail price, variant identity, and an add/adjust form that creates or replaces a specific lot quantity and retail price through a transactional server endpoint. Sales uses the `Asia/Manila` business date and can be refreshed after checkout; CRM and Employees also expose explicit refresh actions.
+
+Cloud parity follow-up adds a selectable transaction date to Sales, admin-only week/month/year summaries, server-normalized inventory money/quantity values, visible success and error states for inventory and CRM saves, full CRM contact columns, an employee add form with password validation, explicit open/closed shift controls, and date-filtered shift history. Electron remains the reference implementation and is not modified by these browser changes.
+
+The inventory catalog path now also supports admin creation of a new product/SKU, variant, first lot, retail price, and initial cost through `POST /api/v1/inventory/products`. Sales cards defensively normalize numeric values in the browser, while the API returns Manila-based period summaries for admin sessions. The adjustment 404 is resolved by restarting the cloud API so the current route set is loaded.
+
+The cloud parity pass now presents Employees in the Electron order: admin add-employee form, employee roster with explicit clock controls, then a date-selected shift calendar. Inventory presents expiration dates without exposing lot numbers in the browser; lot identity remains an internal FEFO/server concern. `CheckoutScreen` has an opt-out `scaleEnabled` prop defaulting to true, so Electron retains scale support while the cloud checkout disables weighing UI and automation.

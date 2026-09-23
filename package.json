@@ -8,7 +8,12 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
     "build": "npm run build:main && npm run build:renderer",
-    "start": "npm run build && electron ."
+    "start": "npm run build && electron .",
+    "cloud:start": "node server/app.js",
+    "cloud:seed-admin": "node server/scripts/seed-admin.js",
+    "cloud:import-local": "node server/scripts/import-local.js",
+    "cloud:build": "vite build --config web/vite.config.ts",
+    "cloud:check": "node --check server/app.js && node --check server/auth.js && node --check server/db.js && node --check server/scripts/seed-admin.js && node --check server/routes/sync.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",

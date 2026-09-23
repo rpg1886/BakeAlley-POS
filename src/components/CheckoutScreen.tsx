@@ -61,6 +61,7 @@ export interface CheckoutScaleSource {
 export interface CheckoutScreenProps {
     dataSource: CheckoutDataSource;
     scaleSource?: CheckoutScaleSource;
+    scaleEnabled?: boolean;
     customers: CheckoutCustomer[];
     retailTierId: string;
     taxRate?: number;
@@ -91,6 +92,7 @@ function formatWeight(grams: number): string {
 export function CheckoutScreen({
     dataSource,
     scaleSource,
+    scaleEnabled = true,
     customers,
     retailTierId,
     taxRate = 0,
@@ -117,7 +119,7 @@ export function CheckoutScreen({
     const totalAmount = subtotal + taxAmount;
     const cashTendered = Number(cashReceived);
     const changeDue = paymentMethod === 'cash' && Number.isFinite(cashTendered) ? cashTendered - totalAmount : 0;
-    const activeWeightLine = cart.find((line) => line.product.soldByWeight);
+    const activeWeightLine = scaleEnabled ? cart.find((line) => line.product.soldByWeight) : undefined;
 
     const orderItems = cart.map((line) => ({
         variantId: line.product.variantId,
@@ -337,11 +339,11 @@ export function CheckoutScreen({
                     </div>
 
                     <aside className="space-y-4">
-                        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                        {scaleEnabled && <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                             <div className="mb-5 flex items-center justify-between"><h2 className="font-semibold">Scale</h2><span className={`rounded-full px-2 py-1 text-xs font-semibold ${scaleReading?.stable ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{activeWeightLine ? (scaleReading?.stable ? 'Stable' : 'Waiting') : 'Idle'}</span></div>
                             <p className="text-3xl font-bold tabular-nums">{activeWeightLine && scaleReading ? formatWeight(scaleReading.grams) : '0 g'}</p>
                             <p className="mt-1 text-sm text-slate-500">{activeWeightLine ? `Reading for ${activeWeightLine.product.name}` : 'Add a weight-based item to read the scale.'}</p>
-                        </div>
+                        </div>}
                         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                             <div className="flex justify-between text-sm text-slate-600"><span>Subtotal</span><span>{money.format(subtotal)}</span></div>
                             <div className="mt-2 flex justify-between text-sm text-slate-600"><span>Tax</span><span>{money.format(taxAmount)}</span></div>
