@@ -75,7 +75,7 @@ interface CartLine {
     unitPrice: number;
 }
 
-const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function resolvePrice(product: CheckoutProduct, tierId: string, quantity: number): number {
     const matchingPrices = product.prices

@@ -13,7 +13,7 @@ const today = (): string => {
     const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
     return `${values.year}-${values.month}-${values.day}`;
 };
-const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function PeriodCard({ label, report }: { label: string; report: SalesReport['week'] }): JSX.Element {
     return <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

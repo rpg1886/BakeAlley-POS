@@ -89,6 +89,8 @@ The local demo seed includes stock lots for every catalog product. Lot-tracked p
 
 The authenticated renderer also has a `Sales` tab backed by `sales:report`. It reports each completed order item separately with transaction ID, time, customer, item, quantity, amount, and payment method, plus calendar week/month/year summaries. The detail rows are intentionally not consolidated; only the period summary cards aggregate totals. Sales date filtering uses explicit UTC+08:00 Philippine calendar-day bounds, and Sales amounts are formatted as Philippine pesos (`PHP`). Gross/net and period summary cards are admin-only; non-admin users see the daily transaction table without aggregate sales totals or markup controls. Checkout requires cash tendered to be at least the order total and displays change due; card and account payments require no cash tender. The main process validates the same rule and persists `orders.payment_method`, `orders.cash_received`, and `orders.change_due`; existing databases migrate safely with zero defaults for historical orders.
 
+Checkout, Inventory, and Sales all format user-facing monetary values as Philippine pesos (`PHP`) with exactly two decimal places. This is presentation-only; database money precision and transaction calculations remain unchanged.
+
 Use `npm start` to build and launch the Electron POS. The app works offline for local checkout; set `BAKE_ALLEY_SCALE_PORT` to a serial port such as `COM3` to enable physical scale connection attempts. PostgreSQL sync remains an optional server integration and is not required for local transactions.
 
 ## Current Implementation Baseline

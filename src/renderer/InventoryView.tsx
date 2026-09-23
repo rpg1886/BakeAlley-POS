@@ -35,7 +35,7 @@ export function InventoryView({ token, listInventory }: InventoryViewProps): JSX
         refresh();
     }, [token]);
 
-    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+    const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return <section className="min-h-[calc(100vh-9rem)] bg-slate-100 px-6 pb-8 pt-6">
         <div className="mx-auto max-w-7xl">
             <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
