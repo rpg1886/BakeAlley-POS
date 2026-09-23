@@ -39,6 +39,26 @@ function seedAdditionalProducts(database: Database.Database): void {
     }
 }
 
+function seedAdditionalInventory(database: Database.Database): void {
+    const insertLot = database.prepare(`
+        INSERT OR IGNORE INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const lots = [
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f701', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f501', 'COCOA-DEMO-01', '2027-09-30', 100],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f702', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f502', 'SODA-DEMO-01', null, 100],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f703', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f503', 'YEAST-DEMO-01', '2027-06-30', 100],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f704', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f504', 'SPRINKLE-DEMO-01', null, 100],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f705', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f505', 'PARCH-DEMO-01', null, 100],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f706', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e501', 'FLOUR-DEMO-02', '2027-09-30', 250],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f707', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e502', 'VANILLA-DEMO-01', null, 100],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f708', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e503', 'BOX-DEMO-01', null, 100],
+    ] as const;
+    for (const [lotId, variantId, lotNumber, expirationDate, quantityOnHand] of lots) {
+        insertLot.run(lotId, variantId, lotNumber, expirationDate, quantityOnHand, SEED_TIMESTAMP, SEED_TIMESTAMP);
+    }
+}
+
 export function seedDatabase(database: Database.Database): void {
     const seed = database.transaction(() => {
         const insertUser = database.prepare(`
@@ -53,6 +73,7 @@ export function seedDatabase(database: Database.Database): void {
         if (database.prepare('SELECT 1 FROM products LIMIT 1').get()) {
             database.prepare('UPDATE product_variants SET initial_cost = CASE sku WHEN ? THEN ? WHEN ? THEN ? WHEN ? THEN ? ELSE initial_cost END WHERE initial_cost = 0').run('FLOUR-25KG', 1.75, 'VANILLA-118', 6.00, 'BOX-CAKE-10', 8.00);
             seedAdditionalProducts(database);
+            seedAdditionalInventory(database);
             return;
         }
 
@@ -102,6 +123,7 @@ export function seedDatabase(database: Database.Database): void {
         `).run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e801', 'Sunrise Bakery', 'Maya Chen', WHOLESALE_TIER_ID, 5000, 0, SEED_TIMESTAMP, SEED_TIMESTAMP);
 
         seedAdditionalProducts(database);
+        seedAdditionalInventory(database);
 
     });
 

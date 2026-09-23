@@ -83,6 +83,8 @@ Updated checkout payment confirmation to require cash received, calculate change
 
 Sales detail rows now remain transaction-level with customer, order, timestamp, item, quantity, amount, and payment method. Added five idempotent demo catalog products: Cocoa Powder, Baking Soda, Active Dry Yeast, Rainbow Sprinkles, and Parchment Paper.
 
+Added idempotent demo stock lots for all eight catalog products. Existing flour quantity was preserved and replenished with a second lot; all products now have positive demo quantity for checkout testing.
+
 Fixed Confirm payment by sending the cash tender amount through IPC, validating it again in the main process, and persisting cash received/change due. Existing orders remain intact through a safe migration.
 
 Fixed checkout navigation state loss by keeping `CheckoutScreen` mounted while Inventory and Sales are displayed; the active cart now survives tab switches. Successful payment also clears the tender field for the next transaction.
