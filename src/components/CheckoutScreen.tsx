@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import type { SalesReport } from '../main/sales/salesReportService';
+import type { CrmCustomer } from '../main/crm/crmService';
+import type { EmployeeSummary } from '../main/employees/employeeService';
 
 export interface CheckoutProductPrice {
     tierId: string;
@@ -62,6 +64,8 @@ export interface CheckoutScreenProps {
     customers: CheckoutCustomer[];
     retailTierId: string;
     taxRate?: number;
+    employeeToken?: string;
+    recordEmployeeSale?: (token: string, orderId: string) => Promise<void>;
 }
 
 interface CartLine {
@@ -90,6 +94,8 @@ export function CheckoutScreen({
     customers,
     retailTierId,
     taxRate = 0,
+    employeeToken,
+    recordEmployeeSale,
 }: CheckoutScreenProps): JSX.Element {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<CheckoutProduct[]>([]);
@@ -239,6 +245,9 @@ export function CheckoutScreen({
                 paymentMethod,
                 cashReceived: paymentMethod === 'cash' ? Number(cashTendered.toFixed(2)) : 0,
             });
+            if (employeeToken && recordEmployeeSale) {
+                await recordEmployeeSale(employeeToken, result.orderId);
+            }
             setCart([]);
             setCashReceived('');
             setPaymentOpen(false);
@@ -373,6 +382,8 @@ declare global {
             sales: {
                 report: (token: string, selectedDate: string, markupPercent: number) => Promise<SalesReport>;
             };
+            crm: { listCustomers: (token: string) => Promise<CrmCustomer[]>; addTag: (token: string, customerId: string, tag: string) => Promise<void> };
+            employees: { list: (token: string) => Promise<EmployeeSummary[]>; clockIn: (token: string) => Promise<void>; clockOut: (token: string) => Promise<void>; recordSale: (token: string, orderId: string) => Promise<void> };
         };
     }
 }

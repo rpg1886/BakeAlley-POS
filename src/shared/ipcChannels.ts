@@ -25,3 +25,15 @@ export const inventoryIpcChannels = {
 export const salesIpcChannels = {
     report: 'sales:report',
 } as const;
+
+export const crmIpcChannels = {
+    list: 'crm:list-customers',
+    addTag: 'crm:add-tag',
+} as const;
+
+export const employeeIpcChannels = {
+    list: 'employees:list',
+    clockIn: 'employees:clock-in',
+    clockOut: 'employees:clock-out',
+    recordSale: 'employees:record-sale',
+} as const;

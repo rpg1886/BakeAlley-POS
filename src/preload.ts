@@ -3,7 +3,9 @@ import type { CheckoutCustomer, CheckoutDataSource, CheckoutProduct, CheckoutSca
 import type { CatalogCustomer, CreateOrderInput } from './main/checkout/checkoutService';
 import type { InventoryRow } from './main/inventory/inventoryImportService';
 import type { SalesReport } from './main/sales/salesReportService';
-import { authIpcChannels, checkoutIpcChannels, inventoryIpcChannels, salesIpcChannels, scaleIpcChannels } from './shared/ipcChannels';
+import type { CrmCustomer } from './main/crm/crmService';
+import type { EmployeeSummary } from './main/employees/employeeService';
+import { authIpcChannels, checkoutIpcChannels, crmIpcChannels, employeeIpcChannels, inventoryIpcChannels, salesIpcChannels, scaleIpcChannels } from './shared/ipcChannels';
 
 export interface BakeAlleyCheckoutBridge extends CheckoutDataSource {
     getCustomers: () => Promise<CheckoutCustomer[]>;
@@ -22,6 +24,8 @@ export interface BakeAlleyCheckoutBridge extends CheckoutDataSource {
     sales: {
         report: (token: string, selectedDate: string, markupPercent: number) => Promise<SalesReport>;
     };
+    crm: { listCustomers: (token: string) => Promise<CrmCustomer[]>; addTag: (token: string, customerId: string, tag: string) => Promise<void> };
+    employees: { list: (token: string) => Promise<EmployeeSummary[]>; clockIn: (token: string) => Promise<void>; clockOut: (token: string) => Promise<void>; recordSale: (token: string, orderId: string) => Promise<void> };
 }
 
 const checkoutBridge: BakeAlleyCheckoutBridge = {
@@ -46,6 +50,16 @@ const checkoutBridge: BakeAlleyCheckoutBridge = {
     },
     sales: {
         report: (token, selectedDate, markupPercent) => ipcRenderer.invoke(salesIpcChannels.report, token, selectedDate, markupPercent),
+    },
+    crm: {
+        listCustomers: (token) => ipcRenderer.invoke(crmIpcChannels.list, token),
+        addTag: (token, customerId, tag) => ipcRenderer.invoke(crmIpcChannels.addTag, token, customerId, tag),
+    },
+    employees: {
+        list: (token) => ipcRenderer.invoke(employeeIpcChannels.list, token),
+        clockIn: (token) => ipcRenderer.invoke(employeeIpcChannels.clockIn, token),
+        clockOut: (token) => ipcRenderer.invoke(employeeIpcChannels.clockOut, token),
+        recordSale: (token, orderId) => ipcRenderer.invoke(employeeIpcChannels.recordSale, token, orderId),
     },
 };
 

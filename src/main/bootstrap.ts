@@ -9,6 +9,10 @@ import { InventoryImportService } from './inventory/inventoryImportService';
 import { registerInventoryIpcHandlers } from './inventory/inventoryIpc';
 import { SalesReportService } from './sales/salesReportService';
 import { registerSalesIpcHandlers } from './sales/salesIpc';
+import { CrmService } from './crm/crmService';
+import { registerCrmIpcHandlers } from './crm/crmIpc';
+import { EmployeeService } from './employees/employeeService';
+import { registerEmployeeIpcHandlers } from './employees/employeeIpc';
 
 export interface MainProcessServicesOptions extends Omit<CheckoutServiceOptions, 'database'> {
     ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>;
@@ -20,6 +24,8 @@ export function registerMainProcessServices(options: MainProcessServicesOptions)
     const authService = new AuthService(options.database);
     const inventoryImportService = new InventoryImportService(options.database, authService);
     const salesReportService = new SalesReportService(options.database, authService);
+    const crmService = new CrmService(options.database, authService);
+    const employeeService = new EmployeeService(options.database, authService);
     const checkoutService = new CheckoutService({
         database: options.database,
         taxRate: options.taxRate,
@@ -30,5 +36,7 @@ export function registerMainProcessServices(options: MainProcessServicesOptions)
     registerAuthIpcHandlers(options.ipcMain, authService);
     registerInventoryIpcHandlers(options.ipcMain, inventoryImportService);
     registerSalesIpcHandlers(options.ipcMain, salesReportService);
+    registerCrmIpcHandlers(options.ipcMain, crmService);
+    registerEmployeeIpcHandlers(options.ipcMain, employeeService);
     return checkoutService;
 }

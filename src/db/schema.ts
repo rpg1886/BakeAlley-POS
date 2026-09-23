@@ -168,6 +168,51 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS customer_tags (
+    tag_id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT
+);
+
+CREATE TABLE IF NOT EXISTS customer_tag_links (
+    customer_id TEXT NOT NULL,
+    tag_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (customer_id, tag_id),
+    FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES customer_tags (tag_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS loyalty_accounts (
+    loyalty_id TEXT PRIMARY KEY NOT NULL,
+    customer_id TEXT NOT NULL UNIQUE,
+    points_balance INTEGER NOT NULL DEFAULT 0 CHECK (points_balance >= 0),
+    lifetime_points INTEGER NOT NULL DEFAULT 0 CHECK (lifetime_points >= 0),
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS employee_shifts (
+    shift_id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    clock_in TEXT NOT NULL,
+    clock_out TEXT,
+    notes TEXT,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS employee_sales (
+    employee_sale_id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    order_id TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE RESTRICT,
+    FOREIGN KEY (order_id) REFERENCES orders (order_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_employee_shifts_user_open ON employee_shifts (user_id, clock_out);
+CREATE INDEX IF NOT EXISTS idx_employee_sales_user ON employee_sales (user_id, created_at);
+
 CREATE INDEX IF NOT EXISTS idx_inventory_lots_fefo
     ON inventory_lots (variant_id, expiration_date, lot_id)
     WHERE quantity_on_hand > 0;
