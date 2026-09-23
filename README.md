@@ -14,3 +14,18 @@ Phase 1: Database Setup & Local Outbox
 ​Prompt 5 (Copilot Chat):
 @workspace Write a Node.js Express route POST /api/v1/sync/push in server/routes/sync.js that accepts a batch of synced JSON items from local POS clients. Execute an atomic PostgreSQL transaction using node-postgres (pg) that upserts incoming orders, inserts order_items, and subtracts sold quantities from server inventory_lots using ON CONFLICT DO NOTHING for idempotency.
 ​Pro-Tips for Copilot Prompting
+
+
+
+-------------I think more impreove prompts---------------
+Step 1: Database setup and schema
+@workspace Generate src/db/schema.ts using better-sqlite3 with complete table initializations matching our architectural rules. Include tables for products, product_variants, units_of_measure, uom_conversions, categories, price_tiers, product_prices, customers, inventory_lots, orders, order_items, sync_queue, and sync_state. Ensure UUID v4 primary keys and numeric weight precision.
+
+Step 2: hardware scale and integration
+@workspace Create src/main/hardware/scaleService.ts using node-serialport to listen to an RS-232 digital scale, parse live weight ASCII data streams, handle reconnection logic, and send parsed live weight data to the Electron renderer process via IPC.
+
+Step 3: Offline sync engine
+@workspace Generate src/sync/PosSyncWorker.ts that manages background replication between our SQLite sync_queue and cloud PostgreSQL. Handle exponential backoff retries, batching up to 50 records, network status polling, and updating record sync status upon success or failure.
+
+Step 4: Checkout UI Compnonent
+@workspace Build src/renderer/components/Checkout.tsx using React and Tailwind CSS. Create a full checkout view with barcode scanning, live scale readings for items sold by weight, customer tier pricing resolution, and atomic order creation that writes to domain tables and sync_queue simultaneously.
