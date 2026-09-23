@@ -40,6 +40,8 @@ Untracked products may be sold without a lot allocation. Inventory adjustments a
 
 `sync_queue` stores the entity type, UUID entity ID, operation, JSON payload, processing status, retry count, last error, and timestamps. A worker claims pending records, submits ordered batches to the PostgreSQL API, and records retryable failures without losing the original payload. `sync_state` tracks the last successful synchronization time per entity type.
 
+The local worker is implemented in `src/sync/syncWorker.ts`. It claims at most 50 due records, posts them to the configured sync endpoint, marks acknowledged records as `SYNCED`, and stores failed or unacknowledged records with a persisted `next_attempt_at`. Retry delays use capped exponential backoff and survive worker restarts.
+
 Conflict handling and server acknowledgements must be explicit in the API contract. Local writes remain authoritative for the client until a successful server acknowledgement or a defined conflict resolution response.
 
 ## Hardware Workflows

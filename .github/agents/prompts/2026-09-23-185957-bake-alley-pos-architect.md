@@ -35,3 +35,12 @@ Validation completed:
 
 - `npm run typecheck` passed under strict TypeScript settings.
 - An in-memory `better-sqlite3` smoke test passed for table creation, tracked-lot enforcement, and quantity precision checks.
+
+## Follow-up Implementation
+
+The offline sync worker was implemented in `src/sync/syncWorker.ts`. It atomically claims due queue records, limits requests to 50 items, posts JSON batches to an injected endpoint, marks acknowledged records as `SYNCED`, and persists capped exponential backoff for network failures or partial acknowledgements.
+
+Validation completed:
+
+- `npm run typecheck` passed.
+- An in-memory worker smoke test passed for 50-item batching, 55-item draining, successful status updates, and retry scheduling.

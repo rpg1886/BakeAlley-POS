@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS sync_queue (
     status TEXT NOT NULL DEFAULT 'PENDING'
         CHECK (status IN ('PENDING', 'PROCESSING', 'SYNCED', 'FAILED')),
     retry_count INTEGER NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
+    next_attempt_at TEXT,
     last_error TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -157,7 +158,7 @@ CREATE INDEX IF NOT EXISTS idx_product_prices_lookup
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id);
 CREATE INDEX IF NOT EXISTS idx_sync_queue_pending
-    ON sync_queue (status, created_at)
+    ON sync_queue (status, next_attempt_at, created_at)
     WHERE status IN ('PENDING', 'FAILED');
 
 CREATE TRIGGER IF NOT EXISTS validate_tracked_order_item_lot
