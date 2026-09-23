@@ -44,3 +44,19 @@ Validation completed:
 
 - `npm run typecheck` passed.
 - An in-memory worker smoke test passed for 50-item batching, 55-item draining, successful status updates, and retry scheduling.
+
+## Follow-up Implementation
+
+The Electron main-process scale service was implemented in `src/main/hardware/scale.ts`. It parses chunked NCI/Toledo-style ASCII readings, converts kilograms to grams, tracks stable status, handles serial errors and close events, reconnects with capped backoff, and registers renderer IPC handlers for read, status, connect, and disconnect operations.
+
+## Follow-up Implementation
+
+The checkout renderer was implemented in `src/components/CheckoutScreen.tsx`. It provides barcode/SKU search, a tier-aware cart, live scale polling for weight-based products, totals, payment method selection, and an injected `createOrderWithOutbox` callback for atomic order and outbox persistence.
+
+## Follow-up Implementation
+
+The remaining Electron integration was implemented in `src/main/checkout/checkoutService.ts`, `src/main/checkout/checkoutIpc.ts`, and `src/preload.ts`. The main process now owns catalog search, price validation, FEFO lot allocation, atomic order and outbox writes, and the preload exposes catalog, order, and scale-read APIs to the renderer.
+
+The IPC channel constants were moved to `src/shared/ipcChannels.ts` so the preload does not import main-only serial or database modules.
+
+The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.

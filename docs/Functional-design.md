@@ -51,6 +51,12 @@ Conflict handling and server acknowledgements must be explicit in the API contra
 - Thermal receipts are formatted as ESC/POS commands and sent to configured USB or serial printer endpoints.
 - Hardware failures must surface as recoverable UI errors and must not corrupt an order transaction.
 
+The scale service is implemented in `src/main/hardware/scale.ts`. It uses `serialport` at the Electron main-process boundary, accepts chunked ASCII input, parses stable and unstable NCI/Toledo-style readings with gram or kilogram units, retains the latest validated reading, exposes connect/disconnect/read/status IPC handlers, and retries disconnected ports with capped exponential delays.
+
+The checkout renderer is implemented in `src/components/CheckoutScreen.tsx`. It uses injected catalog, customer, scale, and order APIs. The renderer never opens SQLite directly: payment delegates to `createOrderWithOutbox`, which must create the order, order items, inventory deductions, and `sync_queue` record in one main-process SQLite transaction before returning the order ID.
+
+The Electron boundary is implemented by `src/main/checkout/checkoutService.ts`, `src/main/checkout/checkoutIpc.ts`, `src/main/bootstrap.ts`, and `src/preload.ts`. The main entry point calls `registerMainProcessServices` with its opened SQLite database and configured `ScaleService`. Catalog searches and order requests cross IPC; the main process recalculates prices, allocates lot-tracked stock FEFO, and commits the order, order items, stock changes, and outbox payload atomically. The preload exposes `window.bakeAlleyCheckout` without exposing SQLite, serialport, or Node APIs to the renderer. IPC channel names live in the dependency-free `src/shared/ipcChannels.ts` module.
+
 ## Current Implementation Baseline
 
 The local SQLite initialization entry point is `src/db/schema.ts`, using `better-sqlite3` and an atomic schema transaction. It defines the canonical units, UOM conversions, categories, products, product variants, price tiers, quantity-aware prices, customers, inventory lots, orders, order items, transactional outbox queue, and sync state tables. The earlier `database/init.sql` remains as a legacy standalone schema reference and should not be used as the application initializer.
