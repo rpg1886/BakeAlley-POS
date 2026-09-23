@@ -2,6 +2,9 @@ import Database from 'better-sqlite3';
 import type { AuthService } from '../auth/authService';
 
 export interface SalesItemSummary {
+    orderId: string;
+    soldAt: string;
+    customerName: string;
     sku: string;
     itemName: string;
     quantity: number;
@@ -52,21 +55,27 @@ export class SalesReportService {
         const markupPercent = user.role === 'admin' ? this.validateMarkup(requestedMarkupPercent) : 0;
         const periods = this.periodsFor(date);
         const items = this.database.prepare(`
-            SELECT variant.sku AS sku,
+                        SELECT order_record.order_id AS orderId,
+                                     order_record.created_at AS soldAt,
+                                     COALESCE(customer.company_name || ' - ', '') || COALESCE(customer.contact_name, 'Walk-in') AS customerName,
+                                     variant.sku AS sku,
                    variant.variant_name AS itemName,
-                   SUM(item.quantity) AS quantity,
-                   SUM(item.total_price) AS amount,
+                                     item.quantity AS quantity,
+                                     item.total_price AS amount,
                    order_record.payment_method AS paymentMethod
             FROM order_items AS item
             JOIN orders AS order_record ON order_record.order_id = item.order_id
             JOIN product_variants AS variant ON variant.variant_id = item.variant_id
+                        LEFT JOIN customers AS customer ON customer.customer_id = order_record.customer_id
             WHERE order_record.status = 'completed'
               AND date(order_record.created_at) = ?
-            GROUP BY variant.variant_id, variant.sku, variant.variant_name, order_record.payment_method
-            ORDER BY amount DESC, itemName ASC
+                        ORDER BY order_record.created_at ASC, order_record.order_id ASC, item.order_item_id ASC
         `).all(date).map((row) => {
-            const item = row as { sku: string; itemName: string; quantity: number; amount: number; paymentMethod: 'cash' | 'card' | 'account' };
+                        const item = row as { orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: 'cash' | 'card' | 'account' };
             return {
+                                orderId: item.orderId,
+                                soldAt: item.soldAt,
+                                customerName: item.customerName,
                 sku: item.sku,
                 itemName: item.itemName,
                 quantity: roundQuantity(item.quantity),

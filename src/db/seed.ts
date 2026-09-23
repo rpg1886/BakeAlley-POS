@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { randomBytes, scryptSync } from 'node:crypto';
+import { randomBytes, randomUUID, scryptSync } from 'node:crypto';
 
 const SEED_TIMESTAMP = '2026-09-23T00:00:00.000Z';
 const RETAIL_TIER_ID = '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
@@ -8,6 +8,35 @@ const WHOLESALE_TIER_ID = '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e102';
 function passwordRecord(password: string): { salt: string; hash: string } {
     const salt = randomBytes(16).toString('hex');
     return { salt, hash: scryptSync(password, salt, 64).toString('hex') };
+}
+
+function seedAdditionalProducts(database: Database.Database): void {
+    const insertProduct = database.prepare(`
+        INSERT OR IGNORE INTO products (product_id, category_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertVariant = database.prepare(`
+        INSERT OR IGNORE INTO product_variants (variant_id, product_id, sku, barcode, variant_name, attributes, initial_cost, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertPrice = database.prepare(`
+        INSERT OR IGNORE INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity)
+        VALUES (?, ?, ?, ?, 0)
+    `);
+    const products = [
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f401', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e301', 'Cocoa Powder', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e201', 1, 1, 'COCOA-1KG', '100000000004', 'Cocoa Powder 1 kg', 4.25, 6.49, 5.75],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f402', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e301', 'Baking Soda', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e201', 1, 0, 'SODA-500G', '100000000005', 'Baking Soda 500 g', 1.15, 2.25, 1.95],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f403', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e301', 'Active Dry Yeast', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e201', 1, 1, 'YEAST-500G', '100000000006', 'Active Dry Yeast 500 g', 3.10, 5.25, 4.45],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f404', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e302', 'Rainbow Sprinkles', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e202', 0, 0, 'SPRINKLE-12', '100000000007', 'Rainbow Sprinkles 12 oz', 2.75, 4.99, 4.25],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f405', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e302', 'Parchment Paper', '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e202', 0, 0, 'PARCH-50', '100000000008', 'Parchment Paper 50 sheets', 3.50, 6.50, 5.50],
+    ] as const;
+    for (const [productId, categoryId, name, uomId, soldByWeight, lotTracking, sku, barcode, variantName, cost, retailPrice, wholesalePrice] of products) {
+        insertProduct.run(productId, categoryId, name, uomId, soldByWeight, lotTracking, SEED_TIMESTAMP, SEED_TIMESTAMP);
+        const variantId = productId.replace('f401', 'f501').replace('f402', 'f502').replace('f403', 'f503').replace('f404', 'f504').replace('f405', 'f505');
+        insertVariant.run(variantId, productId, sku, barcode, variantName, '{}', cost, SEED_TIMESTAMP, SEED_TIMESTAMP);
+        insertPrice.run(randomUUID(), variantId, RETAIL_TIER_ID, retailPrice);
+        insertPrice.run(randomUUID(), variantId, WHOLESALE_TIER_ID, wholesalePrice);
+    }
 }
 
 export function seedDatabase(database: Database.Database): void {
@@ -23,6 +52,7 @@ export function seedDatabase(database: Database.Database): void {
 
         if (database.prepare('SELECT 1 FROM products LIMIT 1').get()) {
             database.prepare('UPDATE product_variants SET initial_cost = CASE sku WHEN ? THEN ? WHEN ? THEN ? WHEN ? THEN ? ELSE initial_cost END WHERE initial_cost = 0').run('FLOUR-25KG', 1.75, 'VANILLA-118', 6.00, 'BOX-CAKE-10', 8.00);
+            seedAdditionalProducts(database);
             return;
         }
 
@@ -70,6 +100,8 @@ export function seedDatabase(database: Database.Database): void {
             INSERT INTO customers (customer_id, company_name, contact_name, tier_id, credit_limit, current_balance, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e801', 'Sunrise Bakery', 'Maya Chen', WHOLESALE_TIER_ID, 5000, 0, SEED_TIMESTAMP, SEED_TIMESTAMP);
+
+        seedAdditionalProducts(database);
 
     });
 
