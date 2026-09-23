@@ -62,3 +62,8 @@ Ensure all SQL generation strictly matches these relationships:
 - Always write fully implemented code with zero placeholder comments like `// TODO: implement later`.
 - Enforce strict typing in TypeScript (`noImplicitAny: true`).
 - Use atomic SQLite transactions (`db.transaction(...)`) whenever modifying domain records and the `sync_queue` simultaneously.
+
+
+create a design document file under docs folder and name it as Functional-design.md . If already created. update this documen everytime you change the code
+
+create a tracking file with user prompts, reasoning summary, and generated artifacts. should be created under .github/agents/prompts with a filename that includes the date and time of the prompt
