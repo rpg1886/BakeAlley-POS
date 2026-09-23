@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "rootDir": "src",
+    "outDir": "dist/main",
+    "strict": true,
+    "noImplicitAny": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/db/**/*.ts",
+    "src/main/**/*.ts",
+    "src/preload.ts",
+    "src/shared/**/*.ts",
+    "src/sync/**/*.ts",
+    "src/components/**/*.tsx"
+  ]
+}

@@ -8,5 +8,6 @@ export const scaleIpcChannels = {
 
 export const checkoutIpcChannels = {
     searchProducts: 'checkout:search-products',
+    listCustomers: 'checkout:list-customers',
     createOrderWithOutbox: 'checkout:create-order-with-outbox',
 } as const;

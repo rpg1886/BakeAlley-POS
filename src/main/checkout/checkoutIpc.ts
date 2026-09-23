@@ -6,6 +6,7 @@ export { checkoutIpcChannels } from '../../shared/ipcChannels';
 
 export function registerCheckoutIpcHandlers(ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>, service: CheckoutService): void {
     ipcMain.removeHandler(checkoutIpcChannels.searchProducts);
+    ipcMain.removeHandler(checkoutIpcChannels.listCustomers);
     ipcMain.removeHandler(checkoutIpcChannels.createOrderWithOutbox);
 
     ipcMain.handle(checkoutIpcChannels.searchProducts, (_event, query: unknown) => {
@@ -14,6 +15,7 @@ export function registerCheckoutIpcHandlers(ipcMain: Pick<IpcMain, 'handle' | 'r
         }
         return service.searchProducts(query);
     });
+    ipcMain.handle(checkoutIpcChannels.listCustomers, () => service.listCustomers());
     ipcMain.handle(checkoutIpcChannels.createOrderWithOutbox, (_event, input: unknown) => {
         if (!isCreateOrderInput(input)) {
             throw new Error('Invalid checkout order');

@@ -343,6 +343,6 @@ export function CheckoutScreen({
 
 declare global {
     interface Window {
-        bakeAlleyCheckout?: CheckoutDataSource & { scale: CheckoutScaleSource };
+        bakeAlleyCheckout?: CheckoutDataSource & { getCustomers: () => Promise<CheckoutCustomer[]>; scale: CheckoutScaleSource };
     }
 }

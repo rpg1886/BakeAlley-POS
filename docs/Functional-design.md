@@ -59,6 +59,12 @@ The checkout renderer is implemented in `src/renderer/components/Checkout.tsx`, 
 
 The Electron boundary is implemented by `src/main/checkout/checkoutService.ts`, `src/main/checkout/checkoutIpc.ts`, `src/main/bootstrap.ts`, and `src/preload.ts`. The main entry point calls `registerMainProcessServices` with its opened SQLite database and configured `ScaleService`. Catalog searches and order requests cross IPC; the main process recalculates prices, allocates lot-tracked stock FEFO, and commits the order, order items, stock changes, and outbox payload atomically. The preload exposes `window.bakeAlleyCheckout` without exposing SQLite, serialport, or Node APIs to the renderer. IPC channel names live in the dependency-free `src/shared/ipcChannels.ts` module.
 
+## Local Launch and Demo Data
+
+The runnable desktop entry point is `src/main/main.ts`. It opens the SQLite database under Electron's user-data directory, initializes the schema, seeds demo baking-supply data once, registers the checkout and scale IPC services, and loads the Vite-built renderer. The seed includes bread flour with lot-tracked stock, vanilla extract, cake boxes, retail and wholesale pricing, and a Sunrise Bakery commercial customer.
+
+Use `npm start` to build and launch the Electron POS. The app works offline for local checkout; set `BAKE_ALLEY_SCALE_PORT` to a serial port such as `COM3` to enable physical scale connection attempts. PostgreSQL sync remains an optional server integration and is not required for local transactions.
+
 ## Current Implementation Baseline
 
 The local SQLite initialization entry point is `src/db/schema.ts`, using `better-sqlite3` and an atomic schema transaction. It defines the canonical units, UOM conversions, categories, products, product variants, price tiers, quantity-aware prices, customers, inventory lots, orders, order items, transactional outbox queue, and sync state tables. The earlier `database/init.sql` remains as a legacy standalone schema reference and should not be used as the application initializer.

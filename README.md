@@ -29,3 +29,6 @@ Step 3: Offline sync engine
 
 Step 4: Checkout UI Compnonent
 @workspace Build src/renderer/components/Checkout.tsx using React and Tailwind CSS. Create a full checkout view with barcode scanning, live scale readings for items sold by weight, customer tier pricing resolution, and atomic order creation that writes to domain tables and sync_queue simultaneously.
+
+
+The existing code can be tested through isolated in-memory SQLite and fake hardware/API smoke tests

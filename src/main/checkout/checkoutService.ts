@@ -16,6 +16,12 @@ export interface CatalogProduct {
     prices: CatalogPrice[];
 }
 
+export interface CatalogCustomer {
+    customerId: string;
+    displayName: string;
+    tierId: string;
+}
+
 export interface CreateOrderItemInput {
     variantId: string;
     quantity: number;
@@ -113,6 +119,16 @@ export class CheckoutService {
             });
         }
         return [...products.values()];
+    }
+
+    public listCustomers(): CatalogCustomer[] {
+        return this.database.prepare(`
+            SELECT customer_id AS customerId,
+                   COALESCE(company_name || ' - ', '') || contact_name AS displayName,
+                   tier_id AS tierId
+            FROM customers
+            ORDER BY displayName ASC
+        `).all() as CatalogCustomer[];
     }
 
     public createOrderWithOutbox(input: CreateOrderInput): { orderId: string } {
