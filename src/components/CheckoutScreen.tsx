@@ -101,6 +101,7 @@ export function CheckoutScreen({
     const [cashReceived, setCashReceived] = useState('');
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
+    const [paymentError, setPaymentError] = useState<string | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     const selectedCustomer = customers.find((customer) => customer.customerId === customerId) ?? null;
@@ -225,6 +226,7 @@ export function CheckoutScreen({
 
         setBusy(true);
         setMessage(null);
+        setPaymentError(null);
         try {
             const result = await dataSource.createOrderWithOutbox({
                 customerId,
@@ -242,7 +244,9 @@ export function CheckoutScreen({
             setPaymentOpen(false);
             setMessage(`Order ${result.orderId} saved and queued for sync.`);
         } catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Unable to save the order.');
+            const errorMessage = error instanceof Error ? error.message : 'Unable to save the order.';
+            setPaymentError(errorMessage);
+            setMessage(errorMessage);
         } finally {
             setBusy(false);
         }
@@ -346,6 +350,7 @@ export function CheckoutScreen({
                     <div className="flex items-start justify-between"><div><p className="text-sm font-semibold uppercase tracking-wide text-orange-600">Payment</p><h2 className="mt-1 text-2xl font-bold" id="payment-title">{money.format(totalAmount)}</h2></div><button aria-label="Close payment dialog" className="text-2xl text-slate-400 hover:text-slate-700" type="button" onClick={() => setPaymentOpen(false)}>×</button></div>
                     <fieldset className="mt-6"><legend className="text-sm font-semibold">Payment method</legend><div className="mt-3 grid grid-cols-3 gap-2">{(['cash', 'card', 'account'] as const).map((method) => <button className={`rounded-lg border px-3 py-3 text-sm font-semibold capitalize ${paymentMethod === method ? 'border-orange-600 bg-orange-50 text-orange-700' : 'border-slate-300 text-slate-600'}`} key={method} type="button" onClick={() => { setPaymentMethod(method); if (method !== 'cash') setCashReceived(''); }}>{method}</button>)}</div></fieldset>
                     {paymentMethod === 'cash' && <div className="mt-5"><label className="text-sm font-semibold">Cash received<input autoFocus className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 text-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200" min={totalAmount.toFixed(2)} step="0.01" type="number" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} /></label><div className={`mt-3 flex justify-between rounded-lg px-3 py-3 text-sm font-semibold ${changeDue >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}><span>{changeDue >= 0 ? 'Change due' : 'Still needed'}</span><span>{money.format(Math.abs(changeDue))}</span></div></div>}
+                    {paymentError && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{paymentError}</p>}
                     <button className="mt-6 w-full rounded-lg bg-orange-600 px-4 py-3 font-semibold text-white hover:bg-orange-700 disabled:opacity-50" disabled={busy || (paymentMethod === 'cash' && changeDue < 0)} type="button" onClick={() => void submitOrder()}>{busy ? 'Saving...' : 'Confirm payment'}</button>
                 </section>
             </div>}

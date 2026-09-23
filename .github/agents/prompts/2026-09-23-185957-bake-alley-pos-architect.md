@@ -87,6 +87,8 @@ Fixed Confirm payment by sending the cash tender amount through IPC, validating 
 
 Fixed checkout navigation state loss by keeping `CheckoutScreen` mounted while Inventory and Sales are displayed; the active cart now survives tab switches. Successful payment also clears the tender field for the next transaction.
 
+Added visible payment-modal error reporting and main-process checkout error logging so any remaining payment rejection is actionable instead of appearing as an unresponsive Confirm button.
+
 Expanded Inventory to show every catalog product, not only products with lots. Added initial capital migration/seed values and displayed quantity, markup amount and percentage, and retail price using `retail = initial capital + markup`.
 
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.

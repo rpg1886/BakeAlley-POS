@@ -20,7 +20,12 @@ export function registerCheckoutIpcHandlers(ipcMain: Pick<IpcMain, 'handle' | 'r
         if (!isCreateOrderInput(input)) {
             throw new Error('Invalid checkout order');
         }
-        return service.createOrderWithOutbox(input);
+        try {
+            return service.createOrderWithOutbox(input);
+        } catch (error) {
+            console.error('Checkout payment failed:', error);
+            throw error;
+        }
     });
 }
 
