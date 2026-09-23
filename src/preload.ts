@@ -1,13 +1,20 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { CheckoutCustomer, CheckoutDataSource, CheckoutProduct, CheckoutScaleReading } from './components/CheckoutScreen';
 import type { CatalogCustomer, CreateOrderInput } from './main/checkout/checkoutService';
-import { checkoutIpcChannels, scaleIpcChannels } from './shared/ipcChannels';
+import { authIpcChannels, checkoutIpcChannels, inventoryIpcChannels, scaleIpcChannels } from './shared/ipcChannels';
 
 export interface BakeAlleyCheckoutBridge extends CheckoutDataSource {
     getCustomers: () => Promise<CheckoutCustomer[]>;
     scale: {
         read: () => Promise<CheckoutScaleReading | null>;
         onReading: (listener: (reading: CheckoutScaleReading) => void) => () => void;
+    };
+    auth: {
+        login: (username: string, password: string) => Promise<{ token: string; user: { userId: string; username: string; displayName: string; role: 'admin' | 'cashier' } }>;
+        logout: (token: string) => Promise<void>;
+    };
+    inventory: {
+        import: (token: string, fileBytes: Uint8Array, fileName: string) => Promise<{ importedRows: number; createdLots: number; updatedLots: number }>;
     };
 }
 
@@ -22,6 +29,13 @@ const checkoutBridge: BakeAlleyCheckoutBridge = {
             ipcRenderer.on(scaleIpcChannels.reading, handler);
             return () => ipcRenderer.removeListener(scaleIpcChannels.reading, handler);
         },
+    },
+    auth: {
+        login: (username, password) => ipcRenderer.invoke(authIpcChannels.login, username, password),
+        logout: (token) => ipcRenderer.invoke(authIpcChannels.logout, token),
+    },
+    inventory: {
+        import: (token, fileBytes, fileName) => ipcRenderer.invoke(inventoryIpcChannels.import, token, fileBytes, fileName),
     },
 };
 

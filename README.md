@@ -32,3 +32,7 @@ Step 4: Checkout UI Compnonent
 
 
 The existing code can be tested through isolated in-memory SQLite and fake hardware/API smoke tests
+
+
+Admin: admin / BakeAlleyAdmin123!
+Cashier: cashier / BakeAlleyCashier123!

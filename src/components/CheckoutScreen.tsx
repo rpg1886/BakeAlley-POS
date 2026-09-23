@@ -343,6 +343,16 @@ export function CheckoutScreen({
 
 declare global {
     interface Window {
-        bakeAlleyCheckout?: CheckoutDataSource & { getCustomers: () => Promise<CheckoutCustomer[]>; scale: CheckoutScaleSource };
+        bakeAlleyCheckout?: CheckoutDataSource & {
+            getCustomers: () => Promise<CheckoutCustomer[]>;
+            scale: CheckoutScaleSource;
+            auth: {
+                login: (username: string, password: string) => Promise<{ token: string; user: { userId: string; username: string; displayName: string; role: 'admin' | 'cashier' } }>;
+                logout: (token: string) => Promise<void>;
+            };
+            inventory: {
+                import: (token: string, fileBytes: Uint8Array, fileName: string) => Promise<{ importedRows: number; createdLots: number; updatedLots: number }>;
+            };
+        };
     }
 }

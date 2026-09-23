@@ -11,3 +11,12 @@ export const checkoutIpcChannels = {
     listCustomers: 'checkout:list-customers',
     createOrderWithOutbox: 'checkout:create-order-with-outbox',
 } as const;
+
+export const authIpcChannels = {
+    login: 'auth:login',
+    logout: 'auth:logout',
+} as const;
+
+export const inventoryIpcChannels = {
+    import: 'inventory:import',
+} as const;

@@ -1,11 +1,26 @@
 import Database from 'better-sqlite3';
+import { randomBytes, scryptSync } from 'node:crypto';
 
 const SEED_TIMESTAMP = '2026-09-23T00:00:00.000Z';
 const RETAIL_TIER_ID = '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
 const WHOLESALE_TIER_ID = '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e102';
 
+function passwordRecord(password: string): { salt: string; hash: string } {
+    const salt = randomBytes(16).toString('hex');
+    return { salt, hash: scryptSync(password, salt, 64).toString('hex') };
+}
+
 export function seedDatabase(database: Database.Database): void {
     const seed = database.transaction(() => {
+        const insertUser = database.prepare(`
+            INSERT OR IGNORE INTO users (user_id, username, display_name, role, password_salt, password_hash, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const adminPassword = passwordRecord('BakeAlleyAdmin123!');
+        const cashierPassword = passwordRecord('BakeAlleyCashier123!');
+        insertUser.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e901', 'admin', 'Bake Alley Admin', 'admin', adminPassword.salt, adminPassword.hash, SEED_TIMESTAMP, SEED_TIMESTAMP);
+        insertUser.run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e902', 'cashier', 'Front Counter', 'cashier', cashierPassword.salt, cashierPassword.hash, SEED_TIMESTAMP, SEED_TIMESTAMP);
+
         if (database.prepare('SELECT 1 FROM products LIMIT 1').get()) {
             return;
         }
@@ -54,6 +69,7 @@ export function seedDatabase(database: Database.Database): void {
             INSERT INTO customers (customer_id, company_name, contact_name, tier_id, credit_limit, current_balance, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).run('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e801', 'Sunrise Bakery', 'Maya Chen', WHOLESALE_TIER_ID, 5000, 0, SEED_TIMESTAMP, SEED_TIMESTAMP);
+
     });
 
     seed();

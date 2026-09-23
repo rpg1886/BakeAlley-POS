@@ -148,6 +148,18 @@ CREATE TABLE IF NOT EXISTS sync_state (
     last_synced_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    user_id TEXT PRIMARY KEY NOT NULL,
+    username TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('admin', 'cashier')),
+    password_salt TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_inventory_lots_fefo
     ON inventory_lots (variant_id, expiration_date, lot_id)
     WHERE quantity_on_hand > 0;

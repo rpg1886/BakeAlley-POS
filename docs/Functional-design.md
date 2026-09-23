@@ -67,6 +67,12 @@ The Electron window uses `contextIsolation: true`, `nodeIntegration: false`, and
 
 The Vite renderer uses relative asset URLs because Electron loads the UI from `file://`; absolute `/assets/...` URLs would resolve to the filesystem root and produce a blank window. The renderer HTML also defines a local Content Security Policy.
 
+## Authentication and Inventory Administration
+
+The first screen is a local login backed by the `users` table. Passwords are salted and hashed with Node `scrypt`; raw passwords are never stored. `admin` users may import inventory, while `cashier` users can perform checkout but cannot modify stock. Sessions remain in the Electron main process and are represented in the renderer by an opaque token.
+
+The admin panel accepts CSV, XLSX, and XLS files with these columns: `sku`, `lot_number`, `expiration_date` (`YYYY-MM-DD`), and `quantity_on_hand`. Imports validate every row, resolve the SKU, create or update the lot inside one SQLite transaction, and enqueue each inventory change for synchronization. The seeded demo credentials are `admin` / `BakeAlleyAdmin123!` and `cashier` / `BakeAlleyCashier123!`; these must be changed before production use.
+
 Use `npm start` to build and launch the Electron POS. The app works offline for local checkout; set `BAKE_ALLEY_SCALE_PORT` to a serial port such as `COM3` to enable physical scale connection attempts. PostgreSQL sync remains an optional server integration and is not required for local transactions.
 
 ## Current Implementation Baseline

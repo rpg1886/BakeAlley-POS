@@ -71,6 +71,8 @@ The POS is now launchable offline through `npm start`. Added the Electron main e
 
 The blank-window startup issue was fixed by disabling Electron's preload sandbox while retaining context isolation and disabled Node integration. Electron logging confirmed the preload now loads without the previous `module not found: ./shared/ipcChannels` error.
 
+Authentication and inventory administration were added. The app now gates checkout behind local scrypt-hashed user login, distinguishes admin and cashier roles, and restricts CSV/XLSX/XLS inventory imports to admins. Imports are transactional and enqueue inventory-lot changes for sync. Existing databases receive the new users table and demo accounts without resetting existing data.
+
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
 
 ## Follow-up Implementation
