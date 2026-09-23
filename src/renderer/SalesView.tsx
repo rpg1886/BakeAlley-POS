@@ -7,7 +7,7 @@ interface SalesViewProps {
     getReport: (token: string, selectedDate: string, markupPercent: number) => Promise<SalesReport>;
 }
 
-const today = (): string => new Date().toISOString().slice(0, 10);
+const today = (): string => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
 function PeriodCard({ label, report }: { label: string; report: SalesReport['week'] }): JSX.Element {

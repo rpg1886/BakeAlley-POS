@@ -59,6 +59,23 @@ function seedAdditionalInventory(database: Database.Database): void {
     }
 }
 
+function seedDummyCustomers(database: Database.Database): void {
+    const insert = database.prepare(`INSERT OR IGNORE INTO customers (customer_id, company_name, contact_name, email, phone, tier_id, credit_limit, current_balance, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`);
+    const customers = [
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f801', 'Golden Crust Bakery', 'Ava Brooks', 'ava@goldencrust.example', '555-0101', WHOLESALE_TIER_ID],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f802', 'Sweet Rise Cafe', 'Liam Carter', 'liam@sweetrise.example', '555-0102', WHOLESALE_TIER_ID],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f803', 'Butter & Bloom', 'Mia Davis', 'mia@butterbloom.example', '555-0103', WHOLESALE_TIER_ID],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f804', 'Home Baker', 'Noah Evans', 'noah@homebaker.example', '555-0104', RETAIL_TIER_ID],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f805', 'Cinnamon House', 'Emma Flores', 'emma@cinnamonhouse.example', '555-0105', WHOLESALE_TIER_ID],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f806', 'The Pie Room', 'Oliver Green', 'oliver@thepieroom.example', '555-0106', WHOLESALE_TIER_ID],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f807', 'Weekend Baker', 'Sophia Hill', 'sophia@weekendbaker.example', '555-0107', RETAIL_TIER_ID],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f808', 'Flour Power', 'James Irving', 'james@flourpower.example', '555-0108', WHOLESALE_TIER_ID],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f809', 'Sugar Studio', 'Isla Jones', 'isla@sugarstudio.example', '555-0109', RETAIL_TIER_ID],
+        ['2f8c8d4e-8d28-4d4d-9f41-7a52c5f2f810', 'Morning Loaf', 'Ethan King', 'ethan@morningloaf.example', '555-0110', WHOLESALE_TIER_ID],
+    ] as const;
+    for (const [id, company, contact, email, phone, tier] of customers) insert.run(id, company, contact, email, phone, tier, SEED_TIMESTAMP, SEED_TIMESTAMP);
+}
+
 export function seedDatabase(database: Database.Database): void {
     const seed = database.transaction(() => {
         const insertUser = database.prepare(`
@@ -74,6 +91,7 @@ export function seedDatabase(database: Database.Database): void {
             database.prepare('UPDATE product_variants SET initial_cost = CASE sku WHEN ? THEN ? WHEN ? THEN ? WHEN ? THEN ? ELSE initial_cost END WHERE initial_cost = 0').run('FLOUR-25KG', 1.75, 'VANILLA-118', 6.00, 'BOX-CAKE-10', 8.00);
             seedAdditionalProducts(database);
             seedAdditionalInventory(database);
+            seedDummyCustomers(database);
             return;
         }
 
@@ -124,6 +142,7 @@ export function seedDatabase(database: Database.Database): void {
 
         seedAdditionalProducts(database);
         seedAdditionalInventory(database);
+        seedDummyCustomers(database);
 
     });
 

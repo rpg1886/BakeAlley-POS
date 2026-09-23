@@ -54,6 +54,7 @@ export class SalesReportService {
         const date = this.validateDate(selectedDate);
         const markupPercent = user.role === 'admin' ? this.validateMarkup(requestedMarkupPercent) : 0;
         const periods = this.periodsFor(date);
+        const bounds = this.localDayBounds(date);
         const items = this.database.prepare(`
                         SELECT order_record.order_id AS orderId,
                                      order_record.created_at AS soldAt,
@@ -71,7 +72,7 @@ export class SalesReportService {
               AND order_record.created_at >= ?
               AND order_record.created_at < ?
                         ORDER BY order_record.created_at ASC, order_record.order_id ASC, item.order_item_id ASC
-        `).all(date, this.nextDate(date)).map((row) => {
+        `).all(bounds.start, bounds.end).map((row) => {
                         const item = row as { orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: 'cash' | 'card' | 'account' };
             return {
                                 orderId: item.orderId,
@@ -105,6 +106,8 @@ export class SalesReportService {
     }
 
     private aggregate(startDate: string, endDate: string, markupPercent: number): Omit<SalesPeriodSummary, 'startDate' | 'endDate'> {
+        const startBounds = this.localDayBounds(startDate).start;
+        const endBounds = this.localDayBounds(endDate).start;
         const row = this.database.prepare(`
             SELECT COALESCE(SUM(total_amount), 0) AS grossTotal,
                    COUNT(order_id) AS orderCount
@@ -112,7 +115,7 @@ export class SalesReportService {
             WHERE status = 'completed'
               AND created_at >= ?
               AND created_at < ?
-        `).get(startDate, endDate) as { grossTotal: number; orderCount: number };
+        `).get(startBounds, endBounds) as { grossTotal: number; orderCount: number };
         const grossTotal = roundMoney(row.grossTotal);
         const netTotal = roundMoney(grossTotal / (1 + markupPercent / 100));
         return { grossTotal, netTotal, orderCount: row.orderCount };
@@ -137,6 +140,13 @@ export class SalesReportService {
         const next = new Date(`${date}T00:00:00Z`);
         next.setUTCDate(next.getUTCDate() + 1);
         return this.formatDate(next);
+    }
+
+    private localDayBounds(date: string): { start: string; end: string } {
+        const [year, month, day] = date.split('-').map(Number);
+        const start = new Date(year, month - 1, day);
+        const end = new Date(year, month - 1, day + 1);
+        return { start: start.toISOString(), end: end.toISOString() };
     }
 
     private formatDate(date: Date): string {

@@ -3,7 +3,7 @@ import type { CheckoutCustomer, CheckoutDataSource, CheckoutProduct, CheckoutSca
 import type { CatalogCustomer, CreateOrderInput } from './main/checkout/checkoutService';
 import type { InventoryRow } from './main/inventory/inventoryImportService';
 import type { SalesReport } from './main/sales/salesReportService';
-import type { CrmCustomer } from './main/crm/crmService';
+import type { CreateCustomerInput, CrmCustomer } from './main/crm/crmService';
 import type { EmployeeSummary } from './main/employees/employeeService';
 import { authIpcChannels, checkoutIpcChannels, crmIpcChannels, employeeIpcChannels, inventoryIpcChannels, salesIpcChannels, scaleIpcChannels } from './shared/ipcChannels';
 
@@ -24,7 +24,7 @@ export interface BakeAlleyCheckoutBridge extends CheckoutDataSource {
     sales: {
         report: (token: string, selectedDate: string, markupPercent: number) => Promise<SalesReport>;
     };
-    crm: { listCustomers: (token: string) => Promise<CrmCustomer[]>; addTag: (token: string, customerId: string, tag: string) => Promise<void> };
+    crm: { listCustomers: (token: string) => Promise<CrmCustomer[]>; addTag: (token: string, customerId: string, tag: string) => Promise<void>; createCustomer: (token: string, input: CreateCustomerInput) => Promise<{ customerId: string }> };
     employees: { list: (token: string) => Promise<EmployeeSummary[]>; clockIn: (token: string) => Promise<void>; clockOut: (token: string) => Promise<void>; recordSale: (token: string, orderId: string) => Promise<void> };
 }
 
@@ -54,6 +54,7 @@ const checkoutBridge: BakeAlleyCheckoutBridge = {
     crm: {
         listCustomers: (token) => ipcRenderer.invoke(crmIpcChannels.list, token),
         addTag: (token, customerId, tag) => ipcRenderer.invoke(crmIpcChannels.addTag, token, customerId, tag),
+        createCustomer: (token, input) => ipcRenderer.invoke(crmIpcChannels.create, token, input),
     },
     employees: {
         list: (token) => ipcRenderer.invoke(employeeIpcChannels.list, token),

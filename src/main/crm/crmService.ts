@@ -15,6 +15,14 @@ export interface CrmCustomer {
     lastPurchaseAt: string | null;
 }
 
+export interface CreateCustomerInput {
+    companyName: string | null;
+    contactName: string;
+    email: string | null;
+    phone: string | null;
+    tierId: string;
+}
+
 export class CrmService {
     public constructor(private readonly database: Database.Database, private readonly auth: AuthService) {}
 
@@ -50,5 +58,15 @@ export class CrmService {
             this.database.prepare('INSERT OR IGNORE INTO customer_tag_links (customer_id, tag_id, created_at) VALUES (?, ?, ?)').run(customerId, tagId, now);
         });
         transaction();
+    }
+
+    public createCustomer(token: string, input: CreateCustomerInput): { customerId: string } {
+        this.auth.requireUser(token);
+        if (!input.contactName.trim() || !input.tierId.trim()) throw new Error('Contact name and pricing tier are required');
+        if (!this.database.prepare('SELECT 1 FROM price_tiers WHERE tier_id = ?').get(input.tierId)) throw new Error('Pricing tier was not found');
+        const customerId = randomUUID();
+        const now = new Date().toISOString();
+        this.database.prepare(`INSERT INTO customers (customer_id, company_name, contact_name, email, phone, tier_id, credit_limit, current_balance, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`).run(customerId, input.companyName?.trim() || null, input.contactName.trim(), input.email?.trim() || null, input.phone?.trim() || null, input.tierId, now, now);
+        return { customerId };
     }
 }

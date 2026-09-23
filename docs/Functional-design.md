@@ -79,6 +79,8 @@ The authenticated renderer also includes a CRM tab and an admin-only Employee ma
 
 Customer CRM contact fields `email` and `phone` are nullable and are added through an upgrade-safe SQLite migration so existing customer records remain valid.
 
+CRM supports adding a customer with company, contact name, email, phone, and pricing tier. The current demo seed includes ten additional customers. Sales reports use local calendar-day bounds converted to ISO timestamps, preventing transactions near UTC midnight from disappearing from the selected day.
+
 Inventory starts from all product variants rather than only existing lots. It displays aggregated quantity on hand, initial capital per sellable variant, retail-tier price, markup amount, and markup percentage. The valuation rule is `retail price = initial capital + markup amount`; variants without stock lots remain visible with zero quantity.
 
 The local demo seed includes stock lots for every catalog product. Lot-tracked products use expiration dates for FEFO; non-lot-tracked products also receive demo quantity so they are visible and testable in the Inventory tab. Seed inserts are idempotent and do not overwrite existing stock.

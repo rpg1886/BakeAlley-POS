@@ -29,6 +29,7 @@ export const salesIpcChannels = {
 export const crmIpcChannels = {
     list: 'crm:list-customers',
     addTag: 'crm:add-tag',
+    create: 'crm:create-customer',
 } as const;
 
 export const employeeIpcChannels = {

@@ -95,6 +95,8 @@ Verified the live SQLite database contained completed orders and order items whi
 
 Added CRM and Employee management tabs. CRM exposes customer profiles, purchase totals/history summaries, tags, and loyalty points. Admins get employee roles, shift clock in/out, and individual sales performance. New records use UUID keys and existing checkout/inventory/sales workflows remain unchanged.
 
+Added CRM customer creation with company/contact/email/phone fields, seeded ten additional demo customers, and fixed Sales daily filtering to use local calendar-day boundaries.
+
 Expanded Inventory to show every catalog product, not only products with lots. Added initial capital migration/seed values and displayed quantity, markup amount and percentage, and retail price using `retail = initial capital + markup`.
 
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
