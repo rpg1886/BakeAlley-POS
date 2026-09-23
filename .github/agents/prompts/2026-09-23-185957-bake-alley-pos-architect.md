@@ -63,6 +63,8 @@ The scale integration now has the requested `src/main/hardware/scaleService.ts` 
 
 The sync worker now has the requested `src/sync/PosSyncWorker.ts` entry point. The existing worker behavior is preserved, with optional injected network-status polling added before synchronization attempts.
 
+The checkout now has the requested `src/renderer/components/Checkout.tsx` entry point, re-exporting the existing fully implemented `CheckoutScreen` without duplicating or changing its behavior.
+
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
 
 ## Follow-up Implementation
