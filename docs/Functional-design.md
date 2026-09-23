@@ -40,9 +40,11 @@ Untracked products may be sold without a lot allocation. Inventory adjustments a
 
 `sync_queue` stores the entity type, UUID entity ID, operation, JSON payload, processing status, retry count, last error, and timestamps. A worker claims pending records, submits ordered batches to the PostgreSQL API, and records retryable failures without losing the original payload. `sync_state` tracks the last successful synchronization time per entity type.
 
-The local worker is implemented in `src/sync/syncWorker.ts`. It claims at most 50 due records, posts them to the configured sync endpoint, marks acknowledged records as `SYNCED`, and stores failed or unacknowledged records with a persisted `next_attempt_at`. Retry delays use capped exponential backoff and survive worker restarts.
+The local worker is implemented in `src/sync/PosSyncWorker.ts`, backed by `src/sync/syncWorker.ts`. It claims at most 50 due records, polls an injected network-status check, posts them to the configured sync endpoint, marks acknowledged records as `SYNCED`, and stores failed or unacknowledged records with a persisted `next_attempt_at`. Retry delays use capped exponential backoff and survive worker restarts.
 
 Conflict handling and server acknowledgements must be explicit in the API contract. Local writes remain authoritative for the client until a successful server acknowledgement or a defined conflict resolution response.
+
+The PostgreSQL ingestion route is implemented in `server/routes/sync.js` as `POST /api/v1/sync/push` when mounted at `/api/v1`. It accepts batches of up to 50 order-create outbox records, parses and validates their JSON payloads, and processes the full batch in one `pg` transaction. Order and order-item inserts use `ON CONFLICT DO NOTHING`; a duplicate order is treated as already applied, while newly inserted items decrement their referenced inventory lots. A failed inventory update rolls back the entire batch and returns no acknowledgement.
 
 ## Hardware Workflows
 
@@ -51,7 +53,7 @@ Conflict handling and server acknowledgements must be explicit in the API contra
 - Thermal receipts are formatted as ESC/POS commands and sent to configured USB or serial printer endpoints.
 - Hardware failures must surface as recoverable UI errors and must not corrupt an order transaction.
 
-The scale service is implemented in `src/main/hardware/scale.ts`. It uses `serialport` at the Electron main-process boundary, accepts chunked ASCII input, parses stable and unstable NCI/Toledo-style readings with gram or kilogram units, retains the latest validated reading, exposes connect/disconnect/read/status IPC handlers, and retries disconnected ports with capped exponential delays.
+The scale service is implemented in `src/main/hardware/scaleService.ts`, backed by `src/main/hardware/scale.ts`. It uses `serialport` at the Electron main-process boundary, accepts chunked ASCII input, parses stable and unstable NCI/Toledo-style readings with gram or kilogram units, retains the latest validated reading, exposes connect/disconnect/read/status IPC handlers, broadcasts live `scale:reading` events to renderer windows, and retries disconnected ports with capped exponential delays.
 
 The checkout renderer is implemented in `src/components/CheckoutScreen.tsx`. It uses injected catalog, customer, scale, and order APIs. The renderer never opens SQLite directly: payment delegates to `createOrderWithOutbox`, which must create the order, order items, inventory deductions, and `sync_queue` record in one main-process SQLite transaction before returning the order ID.
 

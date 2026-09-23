@@ -59,4 +59,12 @@ The remaining Electron integration was implemented in `src/main/checkout/checkou
 
 The IPC channel constants were moved to `src/shared/ipcChannels.ts` so the preload does not import main-only serial or database modules.
 
+The scale integration now has the requested `src/main/hardware/scaleService.ts` entry point. It re-exports the existing serial implementation and adds renderer push events through `scale:reading`, while preserving the existing pull-based `scale:read` IPC contract.
+
+The sync worker now has the requested `src/sync/PosSyncWorker.ts` entry point. The existing worker behavior is preserved, with optional injected network-status polling added before synchronization attempts.
+
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
+
+## Follow-up Implementation
+
+The PostgreSQL sync ingestion route was added at `server/routes/sync.js`. It validates batches up to 50 records, runs order and order-item ingestion plus lot deductions in one `pg` transaction, uses `ON CONFLICT DO NOTHING` for idempotency, and acknowledges queue IDs only after commit.

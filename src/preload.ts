@@ -6,6 +6,7 @@ import { checkoutIpcChannels, scaleIpcChannels } from './shared/ipcChannels';
 export interface BakeAlleyCheckoutBridge extends CheckoutDataSource {
     scale: {
         read: () => Promise<CheckoutScaleReading | null>;
+        onReading: (listener: (reading: CheckoutScaleReading) => void) => () => void;
     };
 }
 
@@ -14,6 +15,11 @@ const checkoutBridge: BakeAlleyCheckoutBridge = {
     createOrderWithOutbox: (order: CreateOrderInput): Promise<{ orderId: string }> => ipcRenderer.invoke(checkoutIpcChannels.createOrderWithOutbox, order),
     scale: {
         read: (): Promise<CheckoutScaleReading | null> => ipcRenderer.invoke(scaleIpcChannels.read),
+        onReading: (listener: (reading: CheckoutScaleReading) => void): (() => void) => {
+            const handler = (_event: Electron.IpcRendererEvent, reading: CheckoutScaleReading): void => listener(reading);
+            ipcRenderer.on(scaleIpcChannels.reading, handler);
+            return () => ipcRenderer.removeListener(scaleIpcChannels.reading, handler);
+        },
     },
 };
 

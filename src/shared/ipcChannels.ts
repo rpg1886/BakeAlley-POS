@@ -1,5 +1,6 @@
 export const scaleIpcChannels = {
     read: 'scale:read',
+    reading: 'scale:reading',
     status: 'scale:status',
     connect: 'scale:connect',
     disconnect: 'scale:disconnect',

@@ -90,6 +90,7 @@ export class ScaleService {
     private state: ScaleConnectionState = 'disconnected';
     private lastError: string | null = null;
     private lastReading: ScaleReading | null = null;
+    private readonly readingListeners = new Set<(reading: ScaleReading) => void>();
 
     public constructor(options: ScaleServiceOptions) {
         this.path = options.path;
@@ -152,6 +153,11 @@ export class ScaleService {
         return this.lastReading;
     }
 
+    public onReading(listener: (reading: ScaleReading) => void): () => void {
+        this.readingListeners.add(listener);
+        return () => this.readingListeners.delete(listener);
+    }
+
     public getStatus(): ScaleStatus {
         return {
             state: this.state,
@@ -176,6 +182,9 @@ export class ScaleService {
             const reading = parseScaleLine(line, this.now());
             if (reading) {
                 this.lastReading = reading;
+                for (const listener of this.readingListeners) {
+                    listener(reading);
+                }
             }
         }
     }

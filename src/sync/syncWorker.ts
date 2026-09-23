@@ -22,6 +22,8 @@ export interface SyncWorkerOptions {
     pollIntervalMs?: number;
     baseRetryDelayMs?: number;
     maxRetryDelayMs?: number;
+    networkStatus?: () => Promise<boolean>;
+    networkPollIntervalMs?: number;
     now?: () => Date;
     sleep?: (durationMs: number) => Promise<void>;
 }
@@ -34,6 +36,7 @@ const DEFAULT_BATCH_SIZE = 50;
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_BASE_RETRY_DELAY_MS = 1_000;
 const DEFAULT_MAX_RETRY_DELAY_MS = 300_000;
+const DEFAULT_NETWORK_POLL_INTERVAL_MS = 10_000;
 
 export class PosSyncWorker {
     private readonly database: Database.Database;
@@ -43,10 +46,14 @@ export class PosSyncWorker {
     private readonly pollIntervalMs: number;
     private readonly baseRetryDelayMs: number;
     private readonly maxRetryDelayMs: number;
+    private readonly networkStatus: (() => Promise<boolean>) | null;
+    private readonly networkPollIntervalMs: number;
     private readonly now: () => Date;
     private readonly sleep: (durationMs: number) => Promise<void>;
     private running = false;
     private pollPromise: Promise<void> | null = null;
+    private networkAvailable = true;
+    private lastNetworkCheckAt = 0;
 
     public constructor(options: SyncWorkerOptions) {
         this.database = options.database;
@@ -56,6 +63,8 @@ export class PosSyncWorker {
         this.pollIntervalMs = Math.max(options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS, 0);
         this.baseRetryDelayMs = Math.max(options.baseRetryDelayMs ?? DEFAULT_BASE_RETRY_DELAY_MS, 1);
         this.maxRetryDelayMs = Math.max(options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS, this.baseRetryDelayMs);
+        this.networkStatus = options.networkStatus ?? null;
+        this.networkPollIntervalMs = Math.max(options.networkPollIntervalMs ?? DEFAULT_NETWORK_POLL_INTERVAL_MS, 0);
         this.now = options.now ?? (() => new Date());
         this.sleep = options.sleep ?? ((durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs)));
     }
@@ -76,6 +85,10 @@ export class PosSyncWorker {
     }
 
     public async syncOnce(): Promise<number> {
+        if (!(await this.isNetworkAvailable())) {
+            return 0;
+        }
+
         const records = this.claimBatch();
         if (records.length === 0) {
             return 0;
@@ -109,11 +122,31 @@ export class PosSyncWorker {
 
     private async runLoop(): Promise<void> {
         while (this.running) {
+            await this.isNetworkAvailable(true);
             await this.syncOnce();
             if (this.running) {
                 await this.sleep(this.pollIntervalMs);
             }
         }
+    }
+
+    private async isNetworkAvailable(force = false): Promise<boolean> {
+        if (!this.networkStatus) {
+            return true;
+        }
+
+        const currentTime = Date.now();
+        if (!force && currentTime - this.lastNetworkCheckAt < this.networkPollIntervalMs) {
+            return this.networkAvailable;
+        }
+
+        this.lastNetworkCheckAt = currentTime;
+        try {
+            this.networkAvailable = await this.networkStatus();
+        } catch {
+            this.networkAvailable = false;
+        }
+        return this.networkAvailable;
     }
 
     private claimBatch(): SyncQueueRecord[] {
