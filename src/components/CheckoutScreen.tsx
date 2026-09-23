@@ -269,7 +269,7 @@ export function CheckoutScreen({
             <div className="mx-auto max-w-7xl space-y-6">
                 <header className="flex flex-wrap items-end justify-between gap-4">
                     <div className="flex items-center gap-3">
-                        <img alt="Bake Alley logo" className="h-12 w-12 rounded-xl border border-amber-200/80 object-cover shadow-sm" src={logoUrl} />
+                        <img alt="Bake Alley logo" className="h-9 w-9 rounded-full border border-amber-200/80 object-cover shadow-sm" src={logoUrl} />
                         <div>
                             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-600">Bake Alley POS</p>
                             <h1 className="font-bakery text-3xl font-bold tracking-tight text-amber-950">Checkout</h1>

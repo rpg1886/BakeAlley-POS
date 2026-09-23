@@ -34,7 +34,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps): JSX.Element {
     return <main className="grid min-h-screen place-items-center bg-[#FAF6F0] p-6">
         <form className="w-full max-w-md rounded-2xl border border-amber-200/80 bg-white p-8 shadow-xl" onSubmit={(event) => void submit(event)}>
             <div className="flex flex-col items-center text-center">
-                <img alt="Bake Alley logo" className="h-20 w-20 rounded-2xl border border-amber-200/80 object-cover shadow-sm" src={logoUrl} />
+                <img alt="Bake Alley logo" className="h-12 w-12 rounded-full border border-amber-200/80 object-cover shadow-sm" src={logoUrl} />
                 <p className="mt-4 text-sm font-semibold uppercase tracking-[0.18em] text-amber-700">Bake Alley POS</p>
                 <h1 className="font-bakery mt-1 text-3xl font-bold text-amber-950">Sign in</h1>
                 <p className="mt-2 text-sm text-amber-700">Use your store account to access checkout.</p>
