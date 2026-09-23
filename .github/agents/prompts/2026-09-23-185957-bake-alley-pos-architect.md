@@ -73,6 +73,8 @@ The blank-window startup issue was fixed by disabling Electron's preload sandbox
 
 Authentication and inventory administration were added. The app now gates checkout behind local scrypt-hashed user login, distinguishes admin and cashier roles, and restricts CSV/XLSX/XLS inventory imports to admins. Imports are transactional and enqueue inventory-lot changes for sync. Existing databases receive the new users table and demo accounts without resetting existing data.
 
+Added a separate Inventory tab backed by an authenticated `inventory:list` IPC query. It displays live product variants, SKUs, lot numbers, expiration dates, units, and quantities on hand without granting cashiers inventory modification rights.
+
 The combined `registerMainProcessServices` bootstrap was added in `src/main/bootstrap.ts` so the Electron entry point can register checkout and scale IPC handlers together.
 
 ## Follow-up Implementation

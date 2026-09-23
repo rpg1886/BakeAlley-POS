@@ -73,6 +73,8 @@ The first screen is a local login backed by the `users` table. Passwords are sal
 
 The admin panel accepts CSV, XLSX, and XLS files with these columns: `sku`, `lot_number`, `expiration_date` (`YYYY-MM-DD`), and `quantity_on_hand`. Imports validate every row, resolve the SKU, create or update the lot inside one SQLite transaction, and enqueue each inventory change for synchronization. The seeded demo credentials are `admin` / `BakeAlleyAdmin123!` and `cashier` / `BakeAlleyCashier123!`; these must be changed before production use.
 
+The authenticated renderer now has separate `Checkout` and `Inventory` tabs. The Inventory tab reads live lot data through `inventory:list`, showing SKU, product, lot, expiration, unit, and on-hand quantity to both roles. Inventory mutations remain restricted to the admin import workflow.
+
 Use `npm start` to build and launch the Electron POS. The app works offline for local checkout; set `BAKE_ALLEY_SCALE_PORT` to a serial port such as `COM3` to enable physical scale connection attempts. PostgreSQL sync remains an optional server integration and is not required for local transactions.
 
 ## Current Implementation Baseline

@@ -9,7 +9,17 @@ export interface InventoryImportResult {
     updatedLots: number;
 }
 
-interface InventoryRow {
+export interface InventoryRow {
+    sku: string;
+    productName: string;
+    variantName: string;
+    lotNumber: string;
+    expirationDate: string | null;
+    quantityOnHand: number;
+    unit: string;
+}
+
+interface InventoryImportRow {
     sku?: unknown;
     lot_number?: unknown;
     expiration_date?: unknown;
@@ -35,7 +45,7 @@ export class InventoryImportService {
         if (!sheet) {
             throw new Error('The inventory file has no worksheet');
         }
-        const rows = XLSX.utils.sheet_to_json<InventoryRow>(sheet, { defval: null, raw: false });
+        const rows = XLSX.utils.sheet_to_json<InventoryImportRow>(sheet, { defval: null, raw: false });
         if (rows.length === 0) {
             throw new Error('The inventory file contains no rows');
         }
@@ -84,6 +94,27 @@ export class InventoryImportService {
         });
 
         return importRows();
+    }
+
+    public listInventory(token: string): InventoryRow[] {
+        this.auth.requireUser(token);
+        return this.database.prepare(`
+            SELECT variant.sku AS sku,
+                   product.name AS productName,
+                   variant.variant_name AS variantName,
+                   lot.lot_number AS lotNumber,
+                   lot.expiration_date AS expirationDate,
+                   lot.quantity_on_hand AS quantityOnHand,
+                   uom.symbol AS unit
+            FROM inventory_lots AS lot
+            JOIN product_variants AS variant ON variant.variant_id = lot.variant_id
+            JOIN products AS product ON product.product_id = variant.product_id
+            JOIN units_of_measure AS uom ON uom.uom_id = product.base_uom_id
+            ORDER BY CASE WHEN lot.expiration_date IS NULL THEN 1 ELSE 0 END,
+                     lot.expiration_date ASC,
+                     variant.variant_name ASC,
+                     lot.lot_number ASC
+        `).all() as InventoryRow[];
     }
 
     private requiredString(value: unknown, field: string): string {

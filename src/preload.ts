@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { CheckoutCustomer, CheckoutDataSource, CheckoutProduct, CheckoutScaleReading } from './components/CheckoutScreen';
 import type { CatalogCustomer, CreateOrderInput } from './main/checkout/checkoutService';
+import type { InventoryRow } from './main/inventory/inventoryImportService';
 import { authIpcChannels, checkoutIpcChannels, inventoryIpcChannels, scaleIpcChannels } from './shared/ipcChannels';
 
 export interface BakeAlleyCheckoutBridge extends CheckoutDataSource {
@@ -14,6 +15,7 @@ export interface BakeAlleyCheckoutBridge extends CheckoutDataSource {
         logout: (token: string) => Promise<void>;
     };
     inventory: {
+        list: (token: string) => Promise<InventoryRow[]>;
         import: (token: string, fileBytes: Uint8Array, fileName: string) => Promise<{ importedRows: number; createdLots: number; updatedLots: number }>;
     };
 }
@@ -35,6 +37,7 @@ const checkoutBridge: BakeAlleyCheckoutBridge = {
         logout: (token) => ipcRenderer.invoke(authIpcChannels.logout, token),
     },
     inventory: {
+        list: (token) => ipcRenderer.invoke(inventoryIpcChannels.list, token),
         import: (token, fileBytes, fileName) => ipcRenderer.invoke(inventoryIpcChannels.import, token, fileBytes, fileName),
     },
 };

@@ -18,5 +18,6 @@ export const authIpcChannels = {
 } as const;
 
 export const inventoryIpcChannels = {
+    list: 'inventory:list',
     import: 'inventory:import',
 } as const;
