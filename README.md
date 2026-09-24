@@ -38,3 +38,12 @@ To launch the already-built Windows desktop app without typing `npm start`, doub
 
 Admin: admin / BakeAlleyAdmin123!
 Cashier: cashier / BakeAlleyCashier123!
+
+Start the Cloud POS
+
+$env:DATABASE_URL="postgresql://postgres:BakeAlley_0824@127.0.0.1:5432/bakealley"
+npm run cloud:start
+
+npx vite --config web/vite.config.ts --host 127.0.0.1
+
+after those commands successfully run go to http://localhost:5173/
