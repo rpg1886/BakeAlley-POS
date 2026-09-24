@@ -1,32 +1,100 @@
-I want to redesign the UI of the cloud-based POS frontend (web/CloudApp.tsx, src/renderer/styles.css, and src/components/CheckoutScreen.tsx) to give it a warm, presentable, artisan bake shop aesthetic (warm breads, golden crusts, pastries, espresso typography) without breaking any existing logic or features.
+import { useState, type FormEvent, type JSX } from 'react';
 
-### MANDATORY GUARDRAILS (DO NOT BREAK EXISTING LOGIC):
-1. DO NOT change, rename, or remove any TypeScript interfaces, props, or function signatures (e.g., `CheckoutDataSource`, `CheckoutOrderPayload`, `CheckoutProduct`, `CloudSession`, `CloudCustomer`).
-2. DO NOT modify or remove any state hooks (`useState`, `useEffect`), event handlers (`onClick`, `onChange`), API calls (`api.createOrder`, `api.searchProducts`), or currency calculation logic.
-3. DO NOT alter the payment workflow, tender calculations (`cashReceived - totalAmount`), or UUID generation (`crypto.randomUUID()`).
-4. Keep the multi-tab navigation state structure fully intact so active carts and views survive tab switching without losing state.
+export interface LoginUser {
+  userId: string;
+  username: string;
+  displayName: string;
+  role: 'admin' | 'cashier';
+}
 
-### VISUAL DESIGN OVERHAUL INSTRUCTIONS:
+interface LoginScreenProps {
+  onLogin: (username: string, password: string) => Promise<void>;
+}
 
-1. CSS Theme & Typography (`src/renderer/styles.css`):
-   - Import Google Fonts: 'Playfair Display' (for titles/headers) and 'Plus Jakarta Sans' (for body/UI text).
-   - Establish a warm artisan bakery color palette using Tailwind or CSS variables:
-     * Background: Soft sourdough cream (`#FAF6F0` / `bg-[#FAF6F0]`)
-     * Primary Accent: Warm crust amber (`#D97706` / `text-amber-700` / `bg-amber-600`)
-     * Text/Headings: Dark espresso brown (`#2C1A11` / `text-amber-950`)
-     * Card Backgrounds: Clean white with warm subtle amber borders (`border-amber-200/80`)
-   - Style headers (`h1`, `h2`, `h3`, `.font-bakery`) to use 'Playfair Display', serif.
+export function LoginScreen({ onLogin }: LoginScreenProps): JSX.Element {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-2. Cloud Navigation & Header (`web/CloudApp.tsx`):
-   - Redesign the top bar into a sticky warm header with subtle glassmorphism (`backdrop-blur-md bg-white/90 border-b border-amber-200/60`).
-   - Add a warm bakery brand mark icon (e.g., 🥖) alongside "Bake Alley Cloud POS".
-   - Render user roles and session details inside clean, pill-style badges (`bg-amber-100 text-amber-900`).
-   - Style the main navigation tab buttons as rounded warm segments (`bg-amber-100/50 p-1` container, with active tab in `bg-amber-700 text-white`).
+  const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await onLogin(username, password);
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : 'Unable to sign in.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
-3. Checkout & Product Catalog Grid (`src/components/CheckoutScreen.tsx`):
-   - Transform search results/product lists into clean, visual display cards with rounded corners (`rounded-2xl`), subtle hover elevation (`hover:-translate-y-0.5 hover:shadow-md`), and warm amber borders.
-   - Display category and lot expiration tags as soft badges (`bg-amber-100 text-amber-800`).
-   - Format prices clearly in Philippine Pesos (`₱`) with bold tabular numbers.
-   - Ensure input fields (search, tender amount, quantity adjustments) have warm focus rings (`focus:ring-2 focus:ring-amber-500 focus:border-amber-500`).
+  return (
+    <main className="grid min-h-screen place-items-center bg-slate-100 p-6">
+      <form
+        className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-xl"
+        onSubmit={(event) => void submit(event)}
+      >
+        {/* Logo Container with matching Checkout Screen size (h-10 w-10 or h-12 w-12) */}
+        <div className="mb-4 flex items-center gap-3">
+          {/* If using an <img> tag */}
+          <img 
+            src="/logo.png" 
+            alt="Bake Alley Logo" 
+            className="h-10 w-10 object-contain rounded-xl"
+          />
+          
+          {/* Alternatively, if using the bakery emoji badge icon from Checkout */}
+          {/* <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-600 text-xl font-bold text-white shadow-sm shadow-amber-600/30">
+            🥖
+          </div> */}
 
-Apply these CSS and Tailwind updates cleanly across `src/renderer/styles.css`, `web/CloudApp.tsx`, and `src/components/CheckoutScreen.tsx`. Keep all functional TypeScript code completely intact.
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-orange-600">
+              Bake Alley POS
+            </p>
+          </div>
+        </div>
+
+        <h1 className="text-3xl font-bold text-slate-900">Sign in</h1>
+        <p className="mt-2 text-sm text-slate-500">Use your store account to access checkout.</p>
+
+        <label className="mt-8 block text-sm font-semibold text-slate-700">
+          Username
+          <input
+            autoComplete="username"
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+          />
+        </label>
+
+        <label className="mt-4 block text-sm font-semibold text-slate-700">
+          Password
+          <input
+            autoComplete="current-password"
+            className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+
+        {error && (
+          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+            {error}
+          </p>
+        )}
+
+        <button
+          className="mt-6 w-full rounded-lg bg-orange-600 px-4 py-3 font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+          disabled={busy || !username || !password}
+          type="submit"
+        >
+          {busy ? 'Signing in...' : 'Sign in'}
+        </button>
+      </form>
+    </main>
+  );
+}
