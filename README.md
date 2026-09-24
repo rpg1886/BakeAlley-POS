@@ -213,3 +213,5 @@ npm run cloud:start
 npx vite --config web/vite.config.ts --host 127.0.0.1
 
 after those commands successfully run go to http://localhost:5173/
+
+https://notebook.google.com/notebook/c0167f8f-bcc5-4d01-bf71-27339fa088e5?utm_source=gemini_notebook&utm_medium=referral
