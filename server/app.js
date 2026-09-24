@@ -1,9 +1,18 @@
 const express = require('express');
+const cors = require('cors');
 const crypto = require('node:crypto');
 const { pool, migrate } = require('./db');
 const { createAuthRouter } = require('./auth');
 
 const app = express();
+
+// Enable CORS for cross-origin requests from GitHub Pages
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json({ limit: '5mb' }));
 const auth = createAuthRouter(express, pool);
 app.use('/api/v1', auth.router);
@@ -11,6 +20,7 @@ app.use('/api/v1', auth.router);
 app.get('/api/v1/health', async (_request, response, next) => {
   try { await pool.query('SELECT 1'); response.json({ ok: true }); } catch (error) { next(error); }
 });
+
 app.get('/api/v1/version', (_request, response) => response.json({ version: process.env.APP_VERSION ?? '0.1.0-cloud' }));
 
 app.get('/api/v1/products/search', auth.requireSession, async (request, response, next) => {
