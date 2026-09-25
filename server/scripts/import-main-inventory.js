@@ -94,8 +94,15 @@ async function importMainInventory(csvPath, defaultMarkupPercent) {
   try {
     await client.query('BEGIN');
     const uomId = await ensurePieceUom(client);
-    const retailTier = await client.query("SELECT tier_id AS \"tierId\" FROM price_tiers WHERE lower(tier_name) = 'retail' LIMIT 1");
-    const retailTierId = retailTier.rowCount ? retailTier.rows[0].tierId : null;
+
+  // Ensure default Retail tier exists with canonical UUID
+    await client.query(`
+      INSERT INTO price_tiers (tier_id, tier_name)
+      VALUES ('2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101', 'Retail')
+      ON CONFLICT (tier_name) DO NOTHING;
+    `);
+
+    const retailTierId = '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
 
     const existingSkus = await client.query('SELECT sku FROM product_variants');
     for (const row of existingSkus.rows) usedSkus.add(row.sku);
