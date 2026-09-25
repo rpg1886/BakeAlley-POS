@@ -234,3 +234,37 @@ Cloud parity follow-up adds a selectable transaction date to Sales, admin-only w
 The inventory catalog path now also supports admin creation of a new product/SKU, variant, first lot, retail price, and initial cost through `POST /api/v1/inventory/products`. Sales cards defensively normalize numeric values in the browser, while the API returns Manila-based period summaries for admin sessions. The adjustment 404 is resolved by restarting the cloud API so the current route set is loaded.
 
 The cloud parity pass now presents Employees in the Electron order: admin add-employee form, employee roster with explicit clock controls, then a date-selected shift calendar. Inventory presents expiration dates without exposing lot numbers in the browser; lot identity remains an internal FEFO/server concern. `CheckoutScreen` has an opt-out `scaleEnabled` prop defaulting to true, so Electron retains scale support while the cloud checkout disables weighing UI and automation.
+
+## Main Inventory Source-of-Truth Analysis (`Inventory_Main.csv`)
+
+`Inventory_Main.csv` is a real stock-take export of the physical store (1,383 rows) with columns `Name, Stock Qty, Cost, Total Amount, Category, Warehouse`. It has been adopted as the source of truth for the catalog, replacing the demo seed data in `src/db/seed.ts` as the reference for what the schema must model.
+
+**Shape differences vs. the existing schema/importer:**
+
+- No SKU, barcode, or lot/expiration data. The prior `InventoryImportService.importWorkbook` required `sku, lot_number, expiration_date, quantity_on_hand` and assumed the catalog already existed — it cannot onboard this file.
+- 35 distinct categories in the CSV, 33 of which exactly match the category grid on the legacy POS screenshot (`UI-old-POS.jpg`): BUTTER, CONFECTIONERY SUGAR, MILK/DAIRY, COCOA, FLAVORINGS, FOOD COLOR, CHOCOLATE BAR/CHIPS, CHOCOLATE REPACKED, OILS, CREAMCHEESE/CHEESE, CAKE EDIBLE TOPPERS, FLOURS, SWEETENERS, BAKING PANS, KITCHEN TOOL/ACCESORIES, CAKE TOPPERS, FONDANT MOLDERS, CUPCAKE/PASTRY BOXES, CAKE BOARDS, CANISTER, CANDLES, SEASONAL ITEMS, DUMMY, CAKE BOXES, plus non-perishable supply categories the old grid does not show (BALL TOPPERS, CAKE ADD ONS, PIPING TIP, PAPERS/PLASTIC/LINERS, CUPCAKE LINER, HOLDERS/STRAWS/EXTENDER/DOWEL, TOPPINGS, RIBBONS, STARCHES, FLOWERS, NUTS, ETC) and 2 blank-category rows. This confirms Bake Alley's real catalog is dominated by cake-decorating supplies, not just baking ingredients.
+- No retail/selling price column — only unit `Cost`. `Total Amount` is a derived `Stock Qty * Cost` audit value and is not imported as a separate fact.
+- `Warehouse` has only two observed values: blank and `In store`, suggesting a future multi-location model, not currently represented in the schema.
+- 9 duplicate `Name`/`Category` pairs exist with different quantities and costs (e.g., `Heart Plunger`, `Large Peony`, `580 tip`), representing separate purchase batches recorded as separate rows rather than distinct SKUs.
+- Legacy `database/init.sql` is a stale, unused alternate schema (its own `products`/`inventory_lots` shape) that is never loaded by `src/main/main.ts`; `src/db/schema.ts` is the schema actually initialized. It should be deleted or clearly marked historical in a future cleanup — left untouched in this change to avoid unrelated risk.
+
+**Applied changes (this change set):**
+
+1. **`InventoryImportService.importStockTakeWorkbook`** (`src/main/inventory/inventoryImportService.ts`) — a new import path built specifically for the `Name, Stock Qty, Cost, Total Amount, Category, Warehouse` shape:
+   - Merges duplicate `Name`+`Category` rows by summing quantity and computing a quantity-weighted average cost.
+   - Auto-creates missing `categories` rows (case-insensitive match against existing names), so the CSV's real category list becomes the live taxonomy.
+   - Auto-creates `products`/`product_variants` when no existing product matches by name + category, generating a deterministic SKU from `CATEGORY-PRODUCT-NAME` (collision-suffixed) since the source has none. Existing matches are updated in place (cost + `Warehouse` stored as a `warehouse` variant attribute) so re-imports are idempotent.
+   - Creates a shared `Piece`/`pc` unit of measure for these items (no per-unit weight/volume data exists in the sheet).
+   - Writes a single non-expiring lot per variant (`STOCKTAKE-MAIN`), replacing its quantity on each import — this file is a full stock take, not an incremental delta.
+   - Applies a default 35% retail markup on top of `Cost` so every imported item is immediately sellable; this is a placeholder assumption admins should override per-product through the existing Inventory admin tools.
+   - Blank-name rows (e.g. the stray `FONDANT MOLDERS` header-style row) are skipped and counted, not treated as errors.
+2. **New IPC channel** `inventory:import-stock-take` (`src/shared/ipcChannels.ts`, `src/main/inventory/inventoryIpc.ts`, `src/preload.ts`) exposes this importer to the renderer without touching the existing lot-restock channel.
+3. **`AdminInventoryPanel`** (`src/renderer/AdminInventoryPanel.tsx`) now shows two explicit import cards: "Main inventory import (source of truth)" for `Inventory_Main.csv`-shaped files, and the pre-existing "Restock existing lots" flow for `sku/lot_number/expiration_date/quantity_on_hand` files. `App.tsx` wires the new prop through.
+4. **`server/scripts/import-main-inventory.js`** — a standalone Node script (`npm run cloud:import-main-inventory`) that applies the same merge/category/SKU/markup rules directly against PostgreSQL, so the cloud database can be seeded straight from the CSV independent of the Electron desktop app.
+
+**Deliberate follow-ups not yet applied (need your input before automating further):**
+
+- **Retail pricing:** the 35% default markup is a placeholder. Confirm the real markup policy (flat %, per-category %, or manual pricing only) so imports don't publish incorrect prices.
+- **Expiration/FEFO tracking:** perishable categories (BUTTER, MILK/DAIRY, COCOA, CONFECTIONERY SUGAR, CHOCOLATE BAR/CHIPS, CHOCOLATE REPACKED, FLOURS, OILS, CREAMCHEESE/CHEESE, FLAVORINGS) currently import into a single non-expiring lot because the CSV has no expiration dates. If you can supply expiry data (even a shelf-life-in-days per category), the importer can create dated lots and enable true FEFO deduction for these items.
+- **Warehouse/location model:** `Warehouse` is currently stored as an opaque `attributes.warehouse` tag on the variant. If Bake Alley has (or plans) more than one storage location, this should become a first-class `locations` table with per-location quantities instead of a tag.
+- **Duplicate stock-take rows:** the importer currently averages duplicate name/category rows into one product. Confirm this is correct versus treating them as distinct variants (e.g., different sizes/vendors that happen to share a name).

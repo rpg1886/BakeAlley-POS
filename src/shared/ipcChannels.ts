@@ -20,6 +20,7 @@ export const authIpcChannels = {
 export const inventoryIpcChannels = {
     list: 'inventory:list',
     import: 'inventory:import',
+    importStockTake: 'inventory:import-stock-take',
 } as const;
 
 export const salesIpcChannels = {

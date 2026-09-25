@@ -12,8 +12,9 @@
     "cloud:start": "node server/app.js",
     "cloud:seed-admin": "node server/scripts/seed-admin.js",
     "cloud:import-local": "node server/scripts/import-local.js",
+    "cloud:import-main-inventory": "node server/scripts/import-main-inventory.js",
     "cloud:build": "vite build --config web/vite.config.ts",
-    "cloud:check": "node --check server/app.js && node --check server/auth.js && node --check server/db.js && node --check server/scripts/seed-admin.js && node --check server/routes/sync.js"
+    "cloud:check": "node --check server/app.js && node --check server/auth.js && node --check server/db.js && node --check server/scripts/seed-admin.js && node --check server/scripts/import-main-inventory.js && node --check server/routes/sync.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.4.1",

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { CheckoutCustomer, CheckoutDataSource, CheckoutProduct, CheckoutScaleReading } from './components/CheckoutScreen';
 import type { CatalogCustomer, CreateOrderInput } from './main/checkout/checkoutService';
 import type { InventoryRow } from './main/inventory/inventoryImportService';
+import type { StockTakeImportResult } from './main/inventory/inventoryImportService';
 import type { SalesReport } from './main/sales/salesReportService';
 import type { CreateCustomerInput, CrmCustomer } from './main/crm/crmService';
 import type { CreateEmployeeInput, EmployeeSummary, ShiftSummary } from './main/employees/employeeService';
@@ -20,6 +21,7 @@ export interface BakeAlleyCheckoutBridge extends CheckoutDataSource {
     inventory: {
         list: (token: string) => Promise<InventoryRow[]>;
         import: (token: string, fileBytes: Uint8Array, fileName: string) => Promise<{ importedRows: number; createdLots: number; updatedLots: number }>;
+        importStockTake: (token: string, fileBytes: Uint8Array, fileName: string) => Promise<StockTakeImportResult>;
     };
     sales: {
         report: (token: string, selectedDate: string, markupPercent: number) => Promise<SalesReport>;
@@ -47,6 +49,7 @@ const checkoutBridge: BakeAlleyCheckoutBridge = {
     inventory: {
         list: (token) => ipcRenderer.invoke(inventoryIpcChannels.list, token),
         import: (token, fileBytes, fileName) => ipcRenderer.invoke(inventoryIpcChannels.import, token, fileBytes, fileName),
+        importStockTake: (token, fileBytes, fileName) => ipcRenderer.invoke(inventoryIpcChannels.importStockTake, token, fileBytes, fileName),
     },
     sales: {
         report: (token, selectedDate, markupPercent) => ipcRenderer.invoke(salesIpcChannels.report, token, selectedDate, markupPercent),
