@@ -71,7 +71,6 @@ function PeriodCard({ label, period }: { label: string; period?: CloudSalesRepor
 }
 
 function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
-  // Persist selected transaction date in Sales view
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return localStorage.getItem('bakealley_pos_sales_date') || today();
   });
@@ -140,7 +139,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               </thead>
               <tbody>
                 {report.items.map((item, index) => (
-                  <tr className="border-b last:border-0" key={`${item.orderId}-${index}`}>
+                  <tr className="border-b last:border-0" key={`$ [cite: 79, 173]{item.orderId}-${index}`}>
                     <td className="py-3">
                       <div>{new Date(item.soldAt).toLocaleTimeString()}</div>
                       <div className="text-xs text-amber-700">{item.customerName}</div>
@@ -214,7 +213,6 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 }
 
 function CrmView({ session, customers, refresh }: { session: CloudSession; customers: CloudCustomer[]; refresh: () => Promise<void> }): JSX.Element {
-  // Persist unsaved draft customer form inputs
   const [form, setForm] = useState(() => {
     try {
       const saved = localStorage.getItem('bakealley_pos_crm_form');
@@ -310,12 +308,10 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
   const [employees, setEmployees] = useState<CloudEmployee[]>([]);
   const [shifts, setShifts] = useState<CloudShift[]>([]);
 
-  // Persist selected employee calendar date
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return localStorage.getItem('bakealley_pos_emp_date') || today();
   });
 
-  // Persist unsaved draft employee creation inputs
   const [form, setForm] = useState(() => {
     try {
       const saved = localStorage.getItem('bakealley_pos_emp_form');
@@ -486,7 +482,6 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
 }
 
 export function CloudApp(): JSX.Element {
-  // Session state initialization with 8-hour rolling inactivity check
   const [session, setSession] = useState<CloudSession | null>(() => {
     const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
     const userJson = localStorage.getItem('bakealley_cloud_user') || sessionStorage.getItem('bakealley_cloud_user');
@@ -508,7 +503,6 @@ export function CloudApp(): JSX.Element {
     return null;
   });
 
-  // Active tab persistence across browser refreshes
   const [tab, setTab] = useState<Tab>(() => {
     const savedTab = localStorage.getItem('bakealley_cloud_tab') as Tab;
     return savedTab && ['checkout', 'sales', 'inventory', 'crm', 'employees'].includes(savedTab)
@@ -544,7 +538,6 @@ export function CloudApp(): JSX.Element {
     }
   }, [session]);
 
-  // Rolling 8-hour inactivity listener
   useEffect(() => {
     if (!session) return;
 

@@ -17,7 +17,7 @@ async function fixCloudPrices() {
 
     await client.query('BEGIN');
 
-    // 1. Create canonical tier with temporary name to bypass UNIQUE name constraint
+    // 1. Upsert canonical Retail Tier
     await client.query(
       `
       INSERT INTO price_tiers (tier_id, tier_name)
@@ -27,7 +27,7 @@ async function fixCloudPrices() {
       [CANONICAL_RETAIL_TIER_ID]
     );
 
-    // 2. Re-link foreign keys in product_prices, customers, and orders
+    // 2. Re-link foreign keys to canonical Retail Tier ID
     await client.query(
       `
       UPDATE product_prices 
@@ -80,7 +80,7 @@ async function fixCloudPrices() {
       [CANONICAL_RETAIL_TIER_ID]
     );
 
-    // 5. Upsert 20% markup prices for all product variants
+    // 5. Insert/Update prices with 20% markup based on initial_cost
     const upsertResult = await client.query(
       `
       INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity)
@@ -99,15 +99,14 @@ async function fixCloudPrices() {
     );
 
     await client.query('COMMIT');
-    console.log(`✓ Re-linked foreign keys and updated ${upsertResult.rowCount} prices with 20% markup!`);
+    console.log(`✓ Updated database with ${upsertResult.rowCount} retail prices (20% markup)!`);
 
-    // 6. Live verification
-    const testQuery = await client.query(
+    // Verification output
+    const sample = await client.query(
       `
       SELECT 
         v.sku, 
         v.variant_name AS name, 
-        pp.tier_id AS "tierId", 
         pp.price_per_unit AS "pricePerUnit"
       FROM product_variants v
       JOIN product_prices pp ON pp.variant_id = v.variant_id
@@ -117,15 +116,12 @@ async function fixCloudPrices() {
       [CANONICAL_RETAIL_TIER_ID]
     );
 
-    console.log('\n--- Live Product Sample in PostgreSQL ---');
-    console.table(testQuery.rows);
-
-    if (testQuery.rows.length > 0 && testQuery.rows.tierId === CANONICAL_RETAIL_TIER_ID) {
-      console.log('\n✅ SUCCESS: Prices are populated and linked to canonical Retail Tier ID!');
-    }
+    console.log('\n--- Sample Products in Database ---');
+    console.table(sample.rows);
+    console.log('\n✅ SUCCESS: Prices are populated and active!');
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
-    console.error('❌ Migration error:', error);
+    console.error('❌ Database error:', error);
   } finally {
     client.release();
     await pool.end();

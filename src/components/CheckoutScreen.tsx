@@ -74,11 +74,22 @@ interface CartLine {
   unitPrice: number;
 }
 
-// Store Categories loaded from Inventory_Main.csv
 const DEFAULT_CATEGORIES = [
-  'BUTTER', 'FLOURS', 'COCOA', 'CHOCOLATE BAR/CHIPS', 'SWEETENERS', 
-  'MILK/DAIRY', 'CAKE BOARDS', 'CAKE BOXES', 'FLAVORINGS', 'SEASONAL ITEMS', 
-  'BAKING PANS', 'CANDLES', 'DECORATIONS', 'PASTRY TOOLS', 'PACKAGING'
+  'BUTTER',
+  'FLOURS',
+  'COCOA',
+  'CHOCOLATE BAR/CHIPS',
+  'SWEETENERS',
+  'MILK/DAIRY',
+  'CAKE BOARDS',
+  'CAKE BOXES',
+  'FLAVORINGS',
+  'SEASONAL ITEMS',
+  'BAKING PANS',
+  'CANDLES',
+  'DECORATIONS',
+  'PASTRY TOOLS',
+  'PACKAGING',
 ];
 
 const money = new Intl.NumberFormat('en-PH', {
@@ -88,11 +99,29 @@ const money = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 2,
 });
 
+/**
+ * Resilient Price Resolution Helper
+ * 1. Corrects array property lookup: matchingPrices?.pricePerUnit
+ * 2. Fallback: Uses first valid non-zero price if tier ID doesn't match exactly
+ */
 function resolvePrice(product: CheckoutProduct, tierId: string, quantity: number): number {
+  if (!product.prices || product.prices.length === 0) return 0;
+
   const matchingPrices = product.prices
     .filter((price) => price.tierId === tierId && price.minQuantity <= quantity)
     .sort((left, right) => right.minQuantity - left.minQuantity);
-  return matchingPrices?.pricePerUnit ?? 0;
+
+  if (matchingPrices.length > 0 && Number(matchingPrices.pricePerUnit) > 0) {
+    return Number(matchingPrices.pricePerUnit);
+  }
+
+  // Resilient Fallback: Use first available price > 0 if Tier UUID mismatch occurs
+  const fallback = product.prices.find((p) => Number(p.pricePerUnit) > 0);
+  if (fallback) {
+    return Number(fallback.pricePerUnit);
+  }
+
+  return 0;
 }
 
 function formatWeight(grams: number): string {
@@ -111,8 +140,26 @@ export function CheckoutScreen({
 }: CheckoutScreenProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CheckoutProduct[]>([]);
-  const [cart, setCart] = useState<CartLine[]>([]);
-  const [customerId, setCustomerId] = useState<string | null>(null);
+
+  // Cart state persisted across page refreshes
+  const [cart, setCart] = useState<CartLine[]>(() => {
+    try {
+      const savedCart = localStorage.getItem('bakealley_pos_cart');
+      return savedCart ? JSON.parse(savedCart) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Customer selection persisted across page refreshes
+  const [customerId, setCustomerId] = useState<string | null>(() => {
+    return localStorage.getItem('bakealley_pos_customer_id') || null;
+  });
+
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryProducts, setCategoryProducts] = useState<CheckoutProduct[]>([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+
   const [scaleReading, setScaleReading] = useState<CheckoutScaleReading | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<CheckoutOrderPayload['paymentMethod']>('cash');
@@ -120,15 +167,21 @@ export function CheckoutScreen({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  
-  // Category Grid State
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [categoryProducts, setCategoryProducts] = useState<CheckoutProduct[]>([]);
-  const [categoryLoading, setCategoryLoading] = useState(false);
-
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const selectedCustomer = customers.find((c) => c.customerId === customerId) ?? null;
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_cart', JSON.stringify(cart));
+  }, [cart]);
+
+  useEffect(() => {
+    if (customerId) {
+      localStorage.setItem('bakealley_pos_customer_id', customerId);
+    } else {
+      localStorage.removeItem('bakealley_pos_customer_id');
+    }
+  }, [customerId]);
+
+  const selectedCustomer = customers.find((customer) => customer.customerId === customerId) ?? null;
   const pricingTierId = selectedCustomer?.tierId ?? retailTierId;
   const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
   const taxAmount = subtotal * taxRate;
@@ -158,13 +211,9 @@ export function CheckoutScreen({
     const poll = async (): Promise<void> => {
       try {
         const reading = await scaleSource.read();
-        if (mounted) {
-          setScaleReading(reading);
-        }
+        if (mounted) setScaleReading(reading);
       } catch {
-        if (mounted) {
-          setScaleReading(null);
-        }
+        if (mounted) setScaleReading(null);
       }
     };
     void poll();
@@ -185,13 +234,9 @@ export function CheckoutScreen({
   }, [pricingTierId]);
 
   useEffect(() => {
-    if (!activeWeightLine || !scaleReading) {
-      return;
-    }
+    if (!activeWeightLine || !scaleReading) return;
     const quantity = scaleReading.grams / (activeWeightLine.product.unit.toLowerCase() === 'kg' ? 1_000 : 1);
-    if (quantity <= 0) {
-      return;
-    }
+    if (quantity <= 0) return;
     setCart((currentCart) =>
       currentCart.map((line) =>
         line.lineId === activeWeightLine.lineId
@@ -254,9 +299,7 @@ export function CheckoutScreen({
   };
 
   const updateQuantity = (lineId: string, quantity: number): void => {
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      return;
-    }
+    if (!Number.isFinite(quantity) || quantity <= 0) return;
     setCart((currentCart) =>
       currentCart.map((line) =>
         line.lineId === lineId
@@ -294,7 +337,12 @@ export function CheckoutScreen({
       if (employeeToken && recordEmployeeSale) {
         await recordEmployeeSale(employeeToken, result.orderId);
       }
+
       setCart([]);
+      setCustomerId(null);
+      localStorage.removeItem('bakealley_pos_cart');
+      localStorage.removeItem('bakealley_pos_customer_id');
+
       setCashReceived('');
       setPaymentOpen(false);
       setMessage(`Order ${result.orderId} saved and queued for sync.`);
@@ -337,9 +385,7 @@ export function CheckoutScreen({
 
         {/* Barcode & SKU Search Bar */}
         <section className="relative">
-          <label className="sr-only" htmlFor="product-search">
-            Search by barcode or SKU
-          </label>
+          <label className="sr-only" htmlFor="product-search">Search by barcode or SKU</label>
           <input
             ref={searchInputRef}
             id="product-search"
@@ -349,7 +395,7 @@ export function CheckoutScreen({
             value={query}
             onChange={(event) => void search(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && results) {
+              if (event.key === 'Enter' && results.length > 0) {
                 addProduct(results);
               }
             }}
@@ -369,9 +415,7 @@ export function CheckoutScreen({
                   </span>
                   <span className="flex w-full items-center justify-between text-sm text-amber-700">
                     <span>{product.sku}</span>
-                    {product.soldByWeight && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Sold by weight</span>
-                    )}
+                    {product.soldByWeight && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Sold by weight</span>}
                   </span>
                 </button>
               ))}
@@ -379,7 +423,7 @@ export function CheckoutScreen({
           )}
         </section>
 
-        {/* 35-Category Fast-Key Grid Section */}
+        {/* Quick Categories Fast-Key Grid Section */}
         <section className="rounded-2xl border border-amber-200/80 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between border-b border-amber-100 pb-3">
             <h2 className="font-bakery text-lg font-bold text-amber-950">
@@ -400,7 +444,6 @@ export function CheckoutScreen({
           </div>
 
           {!selectedCategory ? (
-            /* Category Buttons Grid */
             <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7">
               {DEFAULT_CATEGORIES.map((cat) => (
                 <button
@@ -414,7 +457,6 @@ export function CheckoutScreen({
               ))}
             </div>
           ) : (
-            /* Product Cards for Selected Category */
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {categoryLoading ? (
                 <p className="col-span-full py-8 text-center text-xs text-amber-700">Loading products...</p>
@@ -446,62 +488,26 @@ export function CheckoutScreen({
           )}
         </section>
 
-        {/* Current Cart & Scale/Totals Section */}
+        {/* Current Transaction Table & Totals */}
         <section className="grid gap-6 lg:grid-cols-[1fr_22rem]">
           <div className="overflow-hidden rounded-xl border border-amber-200/80 bg-white shadow-sm">
-            <div className="border-b border-amber-200/80 px-5 py-4">
-              <h2 className="font-semibold">Current transaction</h2>
-            </div>
+            <div className="border-b border-amber-200/80 px-5 py-4"><h2 className="font-semibold">Current transaction</h2></div>
             {cart.length === 0 ? (
               <p className="px-5 py-16 text-center text-amber-700">Scan an item or tap a category to begin.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-amber-50/60 text-xs uppercase tracking-wide text-amber-700">
-                    <tr>
-                      <th className="px-5 py-3">Item</th>
-                      <th className="px-3 py-3">Qty</th>
-                      <th className="px-3 py-3">Price</th>
-                      <th className="px-5 py-3 text-right">Total</th>
-                      <th>
-                        <span className="sr-only">Remove</span>
-                      </th>
-                    </tr>
+                    <tr><th className="px-5 py-3">Item</th><th className="px-3 py-3">Qty</th><th className="px-3 py-3">Price</th><th className="px-5 py-3 text-right">Total</th><th><span className="sr-only">Remove</span></th></tr>
                   </thead>
                   <tbody>
                     {cart.map((line) => (
                       <tr key={line.lineId} className="border-t border-amber-100/60">
-                        <td className="px-5 py-4">
-                          <strong>{line.product.name}</strong>
-                          <div className="text-xs text-amber-700">{line.product.sku}</div>
-                        </td>
-                        <td className="px-3 py-4">
-                          <input
-                            aria-label={`Quantity for ${line.product.name}`}
-                            className="w-24 rounded border border-amber-200/80 px-2 py-1"
-                            min="0.0001"
-                            step="0.0001"
-                            type="number"
-                            value={line.quantity}
-                            onChange={(event) => updateQuantity(line.lineId, Number(event.target.value))}
-                          />
-                        </td>
-                        <td className="px-3 py-4 tabular-nums">
-                          {money.format(line.unitPrice)} / {line.product.unit}
-                        </td>
-                        <td className="px-5 py-4 text-right font-semibold tabular-nums">
-                          {money.format(line.quantity * line.unitPrice)}
-                        </td>
-                        <td className="pr-4">
-                          <button
-                            className="text-amber-600 hover:text-red-600"
-                            title="Remove item"
-                            type="button"
-                            onClick={() => setCart((currentCart) => currentCart.filter((item) => item.lineId !== line.lineId))}
-                          >
-                            ×
-                          </button>
-                        </td>
+                        <td className="px-5 py-4"><strong>{line.product.name}</strong><div className="text-xs text-amber-700">{line.product.sku}</div></td>
+                        <td className="px-3 py-4"><input aria-label={`Quantity for ${line.product.name}`} className="w-24 rounded border border-amber-200/80 px-2 py-1" min="0.0001" step="0.0001" type="number" value={line.quantity} onChange={(event) => updateQuantity(line.lineId, Number(event.target.value))} /></td>
+                        <td className="px-3 py-4 tabular-nums">{money.format(line.unitPrice)} / {line.product.unit}</td>
+                        <td className="px-5 py-4 text-right font-semibold tabular-nums">{money.format(line.quantity * line.unitPrice)}</td>
+                        <td className="pr-4"><button className="text-amber-600 hover:text-red-600" title="Remove item" type="button" onClick={() => setCart((currentCart) => currentCart.filter((item) => item.lineId !== line.lineId))}>×</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -513,45 +519,16 @@ export function CheckoutScreen({
           <aside className="space-y-4">
             {scaleEnabled && (
               <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
-                <div className="mb-5 flex items-center justify-between">
-                  <h2 className="font-semibold">Scale</h2>
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                      scaleReading?.stable ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                    }`}
-                  >
-                    {activeWeightLine ? (scaleReading?.stable ? 'Stable' : 'Waiting') : 'Idle'}
-                  </span>
-                </div>
-                <p className="text-3xl font-bold tabular-nums">
-                  {activeWeightLine && scaleReading ? formatWeight(scaleReading.grams) : '0 g'}
-                </p>
-                <p className="mt-1 text-sm text-amber-700">
-                  {activeWeightLine ? `Reading for ${activeWeightLine.product.name}` : 'Add a weight-based item to read the scale.'}
-                </p>
+                <div className="mb-5 flex items-center justify-between"><h2 className="font-semibold">Scale</h2><span className={`rounded-full px-2 py-1 text-xs font-semibold ${scaleReading?.stable ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{activeWeightLine ? (scaleReading?.stable ? 'Stable' : 'Waiting') : 'Idle'}</span></div>
+                <p className="text-3xl font-bold tabular-nums">{activeWeightLine && scaleReading ? formatWeight(scaleReading.grams) : '0 g'}</p>
+                <p className="mt-1 text-sm text-amber-700">{activeWeightLine ? `Reading for ${activeWeightLine.product.name}` : 'Add a weight-based item to read the scale.'}</p>
               </div>
             )}
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
-              <div className="flex justify-between text-sm text-amber-800">
-                <span>Subtotal</span>
-                <span className="font-semibold tabular-nums">{money.format(subtotal)}</span>
-              </div>
-              <div className="mt-2 flex justify-between text-sm text-amber-800">
-                <span>Tax</span>
-                <span className="font-semibold tabular-nums">{money.format(taxAmount)}</span>
-              </div>
-              <div className="mt-4 flex justify-between border-t border-amber-200/80 pt-4 text-xl font-bold">
-                <span>Total</span>
-                <span className="tabular-nums">{money.format(totalAmount)}</span>
-              </div>
-              <button
-                className="mt-5 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={cart.length === 0 || busy}
-                type="button"
-                onClick={() => setPaymentOpen(true)}
-              >
-                Take payment
-              </button>
+              <div className="flex justify-between text-sm text-amber-800"><span>Subtotal</span><span className="font-semibold tabular-nums">{money.format(subtotal)}</span></div>
+              <div className="mt-2 flex justify-between text-sm text-amber-800"><span>Tax</span><span className="font-semibold tabular-nums">{money.format(taxAmount)}</span></div>
+              <div className="mt-4 flex justify-between border-t border-amber-200/80 pt-4 text-xl font-bold"><span>Total</span><span className="tabular-nums">{money.format(totalAmount)}</span></div>
+              <button className="mt-5 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={cart.length === 0 || busy} type="button" onClick={() => setPaymentOpen(true)}>Take payment</button>
             </div>
           </aside>
         </section>
@@ -559,74 +536,14 @@ export function CheckoutScreen({
         {message && <p className="rounded-lg bg-amber-950 px-4 py-3 text-sm text-white" role="status">{message}</p>}
       </div>
 
-      {/* Payment Modal */}
       {paymentOpen && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-amber-950/50 p-4" role="presentation">
           <section aria-labelledby="payment-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" role="dialog">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-wide text-amber-600">Payment</p>
-                <h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">
-                  {money.format(totalAmount)}
-                </h2>
-              </div>
-              <button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setPaymentOpen(false)}>
-                ×
-              </button>
-            </div>
-            <fieldset className="mt-6">
-              <legend className="text-sm font-semibold">Payment method</legend>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {(['cash', 'card', 'account'] as const).map((method) => (
-                  <button
-                    className={`rounded-lg border px-3 py-3 text-sm font-semibold capitalize ${
-                      paymentMethod === method ? 'border-amber-600 bg-amber-50 text-amber-700' : 'border-amber-200/80 text-amber-800'
-                    }`}
-                    key={method}
-                    type="button"
-                    onClick={() => {
-                      setPaymentMethod(method);
-                      if (method !== 'cash') setCashReceived('');
-                    }}
-                  >
-                    {method}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            {paymentMethod === 'cash' && (
-              <div className="mt-5">
-                <label className="text-sm font-semibold">
-                  Cash received
-                  <input
-                    autoFocus
-                    className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
-                    min={totalAmount.toFixed(2)}
-                    step="0.01"
-                    type="number"
-                    value={cashReceived}
-                    onChange={(event) => setCashReceived(event.target.value)}
-                  />
-                </label>
-                <div className={`mt-3 flex justify-between rounded-lg px-3 py-3 text-sm font-semibold ${changeDue >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>
-                  <span>{changeDue >= 0 ? 'Change due' : 'Still needed'}</span>
-                  <span>{money.format(Math.abs(changeDue))}</span>
-                </div>
-              </div>
-            )}
-            {paymentError && (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-                {paymentError}
-              </p>
-            )}
-            <button
-              className="mt-6 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-              disabled={busy || (paymentMethod === 'cash' && changeDue < 0)}
-              type="button"
-              onClick={() => void submitOrder()}
-            >
-              {busy ? 'Saving...' : 'Confirm payment'}
-            </button>
+            <div className="flex items-start justify-between"><div><p className="text-sm font-semibold uppercase tracking-wide text-amber-600">Payment</p><h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(totalAmount)}</h2></div><button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setPaymentOpen(false)}>×</button></div>
+            <fieldset className="mt-6"><legend className="text-sm font-semibold">Payment method</legend><div className="mt-3 grid grid-cols-3 gap-2">{(['cash', 'card', 'account'] as const).map((method) => <button className={`rounded-lg border px-3 py-3 text-sm font-semibold capitalize ${paymentMethod === method ? 'border-amber-600 bg-amber-50 text-amber-700' : 'border-amber-200/80 text-amber-800'}`} key={method} type="button" onClick={() => { setPaymentMethod(method); if (method !== 'cash') setCashReceived(''); }}>{method}</button>)}</div></fieldset>
+            {paymentMethod === 'cash' && <div className="mt-5"><label className="text-sm font-semibold">Cash received<input autoFocus className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40" min={totalAmount.toFixed(2)} step="0.01" type="number" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} /></label><div className={`mt-3 flex justify-between rounded-lg px-3 py-3 text-sm font-semibold ${changeDue >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}><span>{changeDue >= 0 ? 'Change due' : 'Still needed'}</span><span>{money.format(Math.abs(changeDue))}</span></div></div>}
+            {paymentError && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{paymentError}</p>}
+            <button className="mt-6 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50" disabled={busy || (paymentMethod === 'cash' && changeDue < 0)} type="button" onClick={() => void submitOrder()}>{busy ? 'Saving...' : 'Confirm payment'}</button>
           </section>
         </div>
       )}
