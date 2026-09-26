@@ -11,7 +11,11 @@ const api = new CloudPosApi({
 });
 
 const retailTierId = import.meta.env.VITE_RETAIL_TIER_ID ?? '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
-const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
+
+// Role-Based Session Inactivity Timeouts
+const ADMIN_TIMEOUT_MS = 2 * 60 * 60 * 1000;   // 2 Hours of inactivity for Admins
+const CASHIER_TIMEOUT_MS = 30 * 60 * 1000;     // 30 Minutes of inactivity for Cashiers
+
 const LOW_STOCK_THRESHOLD = 10;
 const CARD_FEE_RATE = 0.025; // 2.5% estimated card fee
 
@@ -20,6 +24,10 @@ const today = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/M
 
 type Tab = 'checkout' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees';
 type VelocityTimeframe = 'monthly' | 'yearly';
+
+function getInactivityTimeout(role?: string): number {
+  return role === 'admin' ? ADMIN_TIMEOUT_MS : CASHIER_TIMEOUT_MS;
+}
 
 function errorText(error: unknown, fallback: string): string {
   if (error instanceof Error) return error.message;
@@ -74,7 +82,7 @@ function PeriodCard({ label, period }: { label: string; period?: CloudSalesRepor
 }
 
 /* ==========================================================================
-   FINANCIAL REPORT VIEW (EOD AUDIT + PDF/CSV EXPORTS)
+   FINANCIAL REPORT VIEW (EOD AUDIT + CONSOLIDATED TENDER RECONCILIATION)
    ========================================================================== */
 function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_financial_date') || today());
@@ -113,19 +121,30 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const grossProfit = dayGross - estimatedCogs;
   const profitMarginPct = dayGross > 0 ? (grossProfit / dayGross) * 100 : 0;
 
+  // Normalized payment reducer matching all tender variations
   const paymentBreakdown = (report?.items || []).reduce(
     (acc, item) => {
-      const method = (item.paymentMethod || 'cash').toLowerCase();
+      const rawMethod = String(item.paymentMethod || 'cash').toLowerCase().trim();
       const amount = Number(item.amount) || 0;
-      if (method === 'cash') acc.cash += amount;
-      else if (method === 'card') acc.card += amount;
-      else if (method === 'gcash') acc.gcash += amount;
-      else acc.account += amount;
+
+      if (rawMethod.includes('gcash')) {
+        acc.gcash += amount;
+      } else if (rawMethod.includes('card')) {
+        acc.card += amount;
+      } else if (rawMethod.includes('account')) {
+        acc.account += amount;
+      } else if (rawMethod.includes('cash')) {
+        acc.cash += amount;
+      } else {
+        acc.other += amount;
+      }
       return acc;
     },
-    { cash: 0, card: 0, gcash: 0, account: 0 }
+    { cash: 0, card: 0, gcash: 0, account: 0, other: 0 }
   );
 
+  const totalDigitalTender = paymentBreakdown.card + paymentBreakdown.gcash + paymentBreakdown.account + paymentBreakdown.other;
+  const totalConsolidatedTender = paymentBreakdown.cash + totalDigitalTender;
   const estimatedCardFees = paymentBreakdown.card * CARD_FEE_RATE;
 
   const exportCsv = (): void => {
@@ -145,11 +164,15 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       ['Total Orders Completed', orderCount],
       ['Average Order Value (AOV)', avgOrderValue.toFixed(2)],
       ['Average Units Per Basket', avgUnitsPerOrder.toFixed(2)],
-      ['Cash Payments Received', paymentBreakdown.cash.toFixed(2)],
-      ['Card Payments Received', paymentBreakdown.card.toFixed(2)],
-      ['GCash Payments Received', paymentBreakdown.gcash.toFixed(2)],
+      [''],
+      ['TENDER RECONCILIATION & CONSOLIDATION', 'AMOUNT (PHP)'],
+      ['Cash Payments Received (Cash Drawer)', paymentBreakdown.cash.toFixed(2)],
+      ['GCash E-Wallet Payments Received', paymentBreakdown.gcash.toFixed(2)],
+      ['Card / POS Terminal Payments Received', paymentBreakdown.card.toFixed(2)],
       ['Account Charges Received', paymentBreakdown.account.toFixed(2)],
-      ['Estimated Card Fees (2.5%)', estimatedCardFees.toFixed(2)],
+      ['Total Digital / Non-Cash Tenders', totalDigitalTender.toFixed(2)],
+      ['Total Consolidated Realized Tender', totalConsolidatedTender.toFixed(2)],
+      ['Estimated Card Merchant Fees (2.5%)', estimatedCardFees.toFixed(2)],
       [''],
       ['Time', 'Customer', 'Item Name', 'SKU', 'Quantity', 'Amount (PHP)', 'Payment Method'],
       ...items.map((item) => [
@@ -210,12 +233,14 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
             <div class="card"><p>Estimated COGS</p><strong>PHP ${estimatedCogs.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong></div>
             <div class="card"><p>Gross Profit Margin</p><strong>${profitMarginPct.toFixed(1)}%</strong></div>
           </div>
-          <h3>Payment Method Reconciliation</h3>
+          <h3>Payment Method Consolidation & Tender Breakdown</h3>
           <p style="font-size: 13px;">
-            <strong>Cash:</strong> PHP ${paymentBreakdown.cash.toFixed(2)} | 
-            <strong>Card:</strong> PHP ${paymentBreakdown.card.toFixed(2)} | 
-            <strong>GCash:</strong> PHP ${paymentBreakdown.gcash.toFixed(2)} | 
-            <strong>Account:</strong> PHP ${paymentBreakdown.account.toFixed(2)}
+            <strong>💵 Cash Drawer:</strong> PHP ${paymentBreakdown.cash.toFixed(2)} | 
+            <strong>📲 GCash E-Wallet:</strong> PHP ${paymentBreakdown.gcash.toFixed(2)} | 
+            <strong>💳 Card / POS:</strong> PHP ${paymentBreakdown.card.toFixed(2)} | 
+            <strong>📋 Commercial Account:</strong> PHP ${paymentBreakdown.account.toFixed(2)}<br>
+            <strong>🌐 Total Digital Tenders:</strong> PHP ${totalDigitalTender.toFixed(2)} | 
+            <strong>💰 Total Consolidated Realization:</strong> PHP ${totalConsolidatedTender.toFixed(2)}
           </p>
           <h3>Line Item Transaction Audit</h3>
           <table>
@@ -312,30 +337,46 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               </div>
             </div>
 
+            {/* CONSOLIDATED TENDER RECONCILIATION CARD */}
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-3">Register Cash Drawer vs Digital Tender</h3>
-                <div className="grid grid-cols-4 gap-2 text-center text-sm">
-                  <div className="rounded-lg bg-white p-2 border border-amber-200/60">
-                    <span className="text-[10px] text-amber-700 font-semibold block">💵 Cash</span>
-                    <strong className="text-amber-950 text-xs tabular-nums">{money.format(paymentBreakdown.cash)}</strong>
+              <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800">Register Cash Drawer vs Digital Tender</h3>
+                  <span className="text-xs font-bold text-amber-950">
+                    Total Realized: <span className="text-emerald-700">{money.format(totalConsolidatedTender)}</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-sm">
+                  <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
+                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">💵 Cash</span>
+                    <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.cash)}</strong>
+                    <span className="text-[9px] text-amber-700 block mt-0.5">Cash Drawer</span>
                   </div>
-                  <div className="rounded-lg bg-white p-2 border border-amber-200/60">
-                    <span className="text-[10px] text-amber-700 font-semibold block">💳 Card</span>
-                    <strong className="text-amber-950 text-xs tabular-nums">{money.format(paymentBreakdown.card)}</strong>
+                  <div className="rounded-lg bg-white p-2.5 border border-sky-200 shadow-sm">
+                    <span className="text-[10px] text-sky-800 font-bold block uppercase tracking-wider">📲 GCash</span>
+                    <strong className="text-sky-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.gcash)}</strong>
+                    <span className="text-[9px] text-sky-700 block mt-0.5">E-Wallet</span>
                   </div>
-                  <div className="rounded-lg bg-white p-2 border border-amber-200/60">
-                    <span className="text-[10px] text-sky-700 font-bold block">📲 GCash</span>
-                    <strong className="text-amber-950 text-xs tabular-nums">{money.format(paymentBreakdown.gcash)}</strong>
+                  <div className="rounded-lg bg-white p-2.5 border border-blue-200 shadow-sm">
+                    <span className="text-[10px] text-blue-800 font-bold block uppercase tracking-wider">💳 Card</span>
+                    <strong className="text-blue-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.card)}</strong>
+                    <span className="text-[9px] text-blue-700 block mt-0.5">POS Terminal</span>
                   </div>
-                  <div className="rounded-lg bg-white p-2 border border-amber-200/60">
-                    <span className="text-[10px] text-amber-700 font-semibold block">📋 Account</span>
-                    <strong className="text-amber-950 text-xs tabular-nums">{money.format(paymentBreakdown.account)}</strong>
+                  <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
+                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">📋 Account</span>
+                    <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.account)}</strong>
+                    <span className="text-[9px] text-amber-700 block mt-0.5">Receivable</span>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1 rounded-lg bg-emerald-800 p-2.5 text-white shadow-sm">
+                    <span className="text-[10px] text-emerald-200 font-bold block uppercase tracking-wider">🌐 Digital Total</span>
+                    <strong className="text-white text-xs tabular-nums block mt-1">{money.format(totalDigitalTender)}</strong>
+                    <span className="text-[9px] text-emerald-200 block mt-0.5">Non-Cash Tenders</span>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-4">
+              <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-3">Cost Analysis & Processing Fee Forecast</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between border-b border-amber-100 pb-1">
@@ -583,7 +624,7 @@ function BiView(): JSX.Element {
 }
 
 /* ==========================================================================
-   SALES VIEW (RETAINED DAILY SALES SUMMARY ONLY)
+   SALES VIEW (DAILY SALES SUMMARY WITH FORMATTED PAYMENT BADGES)
    ========================================================================== */
 function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_sales_date') || today());
@@ -623,7 +664,6 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       {error && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
       {report && !loading && (
         <>
-          {/* RETAINED DAILY SALES SUMMARY ONLY */}
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl bg-amber-950 p-4 text-white">
               <p className="text-sm text-amber-200/80">Daily gross</p>
@@ -646,19 +686,31 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 <tr><th className="py-2">Time / customer</th><th>Item</th><th>SKU</th><th>Qty</th><th>Amount</th><th>Payment</th></tr>
               </thead>
               <tbody>
-                {report.items.map((item, index) => (
-                  <tr className="border-b last:border-0" key={`${item.orderId}-${index}`}>
-                    <td className="py-3">
-                      <div>{new Date(item.soldAt).toLocaleTimeString()}</div>
-                      <div className="text-xs text-amber-700">{item.customerName}</div>
-                    </td>
-                    <td className="font-semibold">{item.itemName}</td>
-                    <td className="font-mono text-xs">{item.sku}</td>
-                    <td>{Number(item.quantity).toFixed(4)}</td>
-                    <td>{money.format(Number(item.amount) || 0)}</td>
-                    <td className="capitalize">{item.paymentMethod}</td>
-                  </tr>
-                ))}
+                {report.items.map((item, index) => {
+                  const methodStr = String(item.paymentMethod || 'cash').toLowerCase();
+                  let paymentBadge = <span className="font-semibold text-amber-950">💵 Cash</span>;
+                  if (methodStr.includes('gcash')) {
+                    paymentBadge = <span className="font-bold text-sky-700">📲 GCash</span>;
+                  } else if (methodStr.includes('card')) {
+                    paymentBadge = <span className="font-bold text-blue-700">💳 Card</span>;
+                  } else if (methodStr.includes('account')) {
+                    paymentBadge = <span className="font-semibold text-amber-900">📋 Account</span>;
+                  }
+
+                  return (
+                    <tr className="border-b last:border-0" key={`${item.orderId}-${index}`}>
+                      <td className="py-3">
+                        <div>{new Date(item.soldAt).toLocaleTimeString()}</div>
+                        <div className="text-xs text-amber-700">{item.customerName}</div>
+                      </td>
+                      <td className="font-semibold">{item.itemName}</td>
+                      <td className="font-mono text-xs">{item.sku}</td>
+                      <td>{Number(item.quantity).toFixed(4)}</td>
+                      <td>{money.format(Number(item.amount) || 0)}</td>
+                      <td>{paymentBadge}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             {report.items.length === 0 && <p className="py-8 text-center text-amber-700">No completed sales for this date.</p>}
@@ -742,7 +794,6 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
         <ActionButton disabled={loading} onClick={() => void refresh()}>{loading ? 'Refreshing...' : 'Refresh Stock'}</ActionButton>
       </div>
 
-      {/* ADMIN-ONLY PORTFOLIO VALUATION HEADER */}
       {isAdmin && (
         <div className="mb-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl bg-amber-950 p-4 text-white">
@@ -1088,7 +1139,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
 }
 
 /* ==========================================================================
-   MAIN APPLICATION SHELL WITH ROLE-BASED TAB SECURITY
+   MAIN APPLICATION SHELL WITH ROLE-BASED SESSION TIMEOUT & TAB SECURITY
    ========================================================================== */
 export function CloudApp(): JSX.Element {
   const [session, setSession] = useState<CloudSession | null>(() => {
@@ -1098,12 +1149,14 @@ export function CloudApp(): JSX.Element {
 
     if (token && userJson && lastActiveStr) {
       const lastActiveTime = Number(lastActiveStr);
-      if (Date.now() - lastActiveTime > EIGHT_HOURS_MS) {
-        clearSessionStorage();
-        return null;
-      }
       try {
-        return { token, user: JSON.parse(userJson) };
+        const user = JSON.parse(userJson);
+        const timeoutMs = getInactivityTimeout(user.role);
+        if (Date.now() - lastActiveTime > timeoutMs) {
+          clearSessionStorage();
+          return null;
+        }
+        return { token, user };
       } catch {
         clearSessionStorage();
         return null;
@@ -1156,12 +1209,14 @@ export function CloudApp(): JSX.Element {
     }
   }, [session]);
 
+  // Role-Based Dynamic Inactivity Monitor Effect
   useEffect(() => {
     if (!session) return;
 
     const handleActivity = (): void => {
       const lastActiveStr = localStorage.getItem('bakealley_cloud_last_active');
-      if (lastActiveStr && Date.now() - Number(lastActiveStr) > EIGHT_HOURS_MS) {
+      const timeoutMs = getInactivityTimeout(session.user.role);
+      if (lastActiveStr && Date.now() - Number(lastActiveStr) > timeoutMs) {
         clearSessionStorage();
         setSession(null);
       } else {
