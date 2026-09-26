@@ -43,7 +43,7 @@ export interface CheckoutOrderPayload {
   subtotal: number;
   taxAmount: number;
   totalAmount: number;
-  paymentMethod: 'cash' | 'card' | 'account';
+  paymentMethod: 'cash' | 'card' | 'gcash' | 'account';
   cashReceived: number;
 }
 
@@ -99,11 +99,6 @@ const money = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 2,
 });
 
-/**
- * Resilient Price Resolution Helper
- * 1. Corrects array property lookup: matchingPrices?.pricePerUnit
- * 2. Fallback: Uses first valid non-zero price if tier ID doesn't match exactly
- */
 function resolvePrice(product: CheckoutProduct, tierId: string, quantity: number): number {
   if (!product.prices || product.prices.length === 0) return 0;
 
@@ -111,11 +106,10 @@ function resolvePrice(product: CheckoutProduct, tierId: string, quantity: number
     .filter((price) => price.tierId === tierId && price.minQuantity <= quantity)
     .sort((left, right) => right.minQuantity - left.minQuantity);
 
-  if (matchingPrices.length > 0 && Number(matchingPrices.pricePerUnit) > 0) {
-    return Number(matchingPrices.pricePerUnit);
+  if (matchingPrices.length > 0 && Number(matchingPrices[0].pricePerUnit) > 0) {
+    return Number(matchingPrices[0].pricePerUnit);
   }
 
-  // Resilient Fallback: Use first available price > 0 if Tier UUID mismatch occurs
   const fallback = product.prices.find((p) => Number(p.pricePerUnit) > 0);
   if (fallback) {
     return Number(fallback.pricePerUnit);
@@ -141,7 +135,6 @@ export function CheckoutScreen({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CheckoutProduct[]>([]);
 
-  // Cart state persisted across page refreshes
   const [cart, setCart] = useState<CartLine[]>(() => {
     try {
       const savedCart = localStorage.getItem('bakealley_pos_cart');
@@ -151,7 +144,6 @@ export function CheckoutScreen({
     }
   });
 
-  // Customer selection persisted across page refreshes
   const [customerId, setCustomerId] = useState<string | null>(() => {
     return localStorage.getItem('bakealley_pos_customer_id') || null;
   });
@@ -355,6 +347,14 @@ export function CheckoutScreen({
     }
   };
 
+  // Payment Options Config with Logos / Visual Badges
+  const paymentOptions = [
+    { id: 'cash', label: 'Cash', icon: '💵', color: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
+    { id: 'card', label: 'Card / POS', icon: '💳', color: 'border-blue-500 bg-blue-50 text-blue-800' },
+    { id: 'gcash', label: 'GCash', icon: '📲', color: 'border-sky-500 bg-sky-50 text-sky-800' },
+    { id: 'account', label: 'Account', icon: '📋', color: 'border-amber-500 bg-amber-50 text-amber-800' },
+  ] as const;
+
   return (
     <main className="min-h-screen bg-[#FAF6F0] p-6 text-amber-950">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -396,7 +396,7 @@ export function CheckoutScreen({
             onChange={(event) => void search(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && results.length > 0) {
-                addProduct(results);
+                addProduct(results[0]);
               }
             }}
           />
@@ -536,14 +536,80 @@ export function CheckoutScreen({
         {message && <p className="rounded-lg bg-amber-950 px-4 py-3 text-sm text-white" role="status">{message}</p>}
       </div>
 
+      {/* Payment Modal with Logged Options (Cash, Card, GCash, Account) */}
       {paymentOpen && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-amber-950/50 p-4" role="presentation">
           <section aria-labelledby="payment-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" role="dialog">
-            <div className="flex items-start justify-between"><div><p className="text-sm font-semibold uppercase tracking-wide text-amber-600">Payment</p><h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(totalAmount)}</h2></div><button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setPaymentOpen(false)}>×</button></div>
-            <fieldset className="mt-6"><legend className="text-sm font-semibold">Payment method</legend><div className="mt-3 grid grid-cols-3 gap-2">{(['cash', 'card', 'account'] as const).map((method) => <button className={`rounded-lg border px-3 py-3 text-sm font-semibold capitalize ${paymentMethod === method ? 'border-amber-600 bg-amber-50 text-amber-700' : 'border-amber-200/80 text-amber-800'}`} key={method} type="button" onClick={() => { setPaymentMethod(method); if (method !== 'cash') setCashReceived(''); }}>{method}</button>)}</div></fieldset>
-            {paymentMethod === 'cash' && <div className="mt-5"><label className="text-sm font-semibold">Cash received<input autoFocus className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40" min={totalAmount.toFixed(2)} step="0.01" type="number" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} /></label><div className={`mt-3 flex justify-between rounded-lg px-3 py-3 text-sm font-semibold ${changeDue >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}><span>{changeDue >= 0 ? 'Change due' : 'Still needed'}</span><span>{money.format(Math.abs(changeDue))}</span></div></div>}
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-amber-600">Payment</p>
+                <h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(totalAmount)}</h2>
+              </div>
+              <button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setPaymentOpen(false)}>×</button>
+            </div>
+
+            <fieldset className="mt-6">
+              <legend className="text-sm font-semibold mb-3">Select Payment Method</legend>
+              <div className="grid grid-cols-2 gap-2.5">
+                {paymentOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod(opt.id);
+                      if (opt.id !== 'cash') setCashReceived('');
+                    }}
+                    className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
+                      paymentMethod === opt.id
+                        ? `${opt.color} ring-2 ring-amber-500/50 shadow-sm font-bold`
+                        : 'border-amber-200/80 text-amber-900 hover:bg-amber-50/50 font-semibold'
+                    }`}
+                  >
+                    <span className="text-xl">{opt.icon}</span>
+                    <span className="text-sm">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            {paymentMethod === 'cash' && (
+              <div className="mt-5">
+                <label className="text-sm font-semibold">
+                  Cash received
+                  <input
+                    autoFocus
+                    className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
+                    min={totalAmount.toFixed(2)}
+                    step="0.01"
+                    type="number"
+                    value={cashReceived}
+                    onChange={(event) => setCashReceived(event.target.value)}
+                  />
+                </label>
+                <div className={`mt-3 flex justify-between rounded-lg px-3 py-3 text-sm font-semibold ${changeDue >= 0 ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>
+                  <span>{changeDue >= 0 ? 'Change due' : 'Still needed'}</span>
+                  <span className="tabular-nums">{money.format(Math.abs(changeDue))}</span>
+                </div>
+              </div>
+            )}
+
+            {paymentMethod === 'gcash' && (
+              <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3.5 text-xs text-sky-900">
+                <p className="font-bold flex items-center gap-1.5">📲 GCash Payment Scan</p>
+                <p className="mt-1">Confirm client transaction reference on the store GCash QR terminal before clicking payment.</p>
+              </div>
+            )}
+
             {paymentError && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{paymentError}</p>}
-            <button className="mt-6 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50" disabled={busy || (paymentMethod === 'cash' && changeDue < 0)} type="button" onClick={() => void submitOrder()}>{busy ? 'Saving...' : 'Confirm payment'}</button>
+            
+            <button
+              className="mt-6 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50 shadow-sm"
+              disabled={busy || (paymentMethod === 'cash' && changeDue < 0)}
+              type="button"
+              onClick={() => void submitOrder()}
+            >
+              {busy ? 'Saving...' : 'Confirm payment'}
+            </button>
           </section>
         </div>
       )}
