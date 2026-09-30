@@ -43,5 +43,5 @@ function isCreateOrderInput(input: unknown): input is CreateOrderInput {
         && typeof candidate.taxAmount === 'number'
         && typeof candidate.totalAmount === 'number'
         && typeof candidate.cashReceived === 'number'
-        && (candidate.paymentMethod === 'cash' || candidate.paymentMethod === 'card' || candidate.paymentMethod === 'account');
+        && (candidate.paymentMethod === 'cash' || candidate.paymentMethod === 'card' || candidate.paymentMethod === 'gcash' || candidate.paymentMethod === 'account');
 }

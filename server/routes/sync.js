@@ -88,8 +88,8 @@ async function applyOrder(client, syncItem) {
         text: `
             INSERT INTO orders (
                 order_id, customer_id, pricing_tier_id, order_type, status,
-                subtotal, tax_amount, total_amount, created_at
-            ) VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8)
+                subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, created_at
+            ) VALUES ($1, $2, $3, $4, 'completed', $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (order_id) DO NOTHING
             RETURNING order_id
         `,
@@ -101,6 +101,9 @@ async function applyOrder(client, syncItem) {
             requireMoney(payload.subtotal, 'subtotal'),
             requireMoney(payload.taxAmount, 'taxAmount'),
             requireMoney(payload.totalAmount, 'totalAmount'),
+            payload.paymentMethod || 'cash',
+            payload.cashReceived || 0,
+            payload.changeDue || 0,
             payload.createdAt || new Date().toISOString(),
         ],
     });

@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS orders (
     total_amount NUMERIC NOT NULL DEFAULT 0.00
         CHECK (total_amount >= 0 AND total_amount = round(total_amount, 2)),
     payment_method TEXT NOT NULL DEFAULT 'cash'
-        CHECK (payment_method IN ('cash', 'card', 'account')),
+        CHECK (payment_method IN ('cash', 'card', 'gcash', 'account')),
     cash_received NUMERIC NOT NULL DEFAULT 0.00
         CHECK (cash_received >= 0 AND cash_received = round(cash_received, 2)),
     change_due NUMERIC NOT NULL DEFAULT 0.00
@@ -252,7 +252,51 @@ export function initializeSchema(database: Database.Database): void {
         database.exec(schemaSql);
         const orderColumns = database.prepare('PRAGMA table_info(orders)').all() as Array<{ name: string }>;
         if (!orderColumns.some((column) => column.name === 'payment_method')) {
-            database.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('cash', 'card', 'account'))");
+            database.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('cash', 'card', 'gcash', 'account'))");
+        } else {
+            const ordersMaster = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'orders'").get() as { sql?: string } | undefined;
+            if (ordersMaster?.sql && !ordersMaster.sql.includes("'gcash'")) {
+                database.exec(`
+                    PRAGMA foreign_keys = OFF;
+                    ALTER TABLE orders RENAME TO _orders_old;
+                    CREATE TABLE orders (
+                        order_id TEXT PRIMARY KEY NOT NULL,
+                        customer_id TEXT,
+                        pricing_tier_id TEXT NOT NULL,
+                        order_type TEXT NOT NULL CHECK (order_type IN ('retail', 'commercial')),
+                        status TEXT NOT NULL DEFAULT 'completed'
+                            CHECK (status IN ('open', 'completed', 'voided')),
+                        subtotal NUMERIC NOT NULL DEFAULT 0.00
+                            CHECK (subtotal >= 0 AND subtotal = round(subtotal, 2)),
+                        tax_amount NUMERIC NOT NULL DEFAULT 0.00
+                            CHECK (tax_amount >= 0 AND tax_amount = round(tax_amount, 2)),
+                        total_amount NUMERIC NOT NULL DEFAULT 0.00
+                            CHECK (total_amount >= 0 AND total_amount = round(total_amount, 2)),
+                        payment_method TEXT NOT NULL DEFAULT 'cash'
+                            CHECK (payment_method IN ('cash', 'card', 'gcash', 'account')),
+                        cash_received NUMERIC NOT NULL DEFAULT 0.00
+                            CHECK (cash_received >= 0 AND cash_received = round(cash_received, 2)),
+                        change_due NUMERIC NOT NULL DEFAULT 0.00
+                            CHECK (change_due >= 0 AND change_due = round(change_due, 2)),
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE SET NULL,
+                        FOREIGN KEY (pricing_tier_id) REFERENCES price_tiers (tier_id) ON DELETE RESTRICT
+                    );
+                    INSERT INTO orders (
+                        order_id, customer_id, pricing_tier_id, order_type, status,
+                        subtotal, tax_amount, total_amount, payment_method,
+                        cash_received, change_due, created_at, updated_at
+                    )
+                    SELECT
+                        order_id, customer_id, pricing_tier_id, order_type, status,
+                        subtotal, tax_amount, total_amount, payment_method,
+                        COALESCE(cash_received, 0.00), COALESCE(change_due, 0.00), created_at, updated_at
+                    FROM _orders_old;
+                    DROP TABLE _orders_old;
+                    PRAGMA foreign_keys = ON;
+                `);
+            }
         }
         const migratedOrderColumns = database.prepare('PRAGMA table_info(orders)').all() as Array<{ name: string }>;
         if (!migratedOrderColumns.some((column) => column.name === 'cash_received')) {

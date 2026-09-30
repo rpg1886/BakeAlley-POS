@@ -9,7 +9,7 @@ export interface SalesItemSummary {
     itemName: string;
     quantity: number;
     amount: number;
-    paymentMethod: 'cash' | 'card' | 'account';
+    paymentMethod: 'cash' | 'card' | 'gcash' | 'account';
 }
 
 export interface SalesPeriodSummary {

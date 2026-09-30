@@ -37,7 +37,7 @@ export interface CreateOrderInput {
     subtotal: number;
     taxAmount: number;
     totalAmount: number;
-    paymentMethod: 'cash' | 'card' | 'account';
+    paymentMethod: 'cash' | 'card' | 'gcash' | 'account';
     cashReceived: number;
 }
 
