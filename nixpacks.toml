@@ -1,0 +1,10 @@
+[build]
+# Cloud API server deployment (skip desktop Electron build)
+cmds = [
+  "npm ci --omit=optional --legacy-peer-deps",
+  "npm prune --omit=dev"
+]
+
+[start]
+cmd = "node server/app.js"
+
