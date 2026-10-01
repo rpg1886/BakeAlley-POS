@@ -98,7 +98,7 @@ app.get('/api/v1/products/search', auth.requireSession, async (request, response
     // Filter by Category ID (UUID) or Category Name String
     if (categoryId) {
       params.push(categoryId);
-      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId)) {
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ [cite: 115] [cite: 115] [cite: 115]/i.test(categoryId)) {
         whereConditions.push(`p.category_id = $${params.length}`);
       } else {
         whereConditions.push(`c.name ILIKE $${params.length}`);
@@ -560,7 +560,7 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
   }
 });
 
-// Employee Shifts List Endpoint (Robust Timestamptz Date Filter)
+// Employee Shifts List Endpoint (Date Filter Fixed with match[1])
 app.get('/api/v1/employees/shifts', auth.requireSession, async (request, response, next) => {
   try {
     const rawDate = String(request.query.date ?? '').trim();
@@ -576,7 +576,7 @@ app.get('/api/v1/employees/shifts', auth.requireSession, async (request, respons
     }
 
     const result = await pool.query(
-      `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", s.clock_in AS "clockIn", s.clock_out AS "clockOut" 
+      `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", u.role AS "role", s.clock_in AS "clockIn", s.clock_out AS "clockOut" 
        FROM employee_shifts s 
        JOIN app_users u ON u.user_id=s.user_id 
        WHERE ($1 = 'admin' OR s.user_id = $2) ${dateFilter} 
@@ -701,7 +701,7 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   }
 });
 
-// Sales Report Endpoint (Fail-Safe Date Parsing)
+// Sales Report Endpoint (Fixed String Extraction with match[1])
 app.get('/api/v1/sales/report', auth.requireSession, async (request, response, next) => {
   try {
     const rawDate = String(request.query.date ?? '').trim();
