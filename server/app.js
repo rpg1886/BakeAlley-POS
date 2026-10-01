@@ -709,7 +709,10 @@ app.use((error, _request, response, _next) => {
 
 async function start(port = Number(process.env.PORT ?? 3000)) { 
   try {
+    logger.info('Running database migration...');
     await migrate(); 
+    logger.info('Migration complete, starting server...');
+    
     return new Promise((resolve, reject) => {
       const server = app.listen(port, () => {
         logger.info(`Bake Alley cloud API listening on port ${port}`);
@@ -728,6 +731,7 @@ async function start(port = Number(process.env.PORT ?? 3000)) {
 }
 
 if (require.main === module) {
+  logger.info('Starting Bake Alley Cloud API...');
   start().catch((error) => { 
     logger.error('Fatal startup error', { 
       error: error.message, 
