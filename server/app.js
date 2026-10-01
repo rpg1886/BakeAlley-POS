@@ -710,19 +710,30 @@ app.use((error, _request, response, _next) => {
 async function start(port = Number(process.env.PORT ?? 3000)) { 
   try {
     await migrate(); 
-    const server = app.listen(port, () => {
-      logger.info(`Bake Alley cloud API listening on port ${port}`);
+    return new Promise((resolve, reject) => {
+      const server = app.listen(port, () => {
+        logger.info(`Bake Alley cloud API listening on port ${port}`);
+        resolve(server);
+      });
+      
+      server.on('error', (error) => {
+        logger.error('Server error', { error: error.message, code: error.code });
+        reject(error);
+      });
     });
-    return server;
   } catch (error) {
-    logger.error('Failed to start server', { error: error.message });
+    logger.error('Failed to start server', { error: error.message, code: error.code, stack: error.stack });
     throw error;
   }
 }
 
 if (require.main === module) {
   start().catch((error) => { 
-    logger.error('Fatal startup error', { error: error.message });
+    logger.error('Fatal startup error', { 
+      error: error.message, 
+      code: error.code, 
+      stack: error.stack 
+    });
     process.exitCode = 1; 
   });
 }
