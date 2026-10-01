@@ -487,3 +487,5 @@
 {"level":"info","message":"Database migration completed successfully","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 19:59:28"}
 {"level":"info","message":"Database migration completed successfully","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 20:05:10"}
 {"level":"info","message":"Database migration completed successfully","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 20:12:19"}
+{"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 20:59:27"}
+{"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:12:19"}

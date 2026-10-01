@@ -178,3 +178,4 @@ Step 9: Γ£ô Transaction committed
 
 Imported 1383 rows from c:\Users\Ryan\Projects\BakeAlley-POS\BakeAlley-POS\Inventory_Main.csv (1 skipped).
 {"createdCategories":37,"createdProducts":1372,"updatedProducts":0,"createdLots":1372,"updatedLots":0}
+2026-10-01 21:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
