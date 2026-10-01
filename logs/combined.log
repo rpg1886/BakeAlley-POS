@@ -489,3 +489,22 @@
 {"level":"info","message":"Database migration completed successfully","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 20:12:19"}
 {"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 20:59:27"}
 {"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:12:19"}
+{"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:31:08"}
+{"allowedOrigins":["https://rpg1886.github.io","http://localhost:5173","http://127.0.0.1:5173","http://localhost:3000","http://127.0.0.1:3000"],"level":"info","message":"CORS allowed origins","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:57:49"}
+{"level":"info","message":"Database migration completed successfully","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:57:50"}
+{"level":"info","message":"Bake Alley cloud API listening on port 3000","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:57:50"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:58:21"}
+{"level":"info","message":"User logged in","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:58:22","username":"admin"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:58:22"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:58:22"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:58:22"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:58:22"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:58:22"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:58:28"}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:58:28"}
+{"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:59:27"}
+{"allowedOrigins":["https://rpg1886.github.io","http://localhost:5173","http://127.0.0.1:5173","http://localhost:3000","http://127.0.0.1:3000"],"level":"info","message":"CORS allowed origins","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:03:27"}
+{"level":"info","message":"Database migration completed successfully","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:03:29"}
+{"level":"info","message":"Bake Alley cloud API listening on port 3000","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:03:29"}
+{"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:12:19"}
+{"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:31:08"}
