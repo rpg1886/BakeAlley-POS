@@ -1,5 +1,5 @@
 [build]
-cmds = ["npm ci --only=prod"]
+cmds = ["npm ci --omit=dev"]
 
 [start]
 cmd = "node server/app.js"
