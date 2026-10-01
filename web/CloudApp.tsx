@@ -12,9 +12,8 @@ const api = new CloudPosApi({
 
 const retailTierId = import.meta.env.VITE_RETAIL_TIER_ID ?? '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
 
-// Role-Based Session Inactivity Timeouts
-const ADMIN_TIMEOUT_MS = 2 * 60 * 60 * 1000;   // 2 Hours of inactivity for Admins
-const CASHIER_TIMEOUT_MS = 30 * 60 * 1000;     // 30 Minutes of inactivity for Cashiers
+// Unified Inactivity Timeout - 5 minutes for all users
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;   // 5 Minutes of inactivity for all users
 
 const LOW_STOCK_THRESHOLD = 10;
 const CARD_FEE_RATE = 0.025; // 2.5% estimated card fee
@@ -25,8 +24,8 @@ const today = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/M
 type Tab = 'checkout' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees';
 type VelocityTimeframe = 'monthly' | 'yearly';
 
-function getInactivityTimeout(role?: string): number {
-  return role === 'admin' ? ADMIN_TIMEOUT_MS : CASHIER_TIMEOUT_MS;
+function getInactivityTimeout(): number {
+  return INACTIVITY_TIMEOUT_MS;  // 5 minutes for all users
 }
 
 function errorText(error: unknown, fallback: string): string {
@@ -1521,19 +1520,12 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
    ========================================================================== */
 export function CloudApp(): JSX.Element {
   const [session, setSession] = useState<CloudSession | null>(() => {
-    const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
-    const userJson = localStorage.getItem('bakealley_cloud_user') || sessionStorage.getItem('bakealley_cloud_user');
-    const lastActiveStr = localStorage.getItem('bakealley_cloud_last_active');
+    const token = localStorage.getItem('bakealley_cloud_token');
+    const userJson = localStorage.getItem('bakealley_cloud_user');
 
-    if (token && userJson && lastActiveStr) {
-      const lastActiveTime = Number(lastActiveStr);
+    if (token && userJson) {
       try {
         const user = JSON.parse(userJson);
-        const timeoutMs = getInactivityTimeout(user.role);
-        if (Date.now() - lastActiveTime > timeoutMs) {
-          clearSessionStorage();
-          return null;
-        }
         return { token, user };
       } catch {
         clearSessionStorage();
@@ -1587,13 +1579,13 @@ export function CloudApp(): JSX.Element {
     }
   }, [session]);
 
-  // Role-Based Dynamic Inactivity Monitor Effect
+  // Inactivity Monitor Effect - Auto-logout after 5 minutes of inactivity
   useEffect(() => {
     if (!session) return;
 
     const handleActivity = (): void => {
       const lastActiveStr = localStorage.getItem('bakealley_cloud_last_active');
-      const timeoutMs = getInactivityTimeout(session.user.role);
+      const timeoutMs = getInactivityTimeout();
       if (lastActiveStr && Date.now() - Number(lastActiveStr) > timeoutMs) {
         clearSessionStorage();
         setSession(null);
@@ -1614,30 +1606,6 @@ export function CloudApp(): JSX.Element {
       window.removeEventListener('scroll', handleActivity);
     };
   }, [session]);
-
-  // Tab Close Detection Effect
-  // Detects if tab was closed by checking if sessionStorage was cleared
-  // while localStorage still has session data (indicating tab close, not refresh)
-  useEffect(() => {
-    const localToken = localStorage.getItem('bakealley_cloud_token');
-    const sessionToken = sessionStorage.getItem('bakealley_cloud_token');
-
-    // If localStorage has token but sessionStorage doesn't, the tab was closed
-    // sessionStorage persists through refresh but clears on tab close
-    if (localToken && !sessionToken) {
-      // Tab was closed - logout and clear storage
-      const performLogout = async (): Promise<void> => {
-        try {
-          await api.logout();
-        } catch (error) {
-          console.error('Logout failed on tab restore:', error);
-        }
-        clearSessionStorage();
-        setSession(null);
-      };
-      void performLogout();
-    }
-  }, []);
 
   if (!session) {
     return (

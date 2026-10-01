@@ -348,3 +348,88 @@
 {"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:05:09"}
 {"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:05:09"}
 {"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:05:09"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59","token":"e2c76618..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59","token":"e2c76618..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59","token":"e2c76618..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59","token":"e2c76618..."}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59","token":"e2c76618..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:10:59","token":"e2c76618..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:04"}
+{"level":"info","message":"User logged in","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:04","username":"admin"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:04"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:04"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:04"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:04"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:04"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:08"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:08"}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:08"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:08"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:08","token":"0007654a..."}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:08"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:08"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:08","token":"0007654a..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:11"}
+{"level":"info","message":"User logged in","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:11","username":"admin"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:11"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:14"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:14"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16"}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16"}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16","token":"1610d1f0..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16","token":"1610d1f0..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16","token":"1610d1f0..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:16","token":"1610d1f0..."}
+{"allowedOrigins":["http://localhost:5173","http://127.0.0.1:5173","http://localhost:3000","http://127.0.0.1:3000"],"level":"info","message":"CORS allowed origins","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:29"}
+{"level":"info","message":"Database migration completed successfully","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:29"}
+{"level":"info","message":"Bake Alley cloud API listening on port 3000","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:29"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:41"}
+{"level":"info","message":"User logged in","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:41","username":"admin"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:41"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:41"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:42"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44"}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44"}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44","token":"15f4ef65..."}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44","token":"15f4ef65..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44","token":"15f4ef65..."}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:44","token":"15f4ef65..."}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:45"}
+{"level":"info","message":"User logged in","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:45","username":"admin"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:45"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:45"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:11:45"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14"}
+{"isAllowed":true,"level":"info","message":"CORS request received","origin":"http://127.0.0.1:5173","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14"}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14","token":"e0ddf663..."}
+{"level":"info","message":"User logged out","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14"}
+{"isAllowed":true,"level":"info","message":"CORS request received","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14"}
+{"level":"warn","message":"Session lookup failed or expired","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 16:15:14","token":"e0ddf663..."}
