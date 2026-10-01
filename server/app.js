@@ -104,6 +104,16 @@ app.get('/api/v1/products/search', auth.requireSession, async (request, response
   }
 });
 
+app.get('/api/v1/units-of-measure', auth.requireSession, async (_request, response, next) => {
+  try {
+    const result = await pool.query('SELECT uom_id AS "uomId", name, symbol FROM units_of_measure ORDER BY name');
+    response.json(result.rows);
+  } catch (error) {
+    logger.error('Units of measure fetch failed', { error: error.message });
+    next(error);
+  }
+});
+
 app.get('/api/v1/customers', auth.requireSession, async (_request, response, next) => {
   try { 
     const result = await pool.query('SELECT customer_id AS "customerId", COALESCE(company_name || \' - \', \'\') || contact_name AS "displayName", email, phone, tier_id AS "tierId" FROM customers ORDER BY contact_name'); 

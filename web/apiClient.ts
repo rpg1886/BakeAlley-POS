@@ -44,6 +44,12 @@ export interface CloudInventoryRow {
   retailPrice: number;
 }
 
+export interface CloudUnitOfMeasure {
+  uomId: string;
+  name: string;
+  symbol: string;
+}
+
 export interface CloudEmployee {
   userId: string;
   username: string;
@@ -138,6 +144,14 @@ export class CloudApiClient {
 
   public async salesReport(date: string): Promise<CloudSalesReport> {
     return this.request(`/api/v1/sales/report?date=${encodeURIComponent(date)}`);
+  }
+
+  public async getUnitsOfMeasure(): Promise<CloudUnitOfMeasure[]> {
+    return this.request('/api/v1/units-of-measure');
+  }
+
+  public async logout(): Promise<void> {
+    await this.request('/api/v1/auth/logout', { method: 'POST' });
   }
 
   private async request(path: string, init: RequestInit = {}): Promise<any> {

@@ -728,6 +728,8 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const [rows, setRows] = useState<CloudInventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uoms, setUoms] = useState<Array<{ uomId: string; name: string; symbol: string }>>([]);
+  const [defaultUomId, setDefaultUomId] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'low' | 'out'>('all');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -741,7 +743,12 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     setLoading(true);
     setError(null);
     try {
-      setRows(await api.inventory());
+      const [inventoryData, uomData] = await Promise.all([api.inventory(), api.getUnitsOfMeasure()]);
+      setRows(inventoryData);
+      setUoms(uomData);
+      if (uomData.length > 0 && !defaultUomId) {
+        setDefaultUomId(uomData[0].uomId);
+      }
     } catch (reason) {
       setError(errorText(reason, 'Unable to load inventory.'));
     } finally {
@@ -882,11 +889,15 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     setIsSubmitting(true);
     setFormError(null);
     try {
+      if (!defaultUomId) {
+        setFormError('Unit of measure not available. Please refresh.');
+        return;
+      }
       await api.createInventoryProduct({
         name: addForm.name,
         sku: addForm.sku,
         variantName: addForm.variantName,
-        baseUomId: '550e8400-e29b-41d4-a716-446655440000',
+        baseUomId: defaultUomId,
         lotNumber: addForm.lotNumber,
         quantity: Number(addForm.quantity),
         retailPrice: Number(addForm.retailPrice),
@@ -1604,6 +1615,31 @@ export function CloudApp(): JSX.Element {
     };
   }, [session]);
 
+  // Browser Close / Tab Close - Logout Effect
+  useEffect(() => {
+    if (!session) return;
+
+    const handleBeforeUnload = async (): Promise<void> => {
+      try {
+        await api.logout();
+      } catch (error) {
+        console.error('Logout failed during page unload:', error);
+      }
+      clearSessionStorage();
+    };
+
+    // Call logout on page unload (closing tab/browser/leaving site)
+    window.addEventListener('beforeunload', () => {
+      handleBeforeUnload().catch(console.error);
+    });
+
+    return () => {
+      window.removeEventListener('beforeunload', () => {
+        handleBeforeUnload().catch(console.error);
+      });
+    };
+  }, [session]);
+
   if (!session) {
     return (
       <LoginScreen
@@ -1655,7 +1691,12 @@ export function CloudApp(): JSX.Element {
           <button
             className="text-sm font-semibold text-amber-700 hover:text-amber-900"
             type="button"
-            onClick={() => {
+            onClick={async () => {
+              try {
+                await api.logout();
+              } catch (error) {
+                console.error('Logout failed:', error);
+              }
               clearSessionStorage();
               setSession(null);
             }}
