@@ -12,20 +12,17 @@ const logger = winston.createLogger({
   transports: [
     new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
     new winston.transports.File({ filename: 'logs/combined.log' }),
+    // Always log to console so Railway/production environments can see output
+    new winston.transports.Console({
+      format: winston.format.combine(
+        process.env.NODE_ENV !== 'production' ? winston.format.colorize() : winston.format.uncolorize(),
+        winston.format.printf(({ level, message, timestamp, ...meta }) => {
+          const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
+          return `${timestamp} [${level}]: ${message} ${metaStr}`;
+        })
+      ),
+    }),
   ],
 });
-
-// Also log to console in development
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.printf(({ level, message, timestamp, ...meta }) => {
-        const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
-        return `${timestamp} [${level}]: ${message} ${metaStr}`;
-      })
-    ),
-  }));
-}
 
 module.exports = logger;
