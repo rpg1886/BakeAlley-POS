@@ -85,15 +85,26 @@ async function ensurePieceUom(client) {
 }
 
 async function importMainInventory(csvPath, defaultMarkupPercent) {
+  console.log('Starting import process...');
+  console.log(`CSV Path: ${csvPath}`);
+  console.log(`Default Markup: ${defaultMarkupPercent}%\n`);
+
+  console.log('Step 1: Running database migration...');
   await migrate();
+  console.log('Step 1: ✓ Migration complete\n');
+
+  console.log('Step 2: Reading CSV file...');
   const workbook = XLSX.readFile(csvPath, { cellDates: false });
   const sheet = workbook.Sheets[workbook.SheetNames];
   if (!sheet) throw new Error(`No worksheet found in ${csvPath}`);
   const sourceRows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
   if (sourceRows.length === 0) throw new Error(`${csvPath} contains no rows`);
+  console.log(`Step 2: ✓ Read ${sourceRows.length} rows from CSV\n`);
 
+  console.log('Step 3: Merging duplicate rows...');
   const { rows: merged, skippedRows } = mergeRows(sourceRows);
   if (merged.size === 0) throw new Error(`${csvPath} contains no usable rows`);
+  console.log(`Step 3: ✓ Merged to ${merged.size} unique products (${skippedRows} skipped)\n`);
 
   const client = await pool.connect();
   const usedSkus = new Set();
@@ -102,12 +113,18 @@ async function importMainInventory(csvPath, defaultMarkupPercent) {
   let updatedProducts = 0;
   let createdLots = 0;
   let updatedLots = 0;
+  let processedRows = 0;
 
   try {
+    console.log('Step 4: Starting database transaction...');
     await client.query('BEGIN');
-    const uomId = await ensurePieceUom(client);
+    console.log('Step 4: ✓ Transaction started\n');
 
-    // FIX: Ensure canonical Retail Tier exists with fixed UUID expected by frontend [2]
+    console.log('Step 5: Ensuring Piece UOM exists...');
+    const uomId = await ensurePieceUom(client);
+    console.log(`Step 5: ✓ Using UOM ID: ${uomId}\n`);
+
+    console.log('Step 6: Ensuring Retail Tier exists...');
     await client.query(
       `
       INSERT INTO price_tiers (tier_id, tier_name)
@@ -116,26 +133,35 @@ async function importMainInventory(csvPath, defaultMarkupPercent) {
     `,
       [CANONICAL_RETAIL_TIER_ID]
     );
+    console.log('Step 6: ✓ Retail tier ready\n');
 
     const retailTierId = CANONICAL_RETAIL_TIER_ID;
 
+    console.log('Step 7: Loading existing SKUs...');
     const existingSkus = await client.query('SELECT sku FROM product_variants');
     for (const row of existingSkus.rows) usedSkus.add(row.sku);
+    console.log(`Step 7: ✓ Found ${usedSkus.size} existing SKUs\n`);
 
+    console.log('Step 8: Processing inventory rows...');
     for (const row of merged.values()) {
+      processedRows += 1;
+      if (processedRows % 10 === 0) {
+        console.log(`  Processing row ${processedRows}/${merged.size}...`);
+      }
+
       let categoryId;
       const existingCategory = await client.query(
         'SELECT category_id AS "categoryId" FROM categories WHERE lower(name) = lower(\$1)',
         [row.category]
       );
       if (existingCategory.rowCount) {
-        categoryId = existingCategory.rows.categoryId;
+        categoryId = existingCategory.rows[0].categoryId;
       } else {
         const inserted = await client.query(
           'INSERT INTO categories (category_id, name) VALUES (gen_random_uuid(), \$1) RETURNING category_id AS "categoryId"',
           [row.category]
         );
-        categoryId = inserted.rows.categoryId;
+        categoryId = inserted.rows[0].categoryId;
         createdCategories += 1;
       }
 
@@ -149,10 +175,10 @@ async function importMainInventory(csvPath, defaultMarkupPercent) {
 
       let variantId;
       if (existingProduct.rowCount) {
-        variantId = existingProduct.rows.variantId;
+        variantId = existingProduct.rows[0].variantId;
         await client.query(
           'UPDATE products SET initial_cost = \$1, updated_at = now() WHERE product_id = \$2',
-          [row.cost, existingProduct.rows.productId]
+          [row.cost, existingProduct.rows[0].productId]
         );
         await client.query(
           'UPDATE product_variants SET attributes = \$1::jsonb, updated_at = now() WHERE variant_id = \$2',
@@ -199,7 +225,7 @@ async function importMainInventory(csvPath, defaultMarkupPercent) {
       if (existingLot.rowCount) {
         await client.query(
           'UPDATE inventory_lots SET quantity_on_hand = \$1, updated_at = now() WHERE lot_id = \$2',
-          [row.quantity, existingLot.rows.lotId]
+          [row.quantity, existingLot.rows[0].lotId]
         );
         updatedLots += 1;
       } else {
@@ -212,12 +238,18 @@ async function importMainInventory(csvPath, defaultMarkupPercent) {
       }
     }
 
+    console.log(`Step 8: ✓ Processed ${merged.size} rows\n`);
+
+    console.log('Step 9: Committing transaction...');
     await client.query('COMMIT');
+    console.log('Step 9: ✓ Transaction committed\n');
+
     console.log(`Imported ${sourceRows.length} rows from ${csvPath} (${skippedRows} skipped).`);
     console.log(
       JSON.stringify({ createdCategories, createdProducts, updatedProducts, createdLots, updatedLots })
     );
   } catch (error) {
+    console.error('ERROR - Rolling back transaction...');
     await client.query('ROLLBACK').catch(() => undefined);
     throw error;
   } finally {
