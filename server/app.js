@@ -98,7 +98,7 @@ app.get('/api/v1/products/search', auth.requireSession, async (request, response
     // Filter by Category ID (UUID) or Category Name String
     if (categoryId) {
       params.push(categoryId);
-      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ [cite: 115] [cite: 115] [cite: 115]/i.test(categoryId)) {
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId)) {
         whereConditions.push(`p.category_id = $${params.length}`);
       } else {
         whereConditions.push(`c.name ILIKE $${params.length}`);
@@ -560,7 +560,7 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
   }
 });
 
-// Employee Shifts List Endpoint (Date Filter Fixed with match[1])
+// Employee Shifts List Endpoint (Strict YYYY-MM-DD Date Filter)
 app.get('/api/v1/employees/shifts', auth.requireSession, async (request, response, next) => {
   try {
     const rawDate = String(request.query.date ?? '').trim();
@@ -701,7 +701,7 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   }
 });
 
-// Sales Report Endpoint (Fixed String Extraction with match[1])
+// Sales Report Endpoint
 app.get('/api/v1/sales/report', auth.requireSession, async (request, response, next) => {
   try {
     const rawDate = String(request.query.date ?? '').trim();
