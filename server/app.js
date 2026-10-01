@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const crypto = require('node:crypto');
+require('dotenv').config();
 const { pool, migrate } = require('./db');
 const { createAuthRouter } = require('./auth');
 const logger = require('./logger');
@@ -10,7 +11,9 @@ const { validate, customerSchema, employeeSchema, inventoryAdjustSchema, invento
 const app = express();
 
 // CORS configuration - restrict to whitelisted origins
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000').split(',');
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000')
+  .split(',')
+  .map(origin => origin.trim());
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {

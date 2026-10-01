@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+require('dotenv').config();
 const { pool, migrate } = require('../db');
 
 async function main() {
