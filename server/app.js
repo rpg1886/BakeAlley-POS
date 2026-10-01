@@ -117,7 +117,7 @@ app.get('/api/v1/products/search', auth.requireSession, async (request, response
     const result = await pool.query(
       `SELECT v.variant_id AS "variantId", v.sku, v.variant_name AS name, u.symbol AS unit, p.is_sold_by_weight AS "soldByWeight", pp.tier_id AS "tierId", pp.min_quantity AS "minQuantity", pp.price_per_unit AS "pricePerUnit", p.category_id AS "categoryId", c.name AS "categoryName" 
        FROM product_variants v 
-       JOIN products p ON p.product_id=p.product_id 
+       JOIN products p ON p.product_id=v.product_id 
        JOIN units_of_measure u ON u.uom_id=p.base_uom_id 
        LEFT JOIN categories c ON c.category_id=p.category_id 
        LEFT JOIN product_prices pp ON pp.variant_id=v.variant_id 
@@ -560,15 +560,21 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
   }
 });
 
-// Employee Shifts List Endpoint (Date Filter Fixed)
+// Employee Shifts List Endpoint (Robust Timestamptz Date Filter)
 app.get('/api/v1/employees/shifts', auth.requireSession, async (request, response, next) => {
   try {
-    const date = String(request.query.date ?? '').trim();
-    const isValidDate = /^\d{4}-\d{2}-\d{2}\$/.test(date);
-    const dateFilter = isValidDate 
-      ? "AND s.clock_in >= \$3::date AT TIME ZONE 'Asia/Manila' AND s.clock_in < (\$3::date + interval '1 day') AT TIME ZONE 'Asia/Manila'" 
-      : '';
-    const params = dateFilter ? [request.user.role, request.user.userId, date] : [request.user.role, request.user.userId];
+    const rawDate = String(request.query.date ?? '').trim();
+    const match = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
+    const date = match ? match[1] : null;
+
+    let dateFilter = '';
+    const params = [request.user.role, request.user.userId];
+
+    if (date) {
+      params.push(`${date}T00:00:00+08:00`);
+      dateFilter = `AND s.clock_in >= $3::timestamptz AND s.clock_in < ($3::timestamptz + interval '1 day')`;
+    }
+
     const result = await pool.query(
       `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", s.clock_in AS "clockIn", s.clock_out AS "clockOut" 
        FROM employee_shifts s 
@@ -695,15 +701,12 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   }
 });
 
-// Sales Report Endpoint (Date Validation Fixed)
+// Sales Report Endpoint (Fail-Safe Date Parsing)
 app.get('/api/v1/sales/report', auth.requireSession, async (request, response, next) => {
   try {
-    const date = String(request.query.date ?? new Date().toISOString().slice(0, 10)).trim();
-    
-    // Validate YYYY-MM-DD date format
-    if (!/^\d{4}-\d{2}-\d{2}\$/.test(date)) {
-      return response.status(400).json({ error: 'INVALID_DATE', message: 'Date must be in YYYY-MM-DD format' });
-    }
+    const rawDate = String(request.query.date ?? '').trim();
+    const match = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
+    const date = match ? match[1] : new Date().toISOString().slice(0, 10);
 
     const start = `${date}T00:00:00+08:00`;
     const result = await pool.query(
