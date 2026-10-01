@@ -1615,30 +1615,29 @@ export function CloudApp(): JSX.Element {
     };
   }, [session]);
 
-  // Browser Close / Tab Close - Logout Effect
+  // Tab Close Detection Effect
+  // Detects if tab was closed by checking if sessionStorage was cleared
+  // while localStorage still has session data (indicating tab close, not refresh)
   useEffect(() => {
-    if (!session) return;
+    const localToken = localStorage.getItem('bakealley_cloud_token');
+    const sessionToken = sessionStorage.getItem('bakealley_cloud_token');
 
-    const handleBeforeUnload = async (): Promise<void> => {
-      try {
-        await api.logout();
-      } catch (error) {
-        console.error('Logout failed during page unload:', error);
-      }
-      clearSessionStorage();
-    };
-
-    // Call logout on page unload (closing tab/browser/leaving site)
-    window.addEventListener('beforeunload', () => {
-      handleBeforeUnload().catch(console.error);
-    });
-
-    return () => {
-      window.removeEventListener('beforeunload', () => {
-        handleBeforeUnload().catch(console.error);
-      });
-    };
-  }, [session]);
+    // If localStorage has token but sessionStorage doesn't, the tab was closed
+    // sessionStorage persists through refresh but clears on tab close
+    if (localToken && !sessionToken) {
+      // Tab was closed - logout and clear storage
+      const performLogout = async (): Promise<void> => {
+        try {
+          await api.logout();
+        } catch (error) {
+          console.error('Logout failed on tab restore:', error);
+        }
+        clearSessionStorage();
+        setSession(null);
+      };
+      void performLogout();
+    }
+  }, []);
 
   if (!session) {
     return (
