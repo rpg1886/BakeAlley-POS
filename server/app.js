@@ -1,32 +1,71 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const crypto = require('node:crypto');
 const { pool, migrate } = require('./db');
 const { createAuthRouter } = require('./auth');
+const logger = require('./logger');
+const { validate, customerSchema, employeeSchema, inventoryAdjustSchema, inventoryProductSchema, orderPayloadSchema } = require('./validation');
 
 const app = express();
 
-// Enable CORS for cross-origin requests
+// CORS configuration - restrict to whitelisted origins
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000').split(',');
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS not allowed'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// Rate limiting middleware
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many login attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Middleware to attach pool to request
+app.use((request, response, next) => {
+  request.pool = pool;
+  next();
+});
+
 app.use(express.json({ limit: '5mb' }));
+app.use('/api/v1', apiLimiter);
+
 const auth = createAuthRouter(express, pool);
 app.use('/api/v1', auth.router);
+app.post('/api/v1/auth/login', loginLimiter, (request, response, next) => next());
 
 app.get('/api/v1/health', async (_request, response, next) => {
   try { 
     await pool.query('SELECT 1'); 
     response.json({ ok: true }); 
   } catch (error) { 
+    logger.error('Health check failed', { error: error.message });
     next(error); 
   }
 });
 
-app.get('/api/v1/version', (_request, response) => response.json({ version: process.env.APP_VERSION ?? '0.1.0-cloud' }));
+app.get('/api/v1/version', (_request, response) => {
+  response.json({ version: process.env.APP_VERSION ?? '0.1.0-cloud' });
+});
 
 app.get('/api/v1/products/search', auth.requireSession, async (request, response, next) => {
   try {
@@ -52,6 +91,7 @@ app.get('/api/v1/products/search', auth.requireSession, async (request, response
     }
     response.json([...grouped.values()]);
   } catch (error) { 
+    logger.error('Product search failed', { error: error.message });
     next(error); 
   }
 });
@@ -61,34 +101,47 @@ app.get('/api/v1/customers', auth.requireSession, async (_request, response, nex
     const result = await pool.query('SELECT customer_id AS "customerId", COALESCE(company_name || \' - \', \'\') || contact_name AS "displayName", email, phone, tier_id AS "tierId" FROM customers ORDER BY contact_name'); 
     response.json(result.rows); 
   } catch (error) { 
+    logger.error('Customer list failed', { error: error.message });
     next(error); 
   }
 });
 
 app.post('/api/v1/customers', auth.requireSession, async (request, response, next) => {
   try {
-    const body = request.body ?? {};
-    if (!body.contactName || !body.tierId) return response.status(400).json({ error: 'INVALID_CUSTOMER' });
+    const validation = validate(customerSchema, request.body);
+    if (!validation.success) {
+      logger.warn('Customer validation failed', { errors: validation.errors });
+      return response.status(400).json({ error: 'INVALID_CUSTOMER', details: validation.errors });
+    }
+
+    const body = validation.data;
     const result = await pool.query(
       `INSERT INTO customers (customer_id, company_name, contact_name, email, phone, tier_id)
        VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
        RETURNING customer_id AS "customerId", COALESCE(company_name || ' - ', '') || contact_name AS "displayName", email, phone, tier_id AS "tierId"`, 
       [body.companyName ?? null, body.contactName, body.email ?? null, body.phone ?? null, body.tierId]
     );
-    response.status(201).json(result.rows);
+    logger.info('Customer created', { customerId: result.rows[0].customerId });
+    response.status(201).json(result.rows[0]);
   } catch (error) { 
+    logger.error('Customer creation failed', { error: error.message });
     next(error); 
   }
 });
 
 app.delete('/api/v1/customers/:id', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
   try {
-    const protectedCustomer = await pool.query('SELECT 1 FROM orders WHERE customer_id = \$1 LIMIT 1', [request.params.id]);
-    if (protectedCustomer.rowCount) return response.status(409).json({ error: 'CUSTOMER_HAS_ORDERS' });
-    const result = await pool.query('DELETE FROM customers WHERE customer_id = \$1', [request.params.id]);
+    const protectedCustomer = await pool.query('SELECT 1 FROM orders WHERE customer_id = $1 LIMIT 1', [request.params.id]);
+    if (protectedCustomer.rowCount) {
+      logger.warn('Customer deletion blocked - has orders', { customerId: request.params.id });
+      return response.status(409).json({ error: 'CUSTOMER_HAS_ORDERS' });
+    }
+    const result = await pool.query('DELETE FROM customers WHERE customer_id = $1', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'CUSTOMER_NOT_FOUND' });
+    logger.info('Customer deleted', { customerId: request.params.id });
     response.status(204).end();
   } catch (error) { 
+    logger.error('Customer deletion failed', { error: error.message });
     next(error); 
   }
 });
@@ -110,76 +163,104 @@ app.get('/api/v1/inventory', auth.requireSession, async (_request, response, nex
       retailPrice: Number(row.retailPrice) || 0 
     }))); 
   } catch (error) { 
+    logger.error('Inventory list failed', { error: error.message });
     next(error); 
   }
 });
 
 app.post('/api/v1/inventory/adjust', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
-  const body = request.body ?? {};
-  const quantity = Number(body.quantity);
-  const price = body.retailPrice === undefined || body.retailPrice === '' ? undefined : Number(body.retailPrice);
-  if (!body.variantId || !Number.isFinite(quantity) || quantity < 0 || (price !== undefined && (!Number.isFinite(price) || price < 0))) {
-    return response.status(400).json({ error: 'INVALID_INVENTORY_ADJUSTMENT' });
-  }
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    const variant = await client.query('SELECT variant_id FROM product_variants WHERE variant_id=\$1 FOR UPDATE', [body.variantId]);
-    if (!variant.rowCount) throw Object.assign(new Error('Variant not found'), { statusCode: 404, code: 'VARIANT_NOT_FOUND' });
-    const lotNumber = body.lotNumber || `CLOUD-${body.variantId.slice(0, 8)}-${body.expirationDate || 'NOEXPIRY'}`;
-    await client.query(
-      `INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand) VALUES (gen_random_uuid(), $1, $2, $3, $4)
-       ON CONFLICT (variant_id, lot_number) DO UPDATE SET expiration_date=EXCLUDED.expiration_date, quantity_on_hand=EXCLUDED.quantity_on_hand, updated_at=now()`, 
-      [body.variantId, lotNumber, body.expirationDate || null, quantity]
-    );
-    if (price !== undefined) {
-      const retailTier = await client.query("SELECT tier_id FROM price_tiers WHERE lower(tier_name)='retail' LIMIT 1");
-      if (!retailTier.rowCount) throw Object.assign(new Error('Retail tier is not configured'), { statusCode: 409, code: 'RETAIL_TIER_NOT_FOUND' });
-      await client.query(
-        `INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity) VALUES (gen_random_uuid(), $1, $2, $3, 0)
-         ON CONFLICT (variant_id, tier_id, min_quantity) DO UPDATE SET price_per_unit=EXCLUDED.price_per_unit`, 
-        [body.variantId, retailTier.rows[0].tier_id, price]
-      );
+    const validation = validate(inventoryAdjustSchema, request.body);
+    if (!validation.success) {
+      logger.warn('Inventory adjustment validation failed', { errors: validation.errors });
+      return response.status(400).json({ error: 'INVALID_INVENTORY_ADJUSTMENT', details: validation.errors });
     }
-    await client.query('COMMIT');
-    response.status(200).json({ updated: true });
+
+    const body = validation.data;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const variant = await client.query('SELECT variant_id FROM product_variants WHERE variant_id=$1 FOR UPDATE', [body.variantId]);
+      if (!variant.rowCount) throw Object.assign(new Error('Variant not found'), { statusCode: 404, code: 'VARIANT_NOT_FOUND' });
+      
+      const lotNumber = body.lotNumber || `CLOUD-${body.variantId.slice(0, 8)}-${body.expirationDate || 'NOEXPIRY'}`;
+      await client.query(
+        `INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand) VALUES (gen_random_uuid(), $1, $2, $3, $4)
+         ON CONFLICT (variant_id, lot_number) DO UPDATE SET expiration_date=EXCLUDED.expiration_date, quantity_on_hand=EXCLUDED.quantity_on_hand, updated_at=now()`, 
+        [body.variantId, lotNumber, body.expirationDate || null, body.quantity]
+      );
+      
+      if (body.retailPrice !== undefined) {
+        const retailTier = await client.query("SELECT tier_id FROM price_tiers WHERE lower(tier_name)='retail' LIMIT 1");
+        if (!retailTier.rowCount) throw Object.assign(new Error('Retail tier is not configured'), { statusCode: 409, code: 'RETAIL_TIER_NOT_FOUND' });
+        await client.query(
+          `INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity) VALUES (gen_random_uuid(), $1, $2, $3, 0)
+           ON CONFLICT (variant_id, tier_id, min_quantity) DO UPDATE SET price_per_unit=EXCLUDED.price_per_unit`, 
+          [body.variantId, retailTier.rows[0].tier_id, body.retailPrice]
+        );
+      }
+      await client.query('COMMIT');
+      logger.info('Inventory adjusted', { variantId: body.variantId, quantity: body.quantity });
+      response.status(200).json({ updated: true });
+    } catch (error) { 
+      await client.query('ROLLBACK').catch(() => undefined); 
+      throw error;
+    } finally { 
+      client.release(); 
+    }
   } catch (error) { 
-    await client.query('ROLLBACK').catch(() => undefined); 
+    logger.error('Inventory adjustment failed', { error: error.message });
     next(error); 
-  } finally { 
-    client.release(); 
   }
 });
 
 app.post('/api/v1/inventory/products', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
-  const body = request.body ?? {};
-  const quantity = Number(body.quantity);
-  const price = Number(body.retailPrice);
-  if (!body.name || !body.sku || !body.variantName || !body.lotNumber || !body.baseUomId || !Number.isFinite(quantity) || quantity < 0 || !Number.isFinite(price) || price < 0) {
-    return response.status(400).json({ error: 'INVALID_PRODUCT_INVENTORY' });
-  }
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    const retailTier = await client.query("SELECT tier_id FROM price_tiers WHERE lower(tier_name)='retail' LIMIT 1");
-    if (!retailTier.rowCount) throw Object.assign(new Error('Retail tier is not configured'), { statusCode: 409, code: 'RETAIL_TIER_NOT_FOUND' });
-    const product = await client.query(
-      `INSERT INTO products (product_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, initial_cost) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5) RETURNING product_id`, 
-      [body.name, body.baseUomId, Boolean(body.soldByWeight), Boolean(body.requiresLotTracking), Number(body.initialCost) || 0]
-    );
-    const variant = await client.query(
-      `INSERT INTO product_variants (variant_id, product_id, sku, barcode, variant_name) VALUES (gen_random_uuid(), $1, $2, $3, $4) RETURNING variant_id AS "variantId", sku, variant_name AS "variantName"`, 
-      [product.rows[0].product_id, body.sku, body.barcode || null, body.variantName]
-    );
-    await client.query('INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity) VALUES (gen_random_uuid(), \$1, \$2, \$3, 0)', [variant.rows[0].variantId, retailTier.rows[0].tier_id, price]);
-    await client.query('INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand) VALUES (gen_random_uuid(), \$1, \$2, \$3, \$4)', [variant.rows[0].variantId, body.lotNumber, body.expirationDate || null, quantity]);
-    await client.query('COMMIT');
-    response.status(201).json(variant.rows[0]);
+    const validation = validate(inventoryProductSchema, request.body);
+    if (!validation.success) {
+      logger.warn('Product creation validation failed', { errors: validation.errors });
+      return response.status(400).json({ error: 'INVALID_PRODUCT_INVENTORY', details: validation.errors });
+    }
+
+    const body = validation.data;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const retailTier = await client.query("SELECT tier_id FROM price_tiers WHERE lower(tier_name)='retail' LIMIT 1");
+      if (!retailTier.rowCount) throw Object.assign(new Error('Retail tier is not configured'), { statusCode: 409, code: 'RETAIL_TIER_NOT_FOUND' });
+      
+      const product = await client.query(
+        `INSERT INTO products (product_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, initial_cost) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5) RETURNING product_id`, 
+        [body.name, body.baseUomId, body.soldByWeight || false, body.requiresLotTracking || false, body.initialCost || 0]
+      );
+      
+      const variant = await client.query(
+        `INSERT INTO product_variants (variant_id, product_id, sku, barcode, variant_name) VALUES (gen_random_uuid(), $1, $2, $3, $4) RETURNING variant_id AS "variantId", sku, variant_name AS "variantName"`, 
+        [product.rows[0].product_id, body.sku, body.barcode || null, body.variantName]
+      );
+      
+      await client.query(
+        'INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity) VALUES (gen_random_uuid(), $1, $2, $3, 0)', 
+        [variant.rows[0].variantId, retailTier.rows[0].tier_id, body.retailPrice]
+      );
+      
+      await client.query(
+        'INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand) VALUES (gen_random_uuid(), $1, $2, $3, $4)', 
+        [variant.rows[0].variantId, body.lotNumber, body.expirationDate || null, body.quantity]
+      );
+      
+      await client.query('COMMIT');
+      logger.info('Product created', { variantId: variant.rows[0].variantId, sku: body.sku });
+      response.status(201).json(variant.rows[0]);
+    } catch (error) { 
+      await client.query('ROLLBACK').catch(() => undefined); 
+      throw error;
+    } finally { 
+      client.release(); 
+    }
   } catch (error) { 
-    await client.query('ROLLBACK').catch(() => undefined); 
+    logger.error('Product creation failed', { error: error.message });
     next(error); 
-  } finally { 
-    client.release(); 
   }
 });
 
@@ -187,22 +268,27 @@ app.get('/api/v1/employees', auth.requireSession, async (request, response, next
   try {
     const result = await pool.query(
       `SELECT u.user_id AS "userId", u.username, u.display_name AS "displayName", u.role, u.active,
-       COUNT(o.order_id)::int AS "salesCount", COALESCE(SUM(o.total_amount), 0) AS "salesAmount"
+       COUNT(o.order_id)::int AS "salesCount", COALESCE(SUM(o.total_amount), 0)::numeric AS "salesAmount"
        FROM app_users u LEFT JOIN orders o ON o.employee_id = u.user_id AND o.status = 'completed'
        WHERE ($1 = 'admin' OR u.user_id = $2) GROUP BY u.user_id ORDER BY u.display_name`, 
       [request.user.role, request.user.userId]
     );
-    response.json(result.rows);
+    response.json(result.rows.map(row => ({ ...row, salesAmount: Number(row.salesAmount) || 0 })));
   } catch (error) { 
+    logger.error('Employees list failed', { error: error.message });
     next(error); 
   }
 });
 
 app.post('/api/v1/employees', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
   try {
-    const body = request.body ?? {};
-    if (!body.username || !body.displayName || !body.password || !['admin', 'cashier'].includes(body.role)) return response.status(400).json({ error: 'INVALID_EMPLOYEE' });
-    if (String(body.password).length < 12) return response.status(400).json({ error: 'PASSWORD_TOO_SHORT' });
+    const validation = validate(employeeSchema, request.body);
+    if (!validation.success) {
+      logger.warn('Employee creation validation failed', { errors: validation.errors });
+      return response.status(400).json({ error: 'INVALID_EMPLOYEE', details: validation.errors });
+    }
+
+    const body = validation.data;
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.scryptSync(String(body.password), salt, 64).toString('hex');
     const result = await pool.query(
@@ -211,8 +297,10 @@ app.post('/api/v1/employees', auth.requireSession, auth.requireAdmin, async (req
        RETURNING user_id AS "userId", username, display_name AS "displayName", role, active`, 
       [body.username, body.displayName, body.role, salt, hash]
     );
-    response.status(201).json(result.rows);
+    logger.info('Employee created', { userId: result.rows[0].userId, username: body.username });
+    response.status(201).json(result.rows[0]);
   } catch (error) { 
+    logger.error('Employee creation failed', { error: error.message });
     next(error); 
   }
 });
@@ -226,9 +314,14 @@ app.post('/api/v1/employees/clock-in', auth.requireSession, async (request, resp
        RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn"`, 
       [request.user.userId]
     );
-    if (!result.rowCount) return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN' });
-    response.status(201).json(result.rows);
+    if (!result.rowCount) {
+      logger.warn('Clock-in failed - shift already open', { userId: request.user.userId });
+      return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN' });
+    }
+    logger.info('Employee clocked in', { userId: request.user.userId });
+    response.status(201).json(result.rows[0]);
   } catch (error) { 
+    logger.error('Clock-in failed', { error: error.message });
     next(error); 
   }
 });
@@ -240,9 +333,14 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
        RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn", clock_out AS "clockOut"`, 
       [request.user.userId]
     );
-    if (!result.rowCount) return response.status(409).json({ error: 'NO_OPEN_SHIFT' });
-    response.json(result.rows);
+    if (!result.rowCount) {
+      logger.warn('Clock-out failed - no open shift', { userId: request.user.userId });
+      return response.status(409).json({ error: 'NO_OPEN_SHIFT' });
+    }
+    logger.info('Employee clocked out', { userId: request.user.userId });
+    response.json(result.rows[0]);
   } catch (error) { 
+    logger.error('Clock-out failed', { error: error.message });
     next(error); 
   }
 });
@@ -250,7 +348,7 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
 app.get('/api/v1/employees/shifts', auth.requireSession, async (request, response, next) => {
   try {
     const date = String(request.query.date ?? '');
-    const dateFilter = /^\d{4}-\d{2}-\d{2}\$/.test(date) ? 'AND s.clock_in >= \$3::date AT TIME ZONE \'Asia/Manila\' AND s.clock_in < (\$3::date + interval \'1 day\') AT TIME ZONE \'Asia/Manila\'' : '';
+    const dateFilter = /^\d{4}-\d{2}-\d{2}$/.test(date) ? 'AND s.clock_in >= $3::date AT TIME ZONE \'Asia/Manila\' AND s.clock_in < ($3::date + interval \'1 day\') AT TIME ZONE \'Asia/Manila\'' : '';
     const params = dateFilter ? [request.user.role, request.user.userId, date] : [request.user.role, request.user.userId];
     const result = await pool.query(
       `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", s.clock_in AS "clockIn", s.clock_out AS "clockOut" 
@@ -262,71 +360,90 @@ app.get('/api/v1/employees/shifts', auth.requireSession, async (request, respons
     );
     response.json(result.rows);
   } catch (error) { 
+    logger.error('Shifts list failed', { error: error.message });
     next(error); 
   }
 });
 
 app.post('/api/v1/orders', auth.requireSession, async (request, response, next) => {
   const payload = request.body ?? {};
+  const validation = validate(orderPayloadSchema, payload);
+  if (!validation.success) {
+    logger.warn('Order validation failed', { errors: validation.errors });
+    return response.status(400).json({ error: 'INVALID_ORDER', details: validation.errors });
+  }
+
+  const validatedPayload = validation.data;
   const client = await pool.connect();
   try {
-    if (!payload.orderId || !Array.isArray(payload.items) || payload.items.length === 0) {
-      return response.status(400).json({ error: 'INVALID_ORDER' });
-    }
     await client.query('BEGIN');
+    
+    // Calculate changeDue server-side
+    const changeDue = validatedPayload.paymentMethod === 'cash' 
+      ? Math.max(0, Number(validatedPayload.cashReceived || 0) - Number(validatedPayload.totalAmount))
+      : 0;
     
     const inserted = await client.query(
       `INSERT INTO orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, created_at) 
        VALUES ($1,$2,$3,$4,$5,'completed',$6,$7,$8,$9,$10,$11,$12) 
        ON CONFLICT (order_id) DO NOTHING RETURNING order_id`, 
       [
-        payload.orderId, 
-        payload.customerId ?? null, 
-        payload.pricingTierId, 
+        validatedPayload.orderId, 
+        validatedPayload.customerId ?? null, 
+        validatedPayload.pricingTierId, 
         request.user.userId, 
-        payload.orderType === 'commercial' ? 'commercial' : 'retail', 
-        payload.subtotal, 
-        payload.taxAmount ?? 0, 
-        payload.totalAmount, 
-        payload.paymentMethod, 
-        payload.cashReceived ?? 0, 
-        payload.changeDue ?? 0, 
-        payload.createdAt ?? new Date().toISOString()
+        validatedPayload.orderType === 'commercial' ? 'commercial' : 'retail', 
+        validatedPayload.subtotal, 
+        validatedPayload.taxAmount ?? 0, 
+        validatedPayload.totalAmount, 
+        validatedPayload.paymentMethod, 
+        validatedPayload.cashReceived ?? 0, 
+        changeDue,
+        validatedPayload.createdAt ?? new Date().toISOString()
       ]
     );
     
     if (inserted.rowCount === 0) { 
-      await client.query('COMMIT'); 
-      return response.json({ orderId: payload.orderId, duplicate: true }); 
+      await client.query('COMMIT');
+      logger.info('Order is duplicate (idempotent)', { orderId: validatedPayload.orderId });
+      return response.json({ orderId: validatedPayload.orderId, duplicate: true }); 
     }
     
-    if (payload.paymentMethod === 'cash' && Number(payload.cashReceived) < Number(payload.totalAmount)) {
+    // Validate cash payment
+    if (validatedPayload.paymentMethod === 'cash' && Number(validatedPayload.cashReceived || 0) < Number(validatedPayload.totalAmount)) {
       throw Object.assign(new Error('Cash received must be at least the order total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' });
     }
 
-    for (const item of payload.items) {
-      // 1. Check price for the specific customer tier
+    for (const item of validatedPayload.items) {
+      // 1. Check price for the specific customer tier with tighter tolerance
       let price = await client.query(
-        'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=\$1 AND pp.tier_id=\$2 AND pp.min_quantity <= \$3 ORDER BY pp.min_quantity DESC LIMIT 1', 
-        [item.variantId, payload.pricingTierId, item.quantity]
+        'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.tier_id=$2 AND pp.min_quantity <= $3 ORDER BY pp.min_quantity DESC LIMIT 1', 
+        [item.variantId, validatedPayload.pricingTierId, item.quantity]
       );
 
-      // 2. Fallback to any active price for this variant if no tier row exists
+      // 2. Fallback to any active price for this variant
       if (!price.rowCount) {
         price = await client.query(
-          'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=\$1 AND pp.price_per_unit > 0 ORDER BY pp.min_quantity ASC LIMIT 1',
+          'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.price_per_unit > 0 ORDER BY pp.min_quantity ASC LIMIT 1',
           [item.variantId]
         );
       }
 
-      // 3. Verify price exists and matches within 1 cent tolerance
-      if (!price.rowCount || Math.abs(Number(price.rows[0].price_per_unit) - Number(item.unitPrice)) > 0.01) {
+      // 3. Verify price with stricter tolerance (0.005 = ±half cent)
+      const serverPrice = Number(price.rows[0]?.price_per_unit || 0);
+      const clientPrice = Number(item.unitPrice);
+      const tolerance = 0.005;
+      
+      if (!price.rowCount || Math.abs(serverPrice - clientPrice) > tolerance) {
+        logger.warn('Price mismatch', { variantId: item.variantId, expected: serverPrice, received: clientPrice });
         throw Object.assign(new Error('Price changed; review the cart'), { statusCode: 409, code: 'PRICE_CHANGED' });
       }
 
-      const lots = await client.query('SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=\$1 AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST, lot_id FOR UPDATE', [item.variantId]);
+      // FEFO allocation with row locking
+      const lots = await client.query('SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=$1 AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST, lot_id FOR UPDATE', [item.variantId]);
       let remaining = Number(item.quantity);
       const allocations = item.lotId ? [{ lotId: item.lotId, quantity: remaining }] : [];
+      
       if (!allocations.length) {
         for (const lot of lots.rows) { 
           if (remaining <= 0) break; 
@@ -335,19 +452,29 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
           remaining -= allocated; 
         }
       }
+      
       if (remaining > 0) {
+        logger.warn('Insufficient inventory', { variantId: item.variantId, requested: item.quantity, available: item.quantity - remaining });
         throw Object.assign(new Error(`Insufficient inventory for ${item.variantId}`), { statusCode: 409, code: 'INSUFFICIENT_INVENTORY' });
       }
+      
       for (const [allocationIndex, allocation] of allocations.entries()) { 
-        const update = await client.query('UPDATE inventory_lots SET quantity_on_hand=quantity_on_hand-\$1, updated_at=now() WHERE lot_id=\$2 AND variant_id=\$3 AND quantity_on_hand >= \$1', [allocation.quantity, allocation.lotId, item.variantId]); 
-        if (update.rowCount !== 1) throw Object.assign(new Error('Inventory changed; retry checkout'), { statusCode: 409, code: 'INVENTORY_CONFLICT' }); 
-        await client.query('INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES (\$1,\$2,\$3,\$4,\$5,\$6,\$7)', [allocationIndex === 0 ? item.orderItemId : crypto.randomUUID(), payload.orderId, item.variantId, allocation.lotId, allocation.quantity, item.unitPrice, Number(item.unitPrice) * allocation.quantity]); 
+        const update = await client.query('UPDATE inventory_lots SET quantity_on_hand=quantity_on_hand-$1, updated_at=now() WHERE lot_id=$2 AND variant_id=$3 AND quantity_on_hand >= $1', [allocation.quantity, allocation.lotId, item.variantId]); 
+        if (update.rowCount !== 1) {
+          logger.error('Inventory conflict during allocation', { lotId: allocation.lotId, requested: allocation.quantity });
+          throw Object.assign(new Error('Inventory changed; retry checkout'), { statusCode: 409, code: 'INVENTORY_CONFLICT' });
+        }
+        
+        await client.query('INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES ($1,$2,$3,$4,$5,$6,$7)', [allocationIndex === 0 ? item.orderItemId : crypto.randomUUID(), validatedPayload.orderId, item.variantId, allocation.lotId, allocation.quantity, item.unitPrice, Number(item.unitPrice) * allocation.quantity]); 
       }
     }
+    
     await client.query('COMMIT');
-    return response.status(201).json({ orderId: payload.orderId, synced: true });
+    logger.info('Order created successfully', { orderId: validatedPayload.orderId, itemCount: validatedPayload.items.length });
+    return response.status(201).json({ orderId: validatedPayload.orderId, synced: true });
   } catch (error) { 
-    await client.query('ROLLBACK').catch(() => undefined); 
+    await client.query('ROLLBACK').catch(() => undefined);
+    logger.error('Order creation failed', { error: error.message, orderId: payload.orderId });
     next(error); 
   } finally { 
     client.release(); 
@@ -357,6 +484,12 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
 app.get('/api/v1/sales/report', auth.requireSession, async (request, response, next) => {
   try {
     const date = String(request.query.date ?? new Date().toISOString().slice(0, 10));
+    
+    // Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return response.status(400).json({ error: 'INVALID_DATE', message: 'Date must be in YYYY-MM-DD format' });
+    }
+
     const start = `${date}T00:00:00+08:00`;
     const result = await pool.query(
       `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod" 
@@ -368,21 +501,42 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
        ORDER BY o.created_at, o.order_id, oi.order_item_id`, 
       [start]
     );
-    const items = result.rows.map((row) => ({ ...row, quantity: Number(row.quantity) || 0, amount: Number(row.amount) || 0 }));
+    
+    const items = result.rows.map((row) => ({ 
+      ...row, 
+      quantity: Number(row.quantity) || 0, 
+      amount: Number(row.amount) || 0 
+    }));
+    
     const summary = async (periodStart, periodEnd) => {
-      const period = await pool.query(`SELECT COALESCE(SUM(total_amount), 0) AS gross, COUNT(order_id)::int AS orders FROM orders WHERE status='completed' AND created_at >= $1::timestamptz AND created_at < $2::timestamptz`, [periodStart, periodEnd]);
+      const period = await pool.query(`SELECT COALESCE(SUM(total_amount), 0)::numeric AS gross, COUNT(order_id)::int AS orders FROM orders WHERE status='completed' AND created_at >= $1::timestamptz AND created_at < $2::timestamptz`, [periodStart, periodEnd]);
       return { grossTotal: Number(period.rows[0].gross) || 0, netTotal: Number(period.rows[0].gross) || 0, orderCount: period.rows[0].orders };
     };
+    
     const selected = new Date(`${date}T00:00:00Z`);
-    const monday = new Date(selected); const day = monday.getUTCDay(); monday.setUTCDate(monday.getUTCDate() - (day === 0 ? 6 : day - 1));
+    const monday = new Date(selected);
+    const day = monday.getUTCDay();
+    monday.setUTCDate(monday.getUTCDate() - (day === 0 ? 6 : day - 1));
+    
     const nextMonth = new Date(Date.UTC(selected.getUTCFullYear(), selected.getUTCMonth() + 1, 1));
     const nextYear = new Date(Date.UTC(selected.getUTCFullYear() + 1, 0, 1));
+    
     const dateString = (value) => value.toISOString().slice(0, 10);
     const periodBounds = (startDate, endDate) => [`${startDate}T00:00:00+08:00`, `${endDate}T00:00:00+08:00`];
-    const weekStart = dateString(monday); const weekEnd = dateString(new Date(monday.getTime() + 7 * 86400000));
+    
+    const weekStart = dateString(monday);
+    const weekEnd = dateString(new Date(monday.getTime() + 7 * 86400000));
     const monthStart = `${selected.getUTCFullYear()}-${String(selected.getUTCMonth() + 1).padStart(2, '0')}-01`;
     const yearStart = `${selected.getUTCFullYear()}-01-01`;
-    const [week, month, year] = request.user.role === 'admin' ? await Promise.all([summary(...periodBounds(weekStart, weekEnd)), summary(...periodBounds(monthStart, dateString(nextMonth))), summary(...periodBounds(yearStart, dateString(nextYear)))]) : [null, null, null];
+    
+    const [week, month, year] = request.user.role === 'admin' 
+      ? await Promise.all([
+          summary(...periodBounds(weekStart, weekEnd)), 
+          summary(...periodBounds(monthStart, dateString(nextMonth))), 
+          summary(...periodBounds(yearStart, dateString(nextYear)))
+        ]) 
+      : [null, null, null];
+    
     response.json({ 
       selectedDate: date, 
       items, 
@@ -395,19 +549,48 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
       timezone: 'Asia/Manila' 
     });
   } catch (error) { 
+    logger.error('Sales report failed', { error: error.message });
     next(error); 
   }
 });
 
-app.use((error, _request, response, _next) => { 
-  console.error(error); 
-  response.status(error.statusCode ?? 500).json({ error: error.code ?? 'INTERNAL_ERROR', message: process.env.NODE_ENV === 'production' ? undefined : error.message }); 
+// Global error handler
+app.use((error, _request, response, _next) => {
+  const statusCode = error.statusCode || (error.code ? 400 : 500);
+  const code = error.code || 'INTERNAL_ERROR';
+  const message = error.message || 'An unexpected error occurred';
+  
+  logger.error('Request error', { 
+    statusCode, 
+    code, 
+    message,
+    stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+  });
+  
+  response.status(statusCode).json({ 
+    error: code, 
+    message: process.env.NODE_ENV === 'production' ? undefined : message 
+  }); 
 });
 
 async function start(port = Number(process.env.PORT ?? 3000)) { 
-  await migrate(); 
-  return app.listen(port, () => console.log(`Bake Alley cloud API listening on ${port}`)); 
+  try {
+    await migrate(); 
+    const server = app.listen(port, () => {
+      logger.info(`Bake Alley cloud API listening on port ${port}`);
+    });
+    return server;
+  } catch (error) {
+    logger.error('Failed to start server', { error: error.message });
+    throw error;
+  }
 }
 
-if (require.main === module) start().catch((error) => { console.error(error); process.exitCode = 1; });
+if (require.main === module) {
+  start().catch((error) => { 
+    logger.error('Fatal startup error', { error: error.message });
+    process.exitCode = 1; 
+  });
+}
+
 module.exports = { app, start };

@@ -130,3 +130,21 @@ CREATE TABLE IF NOT EXISTS sync_events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_product_variants_search ON product_variants(sku, barcode, variant_name);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  session_id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_employee_id ON orders(employee_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_lots_expiration ON inventory_lots(expiration_date NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_product_prices_variant_tier ON product_prices(variant_id, tier_id, min_quantity);
+CREATE INDEX IF NOT EXISTS idx_employees_active ON app_users(active) WHERE active = TRUE;
