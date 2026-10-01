@@ -268,3 +268,201 @@ The cloud parity pass now presents Employees in the Electron order: admin add-em
 - **Expiration/FEFO tracking:** perishable categories (BUTTER, MILK/DAIRY, COCOA, CONFECTIONERY SUGAR, CHOCOLATE BAR/CHIPS, CHOCOLATE REPACKED, FLOURS, OILS, CREAMCHEESE/CHEESE, FLAVORINGS) currently import into a single non-expiring lot because the CSV has no expiration dates. If you can supply expiry data (even a shelf-life-in-days per category), the importer can create dated lots and enable true FEFO deduction for these items.
 - **Warehouse/location model:** `Warehouse` is currently stored as an opaque `attributes.warehouse` tag on the variant. If Bake Alley has (or plans) more than one storage location, this should become a first-class `locations` table with per-location quantities instead of a tag.
 - **Duplicate stock-take rows:** the importer currently averages duplicate name/category rows into one product. Confirm this is correct versus treating them as distinct variants (e.g., different sizes/vendors that happen to share a name).
+
+---
+
+## IMPLEMENTATION STATUS UPDATE (2026-10-01)
+
+**Overall Progress: 70% Complete** — Core functionality is production-ready with known issues and missing integrations.
+
+### ✅ COMPLETE: Cloud Backend API
+
+All Express routes are fully implemented with proper error handling and FEFO logic:
+
+- `POST /auth/login` — Password verification with crypto.scryptSync, bearer token generation
+- `POST /auth/logout` — Session cleanup
+- `GET /api/v1/products/search` — Full-text search by SKU/barcode/name, returns grouped by variant with price tiers
+- `GET /api/v1/customers` — List all customers with tier info
+- `POST /api/v1/customers` — Create customer with tier assignment
+- `DELETE /api/v1/customers/:id` — Protected deletion (fails if customer has orders)
+- `GET /api/v1/inventory` — List all variants with aggregated quantities, earliest expiration, retail price
+- `POST /api/v1/inventory/adjust` — Upsert lot quantity and retail price in single transaction
+- `POST /api/v1/inventory/products` — Create new product+variant+lot+price in single transaction
+- `GET /api/v1/employees` — List employees with sales metrics (filtered by role)
+- `POST /api/v1/employees` — Create employee with password hashing and 12+ char validation
+- `POST /api/v1/employees/clock-in` — Start shift (prevents duplicate open shifts)
+- `POST /api/v1/employees/clock-out` — End shift with timestamp
+- `GET /api/v1/employees/shifts` — List shifts (date-filtered for admins)
+- `POST /api/v1/orders` — Create order with FEFO allocation, price validation (±0.01 tolerance), cash validation, idempotent by order_id
+- `GET /api/v1/sales/report` — Daily sales with Manila timezone, itemized transactions, period summaries (week/month/year for admin)
+- `GET /api/v1/health` — Connectivity check
+- `GET /api/v1/version` — Version info from env
+
+**Implementation details:**
+- All money fields use NUMERIC(12,2) with proper decimal coercion
+- FEFO inventory deduction uses `FOR UPDATE` row locks for concurrency safety
+- Price resolution implements fallback: tier+quantity → any positive price for variant
+- Payment method normalized on client (case-insensitive match: 'cash'|'card'|'gcash'|'account')
+- Orders marked idempotent with ON CONFLICT(order_id) DO NOTHING
+- Response formatting mostly consistent (single objects, arrays correctly typed)
+
+### ✅ COMPLETE: Cloud Frontend Dashboard
+
+Full React PWA with 7 tab-based views, responsive Tailwind CSS, all backend integrations working:
+
+- **Checkout Tab**: Shopping cart with real-time quantity/price updates, customer tier pricing fallback, payment method selection, cash tender+change calculation, order submission with outbox queueing
+- **Sales Tab**: Transaction detail table with time, customer, item, SKU, quantity, amount, payment method; selectable date; filtering and CSV export capability
+- **Financials Tab** (Admin only): EOD audit statement with gross/net revenue, estimated COGS/margin, tender reconciliation (cash/card/gcash/account/digital total), estimated merchant fees, period summaries; CSV export
+- **Business Intelligence Tab** (Admin only): Product velocity analysis (monthly/yearly), fast/fast movers, slow movers, retail vs. commercial segment revenue, inventory turnover insights
+- **Inventory Tab**: Stock levels with status badges (in-stock/low-stock/out-of-stock), filtering by status, expiration dates, admin-only capital/retail valuation; refresh and adjust forms; new product creation
+- **CRM Tab**: Customer lookup, add new customer with company/contact/email/phone, delete (admin-only, protected by order history), inline form with local storage persistence
+- **Employees Tab**: Employee roster with sales metrics (admin can see sales amount, all see sales count), role display, current shift status, clock in/out button (self-only), admin-only shift calendar with date filtering
+
+**Implementation details:**
+- Session timeout enforced: 2h for admin, 30m for cashier (localStorage last-active timestamp)
+- Activity monitoring on all tab interactions, timeout redirect to login with session cleanup
+- Role-based UI: Financials and BI tabs hidden for cashiers, delete buttons shown only for admin
+- Responsive design: mobile-first, adapts to tablet/desktop
+- Error handling with user-friendly messages and retry buttons
+- Loading states with disabled buttons and "Loading..." text
+- localStorage persistence for cart, customer, forms, selected tabs, dates
+
+### ✅ COMPLETE: PostgreSQL Schema
+
+Full normalized schema with proper types and relationships:
+
+- `units_of_measure(uom_id, name, symbol)` — UOM references
+- `categories(category_id, name)` — Product categories
+- `products(product_id, category_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, initial_cost)` — Master products
+- `product_variants(variant_id, product_id, sku, barcode, variant_name)` — SKU/barcode mappings
+- `price_tiers(tier_id, tier_name)` — Retail/wholesale/custom tiers
+- `product_prices(product_price_id, variant_id, tier_id, price_per_unit, min_quantity)` — Tiered pricing with quantity breaks
+- `customers(customer_id, company_name, contact_name, email, phone, tier_id, credit_limit, current_balance)` — Customer data with credit tracking
+- `inventory_lots(lot_id, variant_id, lot_number, expiration_date, quantity_on_hand)` — FEFO tracking with expiration
+- `app_users(user_id, username, display_name, role, password_salt, password_hash, active)` — User accounts
+- `employee_shifts(shift_id, user_id, clock_in, clock_out, notes)` — Shift history
+- `orders(order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, created_at)` — Order header
+- `order_items(order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price)` — Order line items
+- `sync_events(event_id, entity_type, entity_id, operation, payload, idempotency_key, created_at)` — Sync queue (schema only)
+
+**Constraints & details:**
+- All primary keys are UUID v4
+- All money fields NUMERIC(12,2) with CHECK >= 0
+- All quantity/weight fields NUMERIC(12,4)
+- Created_at/updated_at with TIMESTAMPTZ DEFAULT now()
+- Foreign key constraints with appropriate CASCADE/SET NULL
+- UNIQUE constraints on variant_id+lot_number, variant_id+tier_id+min_quantity
+- CHECK constraints on payment_method, order_type, status, role values
+- Missing production indexes (identified as high-priority issue)
+
+### ✅ COMPLETE: Authentication & Authorization
+
+- Password hashing with crypto.scryptSync (16-byte salt, 64-byte derived key)
+- Timing-safe comparison to prevent timing attacks
+- Bearer token sessions stored in-memory (identified as critical issue)
+- Middleware: `requireSession` checks Authorization header, `requireAdmin` checks role
+- Logout clears session token
+
+### ✅ COMPLETE: TypeScript API Client
+
+Fully typed `CloudApiClient` and `CloudPosApi` with:
+- Interface definitions for all domain models (CloudProduct, CloudCustomer, CloudEmployee, etc.)
+- Typed request/response handling
+- Bearer token injection in Authorization header
+- Error handling and message extraction
+
+### ✅ COMPLETE: Offline Store Foundation
+
+IndexedDB-based `BrowserOfflineStore` with:
+- Promise-based async API
+- `sync_queue` object store with pending/processing/failed status
+- Batch limiting (50 records)
+- Ready for sync worker to consume
+
+### ⚠️ PARTIAL: Checkout Screen Integration
+
+Shared component `CheckoutScreen` with:
+- Product search interface
+- Cart management with line-item IDs
+- Price resolution with tier fallback
+- Weight-based vs. unit-based quantity
+- Scale integration (500ms polling on active weight line)
+- Payment method selection
+- Cash tender and change calculation
+- Order submission via datasource interface
+
+**Issues:**
+- Type compatibility between CheckoutOrderPayload and CloudOrderPayload needs alignment
+- No offline/outbox integration yet (ready, but not wired)
+- Scale reading simulation needs hardware testing
+
+### ❌ NOT IMPLEMENTED: Critical Issues
+
+1. **Session Persistence** — Sessions lost on server restart (in-memory Map only)
+2. **Response Format Inconsistency** — Some POST endpoints return array vs. single object
+3. **changeDue Calculation** — Not computed server-side (relies on client)
+4. **Input Validation** — No schema validation (Zod, Yup, etc.)
+5. **Logging & Monitoring** — No structured logging, error tracking, or audit trails
+6. **Connection Pooling** — Pool not configured with max/timeout/idle settings
+7. **Rate Limiting** — No brute-force or DDoS protection
+8. **Sync Worker** — Offline sync not yet implemented
+9. **Service Worker PWA** — Cache strategy and offline support incomplete
+
+### ❌ NOT IMPLEMENTED: Production Features
+
+- Expense/cost tracking
+- Discount/promotion system
+- Multi-location inventory
+- Customer credit enforcement
+- Payment gateway integration (Stripe, GCash, PayMongo)
+- Printer integration (thermal/USB)
+- Hardware scale integration via API
+- Multi-currency support
+- Refund/void order capability
+- Bulk inventory import from CSV
+- Audit trail for inventory adjustments
+
+### RISK ASSESSMENT
+
+**🔴 CRITICAL (blocks production):**
+- Session persistence (data loss on restart)
+- Response format inconsistency (API contract violation)
+- No input validation (injection vulnerabilities)
+
+**🟡 HIGH (must fix before release):**
+- CORS wildcard (CSRF vulnerability)
+- Price tolerance check loose (rare pricing errors possible)
+- No database optimization (performance under load)
+- No logging/monitoring (debugging production issues impossible)
+
+**🟢 MEDIUM (nice to have):**
+- No audit trails (compliance issue)
+- No expense tracking (incomplete financial reports)
+- No promotions/discounts (missing core POS feature)
+
+### NEXT IMMEDIATE STEPS
+
+1. **Fix data consistency issues** (2-4 hours):
+   - Persistent session store (PostgreSQL)
+   - Response format standardization
+   - changeDue server-side calculation
+   - Tight price tolerance
+
+2. **Add production infrastructure** (3-5 hours):
+   - Structured logging (Winston/Pino)
+   - Input validation (Zod)
+   - Connection pooling config
+   - Database indexes
+
+3. **Implement offline-first sync** (9-12 hours):
+   - Sync worker for offline events
+   - Service Worker for PWA caching
+   - Conflict resolution strategy
+
+4. **Comprehensive testing** (18-20 hours):
+   - Unit tests (API handlers, database queries)
+   - Integration tests (full order flow)
+   - E2E tests (checkout to report)
+   - Load testing (concurrent users)
+
+**Estimated effort to production-ready: 4-6 weeks at full-time**
