@@ -1017,7 +1017,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                   {isAdmin && <td className="text-right">{money.format(Number(row.initialCapital) || 0)}</td>}
                   <td className="text-right font-semibold">{money.format(Number(row.retailPrice) || 0)}</td>
                   {isAdmin && (
-                    <td>
+                    <td className="pl-4">
                       <button
                         type="button"
                         onClick={() => openEditModal(row)}
