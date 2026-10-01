@@ -75,23 +75,70 @@ app.get('/api/v1/version', (_request, response) => {
   response.json({ version: process.env.APP_VERSION ?? '0.1.0-cloud' });
 });
 
+// Category List Endpoint (New)
+app.get('/api/v1/categories', auth.requireSession, async (_request, response, next) => {
+  try {
+    const result = await pool.query('SELECT category_id AS "categoryId", name FROM categories ORDER BY name');
+    response.json(result.rows);
+  } catch (error) {
+    logger.error('Categories list failed', { error: error.message });
+    next(error);
+  }
+});
+
+// Product Search Endpoint with True Category Filtering (Updated)
 app.get('/api/v1/products/search', auth.requireSession, async (request, response, next) => {
   try {
-    const query = `%${String(request.query.q ?? '').trim()}%`;
+    const q = String(request.query.q ?? '').trim();
+    const categoryId = String(request.query.categoryId ?? request.query.category ?? '').trim();
+
+    const whereConditions = [];
+    const params = [];
+
+    // Filter by Category ID (UUID) or Category Name String
+    if (categoryId) {
+      params.push(categoryId);
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId)) {
+        whereConditions.push(`p.category_id = $${params.length}`);
+      } else {
+        whereConditions.push(`c.name ILIKE $${params.length}`);
+      }
+    }
+
+    // Filter by Text Search Query across SKU, Barcode, Variant Name, Product Name, or Category Name
+    if (q) {
+      params.push(`%${q}%`);
+      const paramIdx = params.length;
+      whereConditions.push(`(v.sku ILIKE $${paramIdx} OR v.barcode ILIKE $${paramIdx} OR v.variant_name ILIKE $${paramIdx} OR p.name ILIKE $${paramIdx} OR c.name ILIKE $${paramIdx})`);
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
     const result = await pool.query(
-      `SELECT v.variant_id AS "variantId", v.sku, v.variant_name AS name, u.symbol AS unit, p.is_sold_by_weight AS "soldByWeight", pp.tier_id AS "tierId", pp.min_quantity AS "minQuantity", pp.price_per_unit AS "pricePerUnit" 
+      `SELECT v.variant_id AS "variantId", v.sku, v.variant_name AS name, u.symbol AS unit, p.is_sold_by_weight AS "soldByWeight", pp.tier_id AS "tierId", pp.min_quantity AS "minQuantity", pp.price_per_unit AS "pricePerUnit", p.category_id AS "categoryId", c.name AS "categoryName" 
        FROM product_variants v 
        JOIN products p ON p.product_id=v.product_id 
        JOIN units_of_measure u ON u.uom_id=p.base_uom_id 
+       LEFT JOIN categories c ON c.category_id=p.category_id 
        LEFT JOIN product_prices pp ON pp.variant_id=v.variant_id 
-       WHERE v.sku ILIKE $1 OR v.barcode ILIKE $1 OR v.variant_name ILIKE $1 OR p.name ILIKE $1 
-       ORDER BY v.variant_name LIMIT 40`, 
-      [query]
+       ${whereClause} 
+       ORDER BY v.variant_name LIMIT 50`, 
+      params
     );
+
     const grouped = new Map();
     for (const row of result.rows) { 
       if (!grouped.has(row.variantId)) {
-        grouped.set(row.variantId, { variantId: row.variantId, sku: row.sku, name: row.name, unit: row.unit, soldByWeight: row.soldByWeight, prices: [] }); 
+        grouped.set(row.variantId, { 
+          variantId: row.variantId, 
+          sku: row.sku, 
+          name: row.name, 
+          unit: row.unit, 
+          soldByWeight: row.soldByWeight,
+          categoryId: row.categoryId,
+          categoryName: row.categoryName,
+          prices: [] 
+        }); 
       }
       if (row.tierId) {
         grouped.get(row.variantId).prices.push({ tierId: row.tierId, minQuantity: Number(row.minQuantity), pricePerUnit: Number(row.pricePerUnit) }); 
@@ -149,12 +196,12 @@ app.post('/api/v1/customers', auth.requireSession, async (request, response, nex
 
 app.delete('/api/v1/customers/:id', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
   try {
-    const protectedCustomer = await pool.query('SELECT 1 FROM orders WHERE customer_id = $1 LIMIT 1', [request.params.id]);
+    const protectedCustomer = await pool.query('SELECT 1 FROM orders WHERE customer_id = \$1 LIMIT 1', [request.params.id]);
     if (protectedCustomer.rowCount) {
       logger.warn('Customer deletion blocked - has orders', { customerId: request.params.id });
       return response.status(409).json({ error: 'CUSTOMER_HAS_ORDERS' });
     }
-    const result = await pool.query('DELETE FROM customers WHERE customer_id = $1', [request.params.id]);
+    const result = await pool.query('DELETE FROM customers WHERE customer_id = \$1', [request.params.id]);
     if (!result.rowCount) return response.status(404).json({ error: 'CUSTOMER_NOT_FOUND' });
     logger.info('Customer deleted', { customerId: request.params.id });
     response.status(204).end();
@@ -198,7 +245,7 @@ app.post('/api/v1/inventory/adjust', auth.requireSession, auth.requireAdmin, asy
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const variant = await client.query('SELECT variant_id FROM product_variants WHERE variant_id=$1 FOR UPDATE', [body.variantId]);
+      const variant = await client.query('SELECT variant_id FROM product_variants WHERE variant_id=\$1 FOR UPDATE', [body.variantId]);
       if (!variant.rowCount) throw Object.assign(new Error('Variant not found'), { statusCode: 404, code: 'VARIANT_NOT_FOUND' });
       
       const lotNumber = body.lotNumber || `CLOUD-${body.variantId.slice(0, 8)}-${body.expirationDate || 'NOEXPIRY'}`;
@@ -258,12 +305,12 @@ app.post('/api/v1/inventory/products', auth.requireSession, auth.requireAdmin, a
       );
       
       await client.query(
-        'INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity) VALUES (gen_random_uuid(), $1, $2, $3, 0)', 
+        'INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity) VALUES (gen_random_uuid(), \$1, \$2, \$3, 0)', 
         [variant.rows[0].variantId, retailTier.rows[0].tier_id, body.retailPrice]
       );
       
       await client.query(
-        'INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand) VALUES (gen_random_uuid(), $1, $2, $3, $4)', 
+        'INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand) VALUES (gen_random_uuid(), \$1, \$2, \$3, \$4)', 
         [variant.rows[0].variantId, body.lotNumber, body.expirationDate || null, body.quantity]
       );
       
@@ -284,7 +331,7 @@ app.post('/api/v1/inventory/products', auth.requireSession, auth.requireAdmin, a
 app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
   try {
     const { variantId } = request.params;
-    if (!variantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(variantId)) {
+    if (!variantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\$/i.test(variantId)) {
       return response.status(400).json({ error: 'INVALID_VARIANT_ID', message: 'Variant ID must be a valid UUID' });
     }
 
@@ -322,7 +369,7 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
       // Update product initial_cost if provided
       if (body.initialCost !== undefined) {
         await client.query(
-          'UPDATE products SET initial_cost=$1, updated_at=now() WHERE product_id=(SELECT product_id FROM product_variants WHERE variant_id=$2)',
+          'UPDATE products SET initial_cost=\$1, updated_at=now() WHERE product_id=(SELECT product_id FROM product_variants WHERE variant_id=\$2)',
           [body.initialCost, variantId]
         );
       }
@@ -347,14 +394,14 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
       // Update inventory quantity if provided
       if (body.quantity !== undefined) {
         const lots = await client.query(
-          'SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=$1 ORDER BY expiration_date NULLS LAST LIMIT 1',
+          'SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=\$1 ORDER BY expiration_date NULLS LAST LIMIT 1',
           [variantId]
         );
         if (lots.rows[0]) {
           const currentQty = Number(lots.rows[0].quantity_on_hand);
           const diff = body.quantity - currentQty;
           await client.query(
-            'UPDATE inventory_lots SET quantity_on_hand=$1, updated_at=now() WHERE lot_id=$2',
+            'UPDATE inventory_lots SET quantity_on_hand=\$1, updated_at=now() WHERE lot_id=\$2',
             [body.quantity, lots.rows[0].lot_id]
           );
         }
@@ -375,7 +422,6 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
         }
         params.push(variantId);
         if (updateFields.length > 0) {
-          // Update earliest expiring lot (FEFO principle) - removed unsupported LIMIT from UPDATE
           await client.query(
             `UPDATE inventory_lots SET ${updateFields.join(', ')}, updated_at=now() WHERE variant_id=$${paramIndex} AND quantity_on_hand > 0 AND lot_id=(SELECT lot_id FROM inventory_lots WHERE variant_id=$${paramIndex} AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST LIMIT 1)`,
             params
@@ -482,18 +528,16 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
 app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
   try {
     const { userId } = request.params;
-    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\$/i.test(userId)) {
       return response.status(400).json({ error: 'INVALID_USER_ID', message: 'User ID must be a valid UUID' });
     }
 
-    // Check if user exists
-    const userCheck = await pool.query('SELECT user_id, username FROM app_users WHERE user_id=$1', [userId]);
+    const userCheck = await pool.query('SELECT user_id, username FROM app_users WHERE user_id=\$1', [userId]);
     if (!userCheck.rowCount) {
       return response.status(404).json({ error: 'USER_NOT_FOUND', message: 'Employee not found' });
     }
 
-    // Check if employee has any orders (protection rule)
-    const orderCheck = await pool.query('SELECT COUNT(*)::int as count FROM orders WHERE employee_id=$1', [userId]);
+    const orderCheck = await pool.query('SELECT COUNT(*)::int as count FROM orders WHERE employee_id=\$1', [userId]);
     if (Number(orderCheck.rows[0].count) > 0) {
       logger.warn('Employee deletion blocked - has orders', { userId, orderCount: orderCheck.rows[0].count });
       return response.status(409).json({ error: 'EMPLOYEE_HAS_ORDERS', message: `Cannot delete employee with ${orderCheck.rows[0].count} associated orders` });
@@ -502,13 +546,8 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-
-      // Delete employee shifts
-      await client.query('DELETE FROM employee_shifts WHERE user_id=$1', [userId]);
-
-      // Delete employee user account
-      const deleteResult = await client.query('DELETE FROM app_users WHERE user_id=$1', [userId]);
-
+      await client.query('DELETE FROM employee_shifts WHERE user_id=\$1', [userId]);
+      await client.query('DELETE FROM app_users WHERE user_id=\$1', [userId]);
       await client.query('COMMIT');
       logger.info('Employee deleted', { userId, username: userCheck.rows[0].username });
       response.status(200).json({ message: 'Employee deleted successfully' });
@@ -527,7 +566,7 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
 app.get('/api/v1/employees/shifts', auth.requireSession, async (request, response, next) => {
   try {
     const date = String(request.query.date ?? '');
-    const dateFilter = /^\d{4}-\d{2}-\d{2}$/.test(date) ? 'AND s.clock_in >= $3::date AT TIME ZONE \'Asia/Manila\' AND s.clock_in < ($3::date + interval \'1 day\') AT TIME ZONE \'Asia/Manila\'' : '';
+    const dateFilter = /^\d{4}-\d{2}-\d{2}\$/.test(date) ? 'AND s.clock_in >= \$3::date AT TIME ZONE \'Asia/Manila\' AND s.clock_in < (\$3::date + interval \'1 day\') AT TIME ZONE \'Asia/Manila\'' : '';
     const params = dateFilter ? [request.user.role, request.user.userId, date] : [request.user.role, request.user.userId];
     const result = await pool.query(
       `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", s.clock_in AS "clockIn", s.clock_out AS "clockOut" 
@@ -588,27 +627,23 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       return response.json({ orderId: validatedPayload.orderId, duplicate: true }); 
     }
     
-    // Validate cash payment
     if (validatedPayload.paymentMethod === 'cash' && Number(validatedPayload.cashReceived || 0) < Number(validatedPayload.totalAmount)) {
       throw Object.assign(new Error('Cash received must be at least the order total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' });
     }
 
     for (const item of validatedPayload.items) {
-      // 1. Check price for the specific customer tier with tighter tolerance
       let price = await client.query(
-        'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.tier_id=$2 AND pp.min_quantity <= $3 ORDER BY pp.min_quantity DESC LIMIT 1', 
+        'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=\$1 AND pp.tier_id=\$2 AND pp.min_quantity <= \$3 ORDER BY pp.min_quantity DESC LIMIT 1', 
         [item.variantId, validatedPayload.pricingTierId, item.quantity]
       );
 
-      // 2. Fallback to any active price for this variant
       if (!price.rowCount) {
         price = await client.query(
-          'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.price_per_unit > 0 ORDER BY pp.min_quantity ASC LIMIT 1',
+          'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=\$1 AND pp.price_per_unit > 0 ORDER BY pp.min_quantity ASC LIMIT 1',
           [item.variantId]
         );
       }
 
-      // 3. Verify price with stricter tolerance (0.005 = ±half cent)
       const serverPrice = Number(price.rows[0]?.price_per_unit || 0);
       const clientPrice = Number(item.unitPrice);
       const tolerance = 0.005;
@@ -618,8 +653,7 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         throw Object.assign(new Error('Price changed; review the cart'), { statusCode: 409, code: 'PRICE_CHANGED' });
       }
 
-      // FEFO allocation with row locking
-      const lots = await client.query('SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=$1 AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST, lot_id FOR UPDATE', [item.variantId]);
+      const lots = await client.query('SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=\$1 AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST, lot_id FOR UPDATE', [item.variantId]);
       let remaining = Number(item.quantity);
       const allocations = item.lotId ? [{ lotId: item.lotId, quantity: remaining }] : [];
       
@@ -638,13 +672,13 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       }
       
       for (const [allocationIndex, allocation] of allocations.entries()) { 
-        const update = await client.query('UPDATE inventory_lots SET quantity_on_hand=quantity_on_hand-$1, updated_at=now() WHERE lot_id=$2 AND variant_id=$3 AND quantity_on_hand >= $1', [allocation.quantity, allocation.lotId, item.variantId]); 
+        const update = await client.query('UPDATE inventory_lots SET quantity_on_hand=quantity_on_hand-\$1, updated_at=now() WHERE lot_id=\$2 AND variant_id=\$3 AND quantity_on_hand >= \$1', [allocation.quantity, allocation.lotId, item.variantId]); 
         if (update.rowCount !== 1) {
           logger.error('Inventory conflict during allocation', { lotId: allocation.lotId, requested: allocation.quantity });
           throw Object.assign(new Error('Inventory changed; retry checkout'), { statusCode: 409, code: 'INVENTORY_CONFLICT' });
         }
         
-        await client.query('INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES ($1,$2,$3,$4,$5,$6,$7)', [allocationIndex === 0 ? item.orderItemId : crypto.randomUUID(), validatedPayload.orderId, item.variantId, allocation.lotId, allocation.quantity, item.unitPrice, Number(item.unitPrice) * allocation.quantity]); 
+        await client.query('INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES (\$1,\$2,\$3,\$4,\$5,\$6,\$7)', [allocationIndex === 0 ? item.orderItemId : crypto.randomUUID(), validatedPayload.orderId, item.variantId, allocation.lotId, allocation.quantity, item.unitPrice, Number(item.unitPrice) * allocation.quantity]); 
       }
     }
     
@@ -664,8 +698,7 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
   try {
     const date = String(request.query.date ?? new Date().toISOString().slice(0, 10));
     
-    // Validate date format
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    if (!/^\d{4}-\d{2}-\d{2}\$/.test(date)) {
       return response.status(400).json({ error: 'INVALID_DATE', message: 'Date must be in YYYY-MM-DD format' });
     }
 

@@ -15,6 +15,13 @@ export interface CheckoutProduct {
   unit: string;
   soldByWeight: boolean;
   prices: CheckoutProductPrice[];
+  categoryId?: string;
+  categoryName?: string;
+}
+
+export interface CheckoutCategory {
+  categoryId: string;
+  name: string;
 }
 
 export interface CheckoutCustomer {
@@ -50,6 +57,7 @@ export interface CheckoutOrderPayload {
 export interface CheckoutDataSource {
   searchProducts: (query: string) => Promise<CheckoutProduct[]>;
   createOrderWithOutbox: (order: CheckoutOrderPayload) => Promise<{ orderId: string }>;
+  categories?: () => Promise<CheckoutCategory[]>;
 }
 
 export interface CheckoutScaleSource {
@@ -148,7 +156,8 @@ export function CheckoutScreen({
     return localStorage.getItem('bakealley_pos_customer_id') || null;
   });
 
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoriesList, setCategoriesList] = useState<CheckoutCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<{ categoryId?: string; name: string } | null>(null);
   const [categoryProducts, setCategoryProducts] = useState<CheckoutProduct[]>([]);
   const [categoryLoading, setCategoryLoading] = useState(false);
 
@@ -172,6 +181,19 @@ export function CheckoutScreen({
       localStorage.removeItem('bakealley_pos_customer_id');
     }
   }, [customerId]);
+
+  useEffect(() => {
+    if (dataSource.categories) {
+      dataSource
+        .categories()
+        .then((cats) => {
+          if (Array.isArray(cats) && cats.length > 0) {
+            setCategoriesList(cats);
+          }
+        })
+        .catch(() => undefined);
+    }
+  }, [dataSource]);
 
   const selectedCustomer = customers.find((customer) => customer.customerId === customerId) ?? null;
   const pricingTierId = selectedCustomer?.tierId ?? retailTierId;
@@ -247,11 +269,14 @@ export function CheckoutScreen({
     setResults(await dataSource.searchProducts(searchQuery.trim()));
   };
 
-  const handleSelectCategory = async (categoryName: string): Promise<void> => {
-    setSelectedCategory(categoryName);
+  const handleSelectCategory = async (categoryName: string, categoryId?: string): Promise<void> => {
+    setSelectedCategory({ categoryId, name: categoryName });
     setCategoryLoading(true);
     try {
-      const items = await dataSource.searchProducts(categoryName);
+      const searchParam = categoryId
+        ? `?categoryId=${encodeURIComponent(categoryId)}`
+        : `?category=${encodeURIComponent(categoryName)}`;
+      const items = await dataSource.searchProducts(searchParam);
       setCategoryProducts(items);
     } catch {
       setCategoryProducts([]);
@@ -427,7 +452,7 @@ export function CheckoutScreen({
         <section className="rounded-2xl border border-amber-200/80 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between border-b border-amber-100 pb-3">
             <h2 className="font-bakery text-lg font-bold text-amber-950">
-              {selectedCategory ? `Category: ${selectedCategory}` : 'Quick Categories'}
+              {selectedCategory ? `Category: ${selectedCategory.name}` : 'Quick Categories'}
             </h2>
             {selectedCategory && (
               <button
@@ -445,23 +470,36 @@ export function CheckoutScreen({
 
           {!selectedCategory ? (
             <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7">
-              {DEFAULT_CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => void handleSelectCategory(cat)}
-                  className="flex h-20 flex-col items-center justify-center rounded-xl border border-amber-200/80 bg-amber-50/40 p-2 text-center transition hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-100/60 hover:shadow-md"
-                >
-                  <span className="font-bakery text-xs font-bold text-amber-950 line-clamp-2">{cat}</span>
-                </button>
-              ))}
+              {categoriesList.length > 0
+                ? categoriesList.map((cat) => (
+                    <button
+                      key={cat.categoryId}
+                      type="button"
+                      onClick={() => void handleSelectCategory(cat.name, cat.categoryId)}
+                      className="flex h-20 flex-col items-center justify-center rounded-xl border border-amber-200/80 bg-amber-50/40 p-2 text-center transition hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-100/60 hover:shadow-md"
+                    >
+                      <span className="font-bakery text-xs font-bold text-amber-950 line-clamp-2">{cat.name}</span>
+                    </button>
+                  ))
+                : DEFAULT_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => void handleSelectCategory(cat)}
+                      className="flex h-20 flex-col items-center justify-center rounded-xl border border-amber-200/80 bg-amber-50/40 p-2 text-center transition hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-100/60 hover:shadow-md"
+                    >
+                      <span className="font-bakery text-xs font-bold text-amber-950 line-clamp-2">{cat}</span>
+                    </button>
+                  ))}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {categoryLoading ? (
                 <p className="col-span-full py-8 text-center text-xs text-amber-700">Loading products...</p>
               ) : categoryProducts.length === 0 ? (
-                <p className="col-span-full py-8 text-center text-xs text-amber-700">No items found under {selectedCategory}.</p>
+                <p className="col-span-full py-8 text-center text-xs text-amber-700">
+                  No items found under {selectedCategory.name}.
+                </p>
               ) : (
                 categoryProducts.map((product) => {
                   const unitPrice = resolvePrice(product, pricingTierId, 1);
@@ -561,7 +599,7 @@ export function CheckoutScreen({
                     }}
                     className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
                       paymentMethod === opt.id
-                        ? `${opt.color} ring-2 ring-amber-500/50 shadow-sm font-bold`
+                        ? `\${opt.color} ring-2 ring-amber-500/50 shadow-sm font-bold`
                         : 'border-amber-200/80 text-amber-900 hover:bg-amber-50/50 font-semibold'
                     }`}
                   >

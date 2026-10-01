@@ -1,4 +1,9 @@
-import { CloudApiClient } from './apiClient';
+import { CloudApiClient, type CloudProduct } from './apiClient';
+
+export interface CloudCategory {
+  categoryId: string;
+  name: string;
+}
 
 export interface CloudSession {
   token: string;
@@ -14,5 +19,39 @@ export class CloudPosApi extends CloudApiClient {
     });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error ?? 'Login failed');
     return response.json() as Promise<CloudSession>;
+  }
+
+  public async categories(): Promise<CloudCategory[]> {
+    const token = this.options.getToken();
+    const response = await fetch(this.apiUrl('/api/v1/categories'), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to fetch categories');
+    }
+    return response.json() as Promise<CloudCategory[]>;
+  }
+
+  public override async searchProducts(query: string): Promise<CloudProduct[]> {
+    const token = this.options.getToken();
+    const endpoint = query.startsWith('?')
+      ? `/api/v1/products/search${query}`
+      : `/api/v1/products/search?q=${encodeURIComponent(query)}`;
+
+    const response = await fetch(this.apiUrl(endpoint), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Product search failed');
+    }
+    return response.json() as Promise<CloudProduct[]>;
   }
 }
