@@ -75,7 +75,7 @@ app.get('/api/v1/version', (_request, response) => {
   response.json({ version: process.env.APP_VERSION ?? '0.1.0-cloud' });
 });
 
-// Category List Endpoint (New)
+// Category List Endpoint
 app.get('/api/v1/categories', auth.requireSession, async (_request, response, next) => {
   try {
     const result = await pool.query('SELECT category_id AS "categoryId", name FROM categories ORDER BY name');
@@ -86,7 +86,7 @@ app.get('/api/v1/categories', auth.requireSession, async (_request, response, ne
   }
 });
 
-// Product Search Endpoint with True Category Filtering (Updated)
+// Product Search Endpoint with True Category Filtering
 app.get('/api/v1/products/search', auth.requireSession, async (request, response, next) => {
   try {
     const q = String(request.query.q ?? '').trim();
@@ -105,7 +105,7 @@ app.get('/api/v1/products/search', auth.requireSession, async (request, response
       }
     }
 
-    // Filter by Text Search Query across SKU, Barcode, Variant Name, Product Name, or Category Name
+    // Filter by Text Search Query
     if (q) {
       params.push(`%${q}%`);
       const paramIdx = params.length;
@@ -117,7 +117,7 @@ app.get('/api/v1/products/search', auth.requireSession, async (request, response
     const result = await pool.query(
       `SELECT v.variant_id AS "variantId", v.sku, v.variant_name AS name, u.symbol AS unit, p.is_sold_by_weight AS "soldByWeight", pp.tier_id AS "tierId", pp.min_quantity AS "minQuantity", pp.price_per_unit AS "pricePerUnit", p.category_id AS "categoryId", c.name AS "categoryName" 
        FROM product_variants v 
-       JOIN products p ON p.product_id=v.product_id 
+       JOIN products p ON p.product_id=p.product_id 
        JOIN units_of_measure u ON u.uom_id=p.base_uom_id 
        LEFT JOIN categories c ON c.category_id=p.category_id 
        LEFT JOIN product_prices pp ON pp.variant_id=v.variant_id 
@@ -381,7 +381,6 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
         );
         if (tierResult.rows[0]) {
           const retailTierId = tierResult.rows[0].tier_id;
-          // Upsert: update or insert retail price
           await client.query(
             `INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity) 
              VALUES (gen_random_uuid(), $1, $2, $3, 0)
@@ -398,8 +397,6 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
           [variantId]
         );
         if (lots.rows[0]) {
-          const currentQty = Number(lots.rows[0].quantity_on_hand);
-          const diff = body.quantity - currentQty;
           await client.query(
             'UPDATE inventory_lots SET quantity_on_hand=\$1, updated_at=now() WHERE lot_id=\$2',
             [body.quantity, lots.rows[0].lot_id]
@@ -563,10 +560,14 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
   }
 });
 
+// Employee Shifts List Endpoint (Date Filter Fixed)
 app.get('/api/v1/employees/shifts', auth.requireSession, async (request, response, next) => {
   try {
-    const date = String(request.query.date ?? '');
-    const dateFilter = /^\d{4}-\d{2}-\d{2}\$/.test(date) ? 'AND s.clock_in >= \$3::date AT TIME ZONE \'Asia/Manila\' AND s.clock_in < (\$3::date + interval \'1 day\') AT TIME ZONE \'Asia/Manila\'' : '';
+    const date = String(request.query.date ?? '').trim();
+    const isValidDate = /^\d{4}-\d{2}-\d{2}\$/.test(date);
+    const dateFilter = isValidDate 
+      ? "AND s.clock_in >= \$3::date AT TIME ZONE 'Asia/Manila' AND s.clock_in < (\$3::date + interval '1 day') AT TIME ZONE 'Asia/Manila'" 
+      : '';
     const params = dateFilter ? [request.user.role, request.user.userId, date] : [request.user.role, request.user.userId];
     const result = await pool.query(
       `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", s.clock_in AS "clockIn", s.clock_out AS "clockOut" 
@@ -694,10 +695,12 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   }
 });
 
+// Sales Report Endpoint (Date Validation Fixed)
 app.get('/api/v1/sales/report', auth.requireSession, async (request, response, next) => {
   try {
-    const date = String(request.query.date ?? new Date().toISOString().slice(0, 10));
+    const date = String(request.query.date ?? new Date().toISOString().slice(0, 10)).trim();
     
+    // Validate YYYY-MM-DD date format
     if (!/^\d{4}-\d{2}-\d{2}\$/.test(date)) {
       return response.status(400).json({ error: 'INVALID_DATE', message: 'Date must be in YYYY-MM-DD format' });
     }
