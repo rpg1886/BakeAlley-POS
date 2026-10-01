@@ -76,12 +76,12 @@ async function ensurePieceUom(client) {
     "SELECT uom_id AS \"uomId\" FROM units_of_measure WHERE name = 'Piece'"
   );
   if (existing.rowCount) {
-    return existing.rows.uomId;
+    return existing.rows[0].uomId;
   }
   const inserted = await client.query(
     "INSERT INTO units_of_measure (uom_id, name, symbol) VALUES (gen_random_uuid(), 'Piece', 'pc') RETURNING uom_id AS \"uomId\""
   );
-  return inserted.rows.uomId;
+  return inserted.rows[0].uomId;
 }
 
 async function importMainInventory(csvPath, defaultMarkupPercent) {

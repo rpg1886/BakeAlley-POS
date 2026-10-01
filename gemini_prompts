@@ -1,8 +1,4 @@
 # Set your Neon DATABASE_URL environment variable
-$env:DATABASE_URL="postgresql://neondb_owner:npg_A9NQ7CLPFfgM@ep-noisy-wildflower-b3brqru6-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-
-# Execute the import script passing your CSV file path
-node server/scripts/import-main-inventory.js path/to/Inventory_Main.csv
 
 
 git checkout CloudBase-POS
