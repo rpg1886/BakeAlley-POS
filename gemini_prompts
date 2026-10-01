@@ -3,3 +3,9 @@ $env:DATABASE_URL="postgresql://neondb_owner:npg_A9NQ7CLPFfgM@ep-noisy-wildflowe
 
 # Execute the import script passing your CSV file path
 node server/scripts/import-main-inventory.js path/to/Inventory_Main.csv
+
+
+git checkout CloudBase-POS
+git commit --allow-empty -m "Update frontend build target to Railway API"
+git push origin CloudBase-POS
+
