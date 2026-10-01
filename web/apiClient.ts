@@ -118,8 +118,12 @@ export class CloudApiClient {
     await this.request('/api/v1/inventory/adjust', { method: 'POST', body: JSON.stringify(adjustment) });
   }
 
-  public async createInventoryProduct(product: { name: string; sku: string; variantName: string; baseUomId: string; lotNumber: string; expirationDate?: string; quantity: number; retailPrice: number; initialCost?: number; barcode?: string; soldByWeight?: boolean; requiresLotTracking?: boolean }): Promise<void> {
-    await this.request('/api/v1/inventory/products', { method: 'POST', body: JSON.stringify(product) });
+  public async createInventoryProduct(product: { name: string; sku: string; variantName: string; baseUomId: string; lotNumber: string; expirationDate?: string; quantity: number; retailPrice: number; initialCost?: number; barcode?: string; soldByWeight?: boolean; requiresLotTracking?: boolean }): Promise<{ variantId: string; sku: string; variantName: string }> {
+    return this.request('/api/v1/inventory/products', { method: 'POST', body: JSON.stringify(product) });
+  }
+
+  public async deleteEmployee(userId: string): Promise<void> {
+    await this.request(`/api/v1/employees/${userId}`, { method: 'DELETE' });
   }
 
   public async updateInventoryProduct(variantId: string, update: { variantName?: string; sku?: string; retailPrice?: number; initialCost?: number; quantity?: number; lotNumber?: string; expirationDate?: string | null }): Promise<void> {

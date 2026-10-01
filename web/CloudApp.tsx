@@ -772,12 +772,11 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     
     if (!statusMatch) return false;
     
-    // Search filter (case-insensitive across SKU, product name, variant name, lot number)
+    // Search filter (case-insensitive across SKU, product name, variant name)
     const searchLower = searchTerm.toLowerCase().trim();
     if (searchLower) {
       return r.sku.toLowerCase().includes(searchLower) ||
-             r.variantName.toLowerCase().includes(searchLower) ||
-             r.lotNumber.toLowerCase().includes(searchLower);
+             r.variantName.toLowerCase().includes(searchLower);
     }
     return true;
   });
@@ -1380,6 +1379,8 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ userId: string; displayName: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('bakealley_pos_emp_date', selectedDate);
@@ -1431,6 +1432,21 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
       setError(errorText(reason, 'Employee could not be added.'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const deleteEmployee = async (userId: string): Promise<void> => {
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteEmployee(userId);
+      setMessage(`Employee "${deleteConfirm?.displayName}" deleted successfully.`);
+      setDeleteConfirm(null);
+      await refresh();
+    } catch (reason) {
+      setError(errorText(reason, 'Employee could not be deleted.'));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1494,6 +1510,11 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
                           {ownShift ? 'Clock out' : 'Clock in'}
                         </button>
                       )}
+                      {isAdmin && !isSelf && (
+                        <button className="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-semibold hover:bg-red-700 disabled:opacity-50" type="button" onClick={() => setDeleteConfirm({ userId: employee.userId, displayName: employee.displayName })} disabled={deleting}>
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1530,6 +1551,36 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+          <div className="bg-white rounded-2xl p-6 w-96 shadow-lg">
+            <h2 className="text-lg font-bold text-red-600 mb-4">Delete Employee</h2>
+            <p className="text-sm text-gray-700 mb-6">
+              Are you sure you want to delete <strong>{deleteConfirm.displayName}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white font-semibold hover:bg-red-700 disabled:opacity-50"
+                onClick={() => void deleteEmployee(deleteConfirm.userId)}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting...' : 'Delete Employee'}
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-lg bg-gray-300 px-4 py-2 text-gray-900 font-semibold hover:bg-gray-400 disabled:opacity-50"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

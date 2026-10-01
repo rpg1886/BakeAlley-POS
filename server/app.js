@@ -277,8 +277,7 @@ app.post('/api/v1/inventory/products', auth.requireSession, auth.requireAdmin, a
       client.release(); 
     }
   } catch (error) { 
-    logger.error('Product creation failed', { error: error.message });
-    next(error); 
+    logger.error('Product creation failed', { error: error.message, code: error.code, detail: error.detail, constraint: error.constraint });
   }
 });
 
@@ -477,6 +476,51 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
   } catch (error) { 
     logger.error('Clock-out failed', { error: error.message });
     next(error); 
+  }
+});
+
+app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const { userId } = request.params;
+    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      return response.status(400).json({ error: 'INVALID_USER_ID', message: 'User ID must be a valid UUID' });
+    }
+
+    // Check if user exists
+    const userCheck = await pool.query('SELECT user_id, username FROM app_users WHERE user_id=$1', [userId]);
+    if (!userCheck.rowCount) {
+      return response.status(404).json({ error: 'USER_NOT_FOUND', message: 'Employee not found' });
+    }
+
+    // Check if employee has any orders (protection rule)
+    const orderCheck = await pool.query('SELECT COUNT(*)::int as count FROM orders WHERE employee_id=$1', [userId]);
+    if (Number(orderCheck.rows[0].count) > 0) {
+      logger.warn('Employee deletion blocked - has orders', { userId, orderCount: orderCheck.rows[0].count });
+      return response.status(409).json({ error: 'EMPLOYEE_HAS_ORDERS', message: `Cannot delete employee with ${orderCheck.rows[0].count} associated orders` });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Delete employee shifts
+      await client.query('DELETE FROM employee_shifts WHERE user_id=$1', [userId]);
+
+      // Delete employee user account
+      const deleteResult = await client.query('DELETE FROM app_users WHERE user_id=$1', [userId]);
+
+      await client.query('COMMIT');
+      logger.info('Employee deleted', { userId, username: userCheck.rows[0].username });
+      response.status(200).json({ message: 'Employee deleted successfully' });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    logger.error('Employee deletion failed', { error: error.message });
+    next(error);
   }
 });
 
