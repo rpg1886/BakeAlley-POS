@@ -47,6 +47,16 @@ const inventoryProductSchema = z.object({
   requiresLotTracking: z.boolean().optional().default(false),
 });
 
+const inventoryUpdateSchema = z.object({
+  variantName: z.string().min(1, 'Variant name is required').optional(),
+  sku: z.string().min(1, 'SKU is required').optional(),
+  retailPrice: z.number().nonnegative('Retail price must be non-negative').optional(),
+  initialCost: z.number().nonnegative('Initial cost must be non-negative').optional(),
+  quantity: z.number().nonnegative('Quantity must be non-negative').optional(),
+  lotNumber: z.string().optional(),
+  expirationDate: z.string().optional().nullable(),
+});
+
 // Order schemas
 const orderItemSchema = z.object({
   orderItemId: z.string().uuid('Order item ID must be a valid UUID'),
@@ -96,6 +106,7 @@ module.exports = {
   employeeSchema,
   inventoryAdjustSchema,
   inventoryProductSchema,
+  inventoryUpdateSchema,
   orderPayloadSchema,
   searchSchema,
   dateSchema,

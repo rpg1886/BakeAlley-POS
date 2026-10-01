@@ -6,7 +6,7 @@ require('dotenv').config();
 const { pool, migrate } = require('./db');
 const { createAuthRouter } = require('./auth');
 const logger = require('./logger');
-const { validate, customerSchema, employeeSchema, inventoryAdjustSchema, inventoryProductSchema, orderPayloadSchema } = require('./validation');
+const { validate, customerSchema, employeeSchema, inventoryAdjustSchema, inventoryProductSchema, inventoryUpdateSchema, orderPayloadSchema } = require('./validation');
 
 const app = express();
 
@@ -269,6 +269,122 @@ app.post('/api/v1/inventory/products', auth.requireSession, auth.requireAdmin, a
   } catch (error) { 
     logger.error('Product creation failed', { error: error.message });
     next(error); 
+  }
+});
+
+app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const { variantId } = request.params;
+    if (!variantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(variantId)) {
+      return response.status(400).json({ error: 'INVALID_VARIANT_ID', message: 'Variant ID must be a valid UUID' });
+    }
+
+    const validation = validate(inventoryUpdateSchema, request.body);
+    if (!validation.success) {
+      logger.warn('Inventory update validation failed', { variantId, errors: validation.errors });
+      return response.status(400).json({ error: 'INVALID_INVENTORY_UPDATE', details: validation.errors });
+    }
+
+    const body = validation.data;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Update variant if variantName or sku provided
+      if (body.variantName || body.sku) {
+        const updateFields = [];
+        const params = [];
+        let paramIndex = 1;
+        if (body.variantName) {
+          updateFields.push(`variant_name=$${paramIndex++}`);
+          params.push(body.variantName);
+        }
+        if (body.sku) {
+          updateFields.push(`sku=$${paramIndex++}`);
+          params.push(body.sku);
+        }
+        params.push(variantId);
+        await client.query(
+          `UPDATE product_variants SET ${updateFields.join(', ')}, updated_at=now() WHERE variant_id=$${paramIndex}`,
+          params
+        );
+      }
+
+      // Update product initial_cost if provided
+      if (body.initialCost !== undefined) {
+        await client.query(
+          'UPDATE products SET initial_cost=$1, updated_at=now() WHERE product_id=(SELECT product_id FROM product_variants WHERE variant_id=$2)',
+          [body.initialCost, variantId]
+        );
+      }
+
+      // Update retail price in product_prices if provided
+      if (body.retailPrice !== undefined) {
+        const tierResult = await client.query(
+          "SELECT tier_id FROM price_tiers WHERE lower(tier_name)='retail' LIMIT 1"
+        );
+        if (tierResult.rows[0]) {
+          const retailTierId = tierResult.rows[0].tier_id;
+          // Upsert: update or insert retail price
+          await client.query(
+            `INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity) 
+             VALUES (gen_random_uuid(), $1, $2, $3, 0)
+             ON CONFLICT (variant_id, tier_id, min_quantity) DO UPDATE SET price_per_unit=$3, updated_at=now()`,
+            [variantId, retailTierId, body.retailPrice]
+          );
+        }
+      }
+
+      // Update inventory quantity if provided
+      if (body.quantity !== undefined) {
+        const lots = await client.query(
+          'SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=$1 ORDER BY expiration_date NULLS LAST LIMIT 1',
+          [variantId]
+        );
+        if (lots.rows[0]) {
+          const currentQty = Number(lots.rows[0].quantity_on_hand);
+          const diff = body.quantity - currentQty;
+          await client.query(
+            'UPDATE inventory_lots SET quantity_on_hand=$1, updated_at=now() WHERE lot_id=$2',
+            [body.quantity, lots.rows[0].lot_id]
+          );
+        }
+      }
+
+      // Update lot if lotNumber or expirationDate provided
+      if (body.lotNumber || body.expirationDate !== undefined) {
+        const updateFields = [];
+        const params = [];
+        let paramIndex = 1;
+        if (body.lotNumber) {
+          updateFields.push(`lot_number=$${paramIndex++}`);
+          params.push(body.lotNumber);
+        }
+        if (body.expirationDate !== undefined) {
+          updateFields.push(`expiration_date=$${paramIndex++}`);
+          params.push(body.expirationDate || null);
+        }
+        params.push(variantId);
+        if (updateFields.length > 0) {
+          await client.query(
+            `UPDATE inventory_lots SET ${updateFields.join(', ')}, updated_at=now() WHERE variant_id=$${paramIndex} AND quantity_on_hand > 0 LIMIT 1`,
+            params
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+      logger.info('Inventory updated', { variantId, changes: Object.keys(body) });
+      response.status(200).json({ message: 'Inventory updated successfully' });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    logger.error('Inventory update failed', { error: error.message });
+    next(error);
   }
 });
 

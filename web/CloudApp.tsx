@@ -729,6 +729,13 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'low' | 'out'>('all');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingRow, setEditingRow] = useState<CloudInventoryRow | null>(null);
+  const [editForm, setEditForm] = useState({ variantName: '', sku: '', retailPrice: '', initialCost: '', quantity: '', expirationDate: '' });
+  const [addForm, setAddForm] = useState({ name: '', sku: '', variantName: '', retailPrice: '', initialCost: '', quantity: '', lotNumber: '', expirationDate: '' });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const refresh = async (): Promise<void> => {
     setLoading(true);
@@ -758,6 +765,142 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     if (filterStatus === 'low') return qty > 0 && qty <= LOW_STOCK_THRESHOLD;
     return true;
   });
+
+  const openEditModal = (row: CloudInventoryRow) => {
+    setEditingRow(row);
+    setEditForm({
+      variantName: row.variantName,
+      sku: row.sku,
+      retailPrice: String(row.retailPrice),
+      initialCost: String(row.initialCapital),
+      quantity: String(row.quantityOnHand),
+      expirationDate: row.expirationDate || '',
+    });
+    setFormError(null);
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setEditingRow(null);
+    setEditForm({ variantName: '', sku: '', retailPrice: '', initialCost: '', quantity: '', expirationDate: '' });
+    setFormError(null);
+  };
+
+  const openAddModal = () => {
+    setAddForm({ name: '', sku: '', variantName: '', retailPrice: '', initialCost: '', quantity: '', lotNumber: '', expirationDate: '' });
+    setFormError(null);
+    setShowAddModal(true);
+  };
+
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    setAddForm({ name: '', sku: '', variantName: '', retailPrice: '', initialCost: '', quantity: '', lotNumber: '', expirationDate: '' });
+    setFormError(null);
+  };
+
+  const validateEditForm = (): boolean => {
+    if (!editForm.variantName.trim()) {
+      setFormError('Variant name is required');
+      return false;
+    }
+    if (!editForm.sku.trim()) {
+      setFormError('SKU is required');
+      return false;
+    }
+    if (Number(editForm.retailPrice) < 0) {
+      setFormError('Retail price cannot be negative');
+      return false;
+    }
+    if (Number(editForm.initialCost) < 0) {
+      setFormError('Initial cost cannot be negative');
+      return false;
+    }
+    if (Number(editForm.quantity) < 0) {
+      setFormError('Quantity cannot be negative');
+      return false;
+    }
+    return true;
+  };
+
+  const validateAddForm = (): boolean => {
+    if (!addForm.name.trim()) {
+      setFormError('Product name is required');
+      return false;
+    }
+    if (!addForm.sku.trim()) {
+      setFormError('SKU is required');
+      return false;
+    }
+    if (!addForm.variantName.trim()) {
+      setFormError('Variant name is required');
+      return false;
+    }
+    if (Number(addForm.retailPrice) <= 0) {
+      setFormError('Retail price must be greater than 0');
+      return false;
+    }
+    if (Number(addForm.quantity) < 0) {
+      setFormError('Quantity cannot be negative');
+      return false;
+    }
+    if (!addForm.lotNumber.trim()) {
+      setFormError('Lot number is required');
+      return false;
+    }
+    return true;
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateEditForm() || !editingRow) return;
+
+    setIsSubmitting(true);
+    setFormError(null);
+    try {
+      await api.updateInventoryProduct(editingRow.variantId, {
+        variantName: editForm.variantName !== editingRow.variantName ? editForm.variantName : undefined,
+        sku: editForm.sku !== editingRow.sku ? editForm.sku : undefined,
+        retailPrice: Number(editForm.retailPrice) !== editingRow.retailPrice ? Number(editForm.retailPrice) : undefined,
+        initialCost: Number(editForm.initialCost) !== editingRow.initialCapital ? Number(editForm.initialCost) : undefined,
+        quantity: Number(editForm.quantity) !== editingRow.quantityOnHand ? Number(editForm.quantity) : undefined,
+        expirationDate: editForm.expirationDate !== editingRow.expirationDate ? (editForm.expirationDate || null) : undefined,
+      });
+      await refresh();
+      closeEditModal();
+    } catch (reason) {
+      setFormError(errorText(reason, 'Failed to update inventory'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateAddForm()) return;
+
+    setIsSubmitting(true);
+    setFormError(null);
+    try {
+      await api.createInventoryProduct({
+        name: addForm.name,
+        sku: addForm.sku,
+        variantName: addForm.variantName,
+        baseUomId: '550e8400-e29b-41d4-a716-446655440000',
+        lotNumber: addForm.lotNumber,
+        quantity: Number(addForm.quantity),
+        retailPrice: Number(addForm.retailPrice),
+        initialCost: Number(addForm.initialCost) || 0,
+        expirationDate: addForm.expirationDate || undefined,
+      });
+      await refresh();
+      closeAddModal();
+    } catch (reason) {
+      setFormError(errorText(reason, 'Failed to add inventory item'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Panel title="Inventory stock & Valuation">
@@ -791,7 +934,14 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
             {lowStockCount} Low Stock Alert {filterStatus === 'low' && '✓'}
           </button>
         </div>
-        <ActionButton disabled={loading} onClick={() => void refresh()}>{loading ? 'Refreshing...' : 'Refresh Stock'}</ActionButton>
+        <div className="flex gap-2">
+          {isAdmin && (
+            <ActionButton disabled={loading || isSubmitting} onClick={openAddModal}>
+              + Add Item
+            </ActionButton>
+          )}
+          <ActionButton disabled={loading} onClick={() => void refresh()}>{loading ? 'Refreshing...' : 'Refresh Stock'}</ActionButton>
+        </div>
       </div>
 
       {isAdmin && (
@@ -826,6 +976,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               <th className="text-right">Qty</th>
               {isAdmin && <th className="text-right">Capital</th>}
               <th className="text-right">Retail price</th>
+              {isAdmin && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -854,6 +1005,18 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                   <td className={`text-right font-bold tabular-nums ${isOut ? 'text-red-700' : isLow ? 'text-amber-800' : ''}`}>{qty.toFixed(4)}</td>
                   {isAdmin && <td className="text-right">{money.format(Number(row.initialCapital) || 0)}</td>}
                   <td className="text-right font-semibold">{money.format(Number(row.retailPrice) || 0)}</td>
+                  {isAdmin && (
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(row)}
+                        className="rounded px-2 py-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                        disabled={isSubmitting}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -865,6 +1028,210 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           </p>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {showEditModal && editingRow && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+          <div className="bg-white rounded-2xl p-6 w-96 max-h-screen overflow-y-auto shadow-lg">
+            <h2 className="text-xl font-bold text-amber-950 mb-4">Edit Inventory Item</h2>
+            {formError && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{formError}</p>}
+            <form onSubmit={handleEditSubmit} className="space-y-3">
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Variant Name</label>
+                <input
+                  type="text"
+                  value={editForm.variantName}
+                  onChange={(e) => setEditForm({ ...editForm, variantName: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">SKU</label>
+                <input
+                  type="text"
+                  value={editForm.sku}
+                  onChange={(e) => setEditForm({ ...editForm, sku: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Retail Price (₱)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editForm.retailPrice}
+                  onChange={(e) => setEditForm({ ...editForm, retailPrice: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Initial Cost (₱)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editForm.initialCost}
+                  onChange={(e) => setEditForm({ ...editForm, initialCost: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Quantity</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={editForm.quantity}
+                  onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Expiration Date (optional)</label>
+                <input
+                  type="date"
+                  value={editForm.expirationDate}
+                  onChange={(e) => setEditForm({ ...editForm, expirationDate: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="flex gap-2 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="flex-1 rounded-lg bg-gray-300 px-4 py-2 text-gray-900 font-semibold hover:bg-gray-400 disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Item Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+          <div className="bg-white rounded-2xl p-6 w-96 max-h-screen overflow-y-auto shadow-lg">
+            <h2 className="text-xl font-bold text-amber-950 mb-4">Add New Inventory Item</h2>
+            {formError && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{formError}</p>}
+            <form onSubmit={handleAddSubmit} className="space-y-3">
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Product Name</label>
+                <input
+                  type="text"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">SKU</label>
+                <input
+                  type="text"
+                  value={addForm.sku}
+                  onChange={(e) => setAddForm({ ...addForm, sku: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Variant Name</label>
+                <input
+                  type="text"
+                  value={addForm.variantName}
+                  onChange={(e) => setAddForm({ ...addForm, variantName: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Retail Price (₱)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={addForm.retailPrice}
+                  onChange={(e) => setAddForm({ ...addForm, retailPrice: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Initial Cost (₱)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={addForm.initialCost}
+                  onChange={(e) => setAddForm({ ...addForm, initialCost: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Quantity</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={addForm.quantity}
+                  onChange={(e) => setAddForm({ ...addForm, quantity: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Lot Number</label>
+                <input
+                  type="text"
+                  value={addForm.lotNumber}
+                  onChange={(e) => setAddForm({ ...addForm, lotNumber: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-amber-950">Expiration Date (optional)</label>
+                <input
+                  type="date"
+                  value={addForm.expirationDate}
+                  onChange={(e) => setAddForm({ ...addForm, expirationDate: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="flex gap-2 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Adding...' : 'Add Item'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeAddModal}
+                  className="flex-1 rounded-lg bg-gray-300 px-4 py-2 text-gray-900 font-semibold hover:bg-gray-400 disabled:opacity-50"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </Panel>
   );
 }
