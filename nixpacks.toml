@@ -4,6 +4,3 @@ cmds = ["npm ci --omit=dev"]
 [start]
 cmd = "node server/app.js"
 
-[env]
-PORT = "3000"
-
