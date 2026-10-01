@@ -11,7 +11,7 @@ const { validate, customerSchema, employeeSchema, inventoryAdjustSchema, invento
 const app = express();
 
 // CORS configuration - restrict to whitelisted origins
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000')
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || 'https://rpg1886.github.io,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000')
   .split(',')
   .map(origin => origin.trim());
 
