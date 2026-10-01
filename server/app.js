@@ -376,8 +376,9 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
         }
         params.push(variantId);
         if (updateFields.length > 0) {
+          // Update earliest expiring lot (FEFO principle) - removed unsupported LIMIT from UPDATE
           await client.query(
-            `UPDATE inventory_lots SET ${updateFields.join(', ')}, updated_at=now() WHERE variant_id=$${paramIndex} AND quantity_on_hand > 0 LIMIT 1`,
+            `UPDATE inventory_lots SET ${updateFields.join(', ')}, updated_at=now() WHERE variant_id=$${paramIndex} AND quantity_on_hand > 0 AND lot_id=(SELECT lot_id FROM inventory_lots WHERE variant_id=$${paramIndex} AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST LIMIT 1)`,
             params
           );
         }
@@ -393,8 +394,8 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
       client.release();
     }
   } catch (error) {
-    logger.error('Inventory update failed', { error: error.message });
-    next(error);
+    logger.error('Inventory update failed', { error: error.message, code: error.code, detail: error.detail });
+    next(Object.assign(error, { statusCode: 400 }));
   }
 });
 

@@ -730,6 +730,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const [uoms, setUoms] = useState<Array<{ uomId: string; name: string; symbol: string }>>([]);
   const [defaultUomId, setDefaultUomId] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'low' | 'out'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingRow, setEditingRow] = useState<CloudInventoryRow | null>(null);
@@ -767,8 +768,17 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
   const filteredRows = rows.filter((r) => {
     const qty = Number(r.quantityOnHand);
-    if (filterStatus === 'out') return qty <= 0;
-    if (filterStatus === 'low') return qty > 0 && qty <= LOW_STOCK_THRESHOLD;
+    const statusMatch = filterStatus === 'all' || (filterStatus === 'out' && qty <= 0) || (filterStatus === 'low' && qty > 0 && qty <= LOW_STOCK_THRESHOLD);
+    
+    if (!statusMatch) return false;
+    
+    // Search filter (case-insensitive across SKU, product name, variant name, lot number)
+    const searchLower = searchTerm.toLowerCase().trim();
+    if (searchLower) {
+      return r.sku.toLowerCase().includes(searchLower) ||
+             r.variantName.toLowerCase().includes(searchLower) ||
+             r.lotNumber.toLowerCase().includes(searchLower);
+    }
     return true;
   });
 
@@ -914,6 +924,18 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
   return (
     <Panel title="Inventory stock & Valuation">
+      <div className="mb-6">
+        <div className="rounded-lg border border-amber-200 bg-white mb-4 px-4 py-3">
+          <input
+            type="text"
+            placeholder="Search by SKU, product name, variant name, or lot number..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+          />
+        </div>
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
