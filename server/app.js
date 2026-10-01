@@ -441,14 +441,30 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
   }
 });
 
+// Employee Roster List Endpoint (Date-Filtered Sales Totals)
 app.get('/api/v1/employees', auth.requireSession, async (request, response, next) => {
   try {
+    const rawDate = String(request.query.date ?? '').trim();
+    const match = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
+    const date = match ? match[1] : null;
+
+    let dateFilter = '';
+    const params = [request.user.role, request.user.userId];
+
+    if (date) {
+      params.push(`${date}T00:00:00+08:00`);
+      dateFilter = `AND o.created_at >= $3::timestamptz AND o.created_at < ($3::timestamptz + interval '1 day')`;
+    }
+
     const result = await pool.query(
       `SELECT u.user_id AS "userId", u.username, u.display_name AS "displayName", u.role, u.active,
        COUNT(o.order_id)::int AS "salesCount", COALESCE(SUM(o.total_amount), 0)::numeric AS "salesAmount"
-       FROM app_users u LEFT JOIN orders o ON o.employee_id = u.user_id AND o.status = 'completed'
-       WHERE ($1 = 'admin' OR u.user_id = $2) GROUP BY u.user_id ORDER BY u.display_name`, 
-      [request.user.role, request.user.userId]
+       FROM app_users u 
+       LEFT JOIN orders o ON o.employee_id = u.user_id AND o.status = 'completed' ${dateFilter}
+       WHERE ($1 = 'admin' OR u.user_id = $2) 
+       GROUP BY u.user_id 
+       ORDER BY u.display_name`, 
+      params
     );
     response.json(result.rows.map(row => ({ ...row, salesAmount: Number(row.salesAmount) || 0 })));
   } catch (error) { 

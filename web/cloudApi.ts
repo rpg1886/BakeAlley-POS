@@ -1,4 +1,4 @@
-import { CloudApiClient, type CloudProduct } from './apiClient';
+import { CloudApiClient, type CloudEmployee, type CloudProduct, type CloudShift } from './apiClient';
 
 export interface CloudCategory {
   categoryId: string;
@@ -53,5 +53,37 @@ export class CloudPosApi extends CloudApiClient {
       throw new Error(body.error ?? 'Product search failed');
     }
     return response.json() as Promise<CloudProduct[]>;
+  }
+
+  public override async employees(date?: string): Promise<CloudEmployee[]> {
+    const token = this.options.getToken();
+    const path = date ? `/api/v1/employees?date=${encodeURIComponent(date)}` : '/api/v1/employees';
+    const response = await fetch(this.apiUrl(path), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to fetch employees');
+    }
+    return response.json() as Promise<CloudEmployee[]>;
+  }
+
+  public override async shifts(date?: string): Promise<CloudShift[]> {
+    const token = this.options.getToken();
+    const path = date ? `/api/v1/employees/shifts?date=${encodeURIComponent(date)}` : '/api/v1/employees/shifts';
+    const response = await fetch(this.apiUrl(path), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to fetch shifts');
+    }
+    return response.json() as Promise<CloudShift[]>;
   }
 }

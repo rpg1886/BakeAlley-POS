@@ -99,7 +99,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     try {
       setReport(await api.salesReport(selectedDate));
     } catch (reason) {
-      setError(errorText(reason, 'Unable to generate financial report.'));
+      setError(errorText(reason, 'Unable to load financial report.'));
     } finally {
       setLoading(false);
     }
@@ -120,7 +120,6 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const grossProfit = dayGross - estimatedCogs;
   const profitMarginPct = dayGross > 0 ? (grossProfit / dayGross) * 100 : 0;
 
-  // Normalized payment reducer matching all tender variations
   const paymentBreakdown = (report?.items || []).reduce(
     (acc, item) => {
       const rawMethod = String(item.paymentMethod || 'cash').toLowerCase().trim();
@@ -146,265 +145,72 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const totalConsolidatedTender = paymentBreakdown.cash + totalDigitalTender;
   const estimatedCardFees = paymentBreakdown.card * CARD_FEE_RATE;
 
-  const exportCsv = (): void => {
-    if (!report) return;
-    const items = report.items || [];
-    const csvData = [
-      ['Bake Alley Cloud POS — End of Day Financial Audit Statement'],
-      ['Audit Date', selectedDate],
-      ['Generated Date/Time', new Date().toLocaleString()],
-      [''],
-      ['FINANCIAL METRIC', 'VALUE (PHP)'],
-      ['Gross Sales Revenue', dayGross.toFixed(2)],
-      ['Net Revenue', dayNet.toFixed(2)],
-      ['Estimated Cost of Goods Sold (COGS)', estimatedCogs.toFixed(2)],
-      ['Estimated Gross Profit', grossProfit.toFixed(2)],
-      ['Profit Margin %', `${profitMarginPct.toFixed(1)}%`],
-      ['Total Orders Completed', orderCount],
-      ['Average Order Value (AOV)', avgOrderValue.toFixed(2)],
-      ['Average Units Per Basket', avgUnitsPerOrder.toFixed(2)],
-      [''],
-      ['TENDER RECONCILIATION & CONSOLIDATION', 'AMOUNT (PHP)'],
-      ['Cash Payments Received (Cash Drawer)', paymentBreakdown.cash.toFixed(2)],
-      ['GCash E-Wallet Payments Received', paymentBreakdown.gcash.toFixed(2)],
-      ['Card / POS Terminal Payments Received', paymentBreakdown.card.toFixed(2)],
-      ['Account Charges Received', paymentBreakdown.account.toFixed(2)],
-      ['Total Digital / Non-Cash Tenders', totalDigitalTender.toFixed(2)],
-      ['Total Consolidated Realized Tender', totalConsolidatedTender.toFixed(2)],
-      ['Estimated Card Merchant Fees (2.5%)', estimatedCardFees.toFixed(2)],
-      [''],
-      ['Time', 'Customer', 'Item Name', 'SKU', 'Quantity', 'Amount (PHP)', 'Payment Method'],
-      ...items.map((item) => [
-        new Date(item.soldAt).toLocaleTimeString(),
-        `"${(item.customerName || 'Walk-in').replace(/"/g, '""')}"`,
-        `"${(item.itemName || '').replace(/"/g, '""')}"`,
-        item.sku,
-        Number(item.quantity).toFixed(4),
-        Number(item.amount).toFixed(2),
-        item.paymentMethod,
-      ]),
-    ];
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + csvData.map((row) => row.join(',')).join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const downloadLink = document.createElement('a');
-    downloadLink.setAttribute('href', encodedUri);
-    downloadLink.setAttribute('download', `EOD_Financial_Report_${selectedDate}.csv`);
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    document.body.removeChild(downloadLink);
-  };
-
-  const exportPdfPrint = (): void => {
-    if (!report) return;
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Bake Alley POS - EOD Financial Statement (${selectedDate})</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; color: #271c19; }
-            h1 { color: #451a03; border-bottom: 2px solid #78350f; padding-bottom: 8px; margin-bottom: 4px; font-size: 22px; }
-            .header-info { display: flex; justify-content: space-between; font-size: 13px; color: #78350f; margin-bottom: 20px; }
-            .summary-grid { display: grid; grid-template-cols: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
-            .card { border: 1px solid #fde68a; background: #fffbeb; padding: 12px; rounded-md: 8px; }
-            .card p { font-size: 11px; text-transform: uppercase; color: #92400e; margin: 0; }
-            .card strong { font-size: 18px; color: #451a03; display: block; margin-top: 4px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
-            th, td { border: 1px solid #fde68a; padding: 8px; text-align: left; }
-            th { background-color: #fef3c7; color: #78350f; text-transform: uppercase; font-size: 10px; }
-            .text-right { text-align: right; }
-            @media print { button { display: none; } }
-          </style>
-        </head>
-        <body>
-          <h1>🍞 Bake Alley Cloud POS — End of Day Financial Audit</h1>
-          <div class="header-info">
-            <div><strong>Audit Date:</strong> ${selectedDate}</div>
-            <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
-          </div>
-          <div class="summary-grid">
-            <div class="card"><p>Gross Revenue</p><strong>PHP ${dayGross.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong></div>
-            <div class="card"><p>Net Revenue</p><strong>PHP ${dayNet.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong></div>
-            <div class="card"><p>Estimated COGS</p><strong>PHP ${estimatedCogs.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong></div>
-            <div class="card"><p>Gross Profit Margin</p><strong>${profitMarginPct.toFixed(1)}%</strong></div>
-          </div>
-          <h3>Payment Method Consolidation & Tender Breakdown</h3>
-          <p style="font-size: 13px;">
-            <strong>💵 Cash Drawer:</strong> PHP ${paymentBreakdown.cash.toFixed(2)} | 
-            <strong>📲 GCash E-Wallet:</strong> PHP ${paymentBreakdown.gcash.toFixed(2)} | 
-            <strong>💳 Card / POS:</strong> PHP ${paymentBreakdown.card.toFixed(2)} | 
-            <strong>📋 Commercial Account:</strong> PHP ${paymentBreakdown.account.toFixed(2)}<br>
-            <strong>🌐 Total Digital Tenders:</strong> PHP ${totalDigitalTender.toFixed(2)} | 
-            <strong>💰 Total Consolidated Realization:</strong> PHP ${totalConsolidatedTender.toFixed(2)}
-          </p>
-          <h3>Line Item Transaction Audit</h3>
-          <table>
-            <thead>
-              <tr><th>Time</th><th>Customer</th><th>Item Name</th><th>SKU</th><th class="text-right">Qty</th><th class="text-right">Amount</th><th>Method</th></tr>
-            </thead>
-            <tbody>
-              ${(report.items || []).map((item) => `
-                <tr>
-                  <td>${new Date(item.soldAt).toLocaleTimeString()}</td>
-                  <td>${item.customerName || 'Walk-in'}</td>
-                  <td>${item.itemName}</td>
-                  <td>${item.sku}</td>
-                  <td class="text-right">${Number(item.quantity).toFixed(2)}</td>
-                  <td class="text-right">PHP ${Number(item.amount).toFixed(2)}</td>
-                  <td style="text-transform: capitalize;">${item.paymentMethod}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <script>
-            window.onload = function() { window.print(); }
-          </script>
-        </body>
-      </html>
-    `;
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-  };
-
   return (
-    <Panel title="Financial Statements & Accounting Audit">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-amber-100 pb-4">
-        <div>
-          <label className="text-sm font-semibold text-amber-900 block mb-1">Select Audit Date</label>
+    <Panel title="Financial End-of-Day Audit">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <label className="text-sm font-semibold text-amber-950">
+          Audit date
           <input
-            className="rounded-lg border border-amber-200/80 px-3 py-2 text-sm outline-none focus:border-amber-500"
+            className="mt-1 block rounded-lg border border-amber-200/80 px-3 py-2 font-normal"
             type="date"
             value={selectedDate}
             onChange={(event) => setSelectedDate(event.target.value)}
           />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={loading || !report}
-            className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-100 disabled:opacity-50"
-          >
-            📥 Export CSV
-          </button>
-          <button
-            type="button"
-            onClick={exportPdfPrint}
-            disabled={loading || !report}
-            className="rounded-lg bg-amber-800 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-900 disabled:opacity-50"
-          >
-            🖨️ Print / Save PDF
-          </button>
-          <ActionButton disabled={loading} onClick={() => void refresh()}>{loading ? 'Generating...' : 'Refresh'}</ActionButton>
-        </div>
+        </label>
+        <ActionButton disabled={loading} onClick={() => void refresh()}>
+          {loading ? 'Refreshing...' : 'Refresh Audit'}
+        </ActionButton>
       </div>
 
-      {error && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
+      {error && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
       {report && !loading && (
-        <div className="space-y-8">
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit — {selectedDate}</h2>
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Verified EOD Statement</span>
+        <div className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl bg-amber-950 p-4 text-white">
+              <p className="text-xs uppercase text-amber-200/80">Gross Sales Revenue</p>
+              <strong className="text-2xl tabular-nums">{money.format(dayGross)}</strong>
+              <p className="mt-1 text-xs text-amber-200/70">{orderCount} completed transactions</p>
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-amber-200/80 bg-amber-950 p-4 text-white shadow-sm">
-                <p className="text-xs uppercase tracking-wider text-amber-200/80">EOD Gross Revenue</p>
-                <strong className="mt-1 block text-2xl font-bold tabular-nums">{money.format(dayGross)}</strong>
-                <p className="mt-1 text-xs text-amber-200/70">{orderCount} completed transactions</p>
-              </div>
-              <div className="rounded-xl border border-amber-200/80 bg-emerald-700 p-4 text-white shadow-sm">
-                <p className="text-xs uppercase tracking-wider text-emerald-100">EOD Net Revenue</p>
-                <strong className="mt-1 block text-2xl font-bold tabular-nums">{money.format(dayNet)}</strong>
-                <p className="mt-1 text-xs text-emerald-100/80">Realized revenue</p>
-              </div>
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wider text-amber-700">Est. Gross Profit & Margin</p>
-                <strong className="mt-1 block text-2xl font-bold text-amber-950 tabular-nums">{money.format(grossProfit)}</strong>
-                <p className="mt-1 text-xs font-semibold text-emerald-700">{profitMarginPct.toFixed(1)}% Profit Margin</p>
-              </div>
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wider text-amber-700">Basket & Size Metrics</p>
-                <strong className="mt-1 block text-2xl font-bold text-amber-950 tabular-nums">{money.format(avgOrderValue)}</strong>
-                <p className="mt-1 text-xs text-amber-700">{avgUnitsPerOrder.toFixed(1)} items avg / basket</p>
-              </div>
+            <div className="rounded-xl bg-emerald-800 p-4 text-white">
+              <p className="text-xs uppercase text-emerald-100">Estimated Gross Profit</p>
+              <strong className="text-2xl tabular-nums">{money.format(grossProfit)}</strong>
+              <p className="mt-1 text-xs text-emerald-100/80">{profitMarginPct.toFixed(1)}% margin</p>
             </div>
+            <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
+              <p className="text-xs uppercase text-amber-700">Average Order Value (AOV)</p>
+              <strong className="text-2xl text-amber-950 tabular-nums">{money.format(avgOrderValue)}</strong>
+              <p className="mt-1 text-xs text-amber-700">{avgUnitsPerOrder.toFixed(2)} units / basket</p>
+            </div>
+            <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
+              <p className="text-xs uppercase text-amber-700">Consolidated Realized Tender</p>
+              <strong className="text-2xl text-amber-950 tabular-nums">{money.format(totalConsolidatedTender)}</strong>
+              <p className="mt-1 text-xs text-amber-700">Cash drawer + Digital</p>
+            </div>
+          </div>
 
-            {/* CONSOLIDATED TENDER RECONCILIATION CARD */}
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800">Register Cash Drawer vs Digital Tender</h3>
-                  <span className="text-xs font-bold text-amber-950">
-                    Total Realized: <span className="text-emerald-700">{money.format(totalConsolidatedTender)}</span>
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-sm">
-                  <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
-                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">💵 Cash</span>
-                    <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.cash)}</strong>
-                    <span className="text-[9px] text-amber-700 block mt-0.5">Cash Drawer</span>
-                  </div>
-                  <div className="rounded-lg bg-white p-2.5 border border-sky-200 shadow-sm">
-                    <span className="text-[10px] text-sky-800 font-bold block uppercase tracking-wider">📲 GCash</span>
-                    <strong className="text-sky-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.gcash)}</strong>
-                    <span className="text-[9px] text-sky-700 block mt-0.5">E-Wallet</span>
-                  </div>
-                  <div className="rounded-lg bg-white p-2.5 border border-blue-200 shadow-sm">
-                    <span className="text-[10px] text-blue-800 font-bold block uppercase tracking-wider">💳 Card</span>
-                    <strong className="text-blue-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.card)}</strong>
-                    <span className="text-[9px] text-blue-700 block mt-0.5">POS Terminal</span>
-                  </div>
-                  <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
-                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">📋 Account</span>
-                    <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.account)}</strong>
-                    <span className="text-[9px] text-amber-700 block mt-0.5">Receivable</span>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1 rounded-lg bg-emerald-800 p-2.5 text-white shadow-sm">
-                    <span className="text-[10px] text-emerald-200 font-bold block uppercase tracking-wider">🌐 Digital Total</span>
-                    <strong className="text-white text-xs tabular-nums block mt-1">{money.format(totalDigitalTender)}</strong>
-                    <span className="text-[9px] text-emerald-200 block mt-0.5">Non-Cash Tenders</span>
-                  </div>
-                </div>
+          <div className="rounded-2xl border border-amber-200/80 bg-amber-50/40 p-5">
+            <h2 className="font-bakery text-base font-bold text-amber-950 mb-3">💵 Consolidated Tender & Channel Reconciliation</h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3.5">
+                <p className="text-xs font-semibold text-emerald-800">💵 Cash Payments (Drawer)</p>
+                <strong className="mt-1 block text-lg font-bold text-emerald-950 tabular-nums">{money.format(paymentBreakdown.cash)}</strong>
               </div>
-
-              <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-3">Cost Analysis & Processing Fee Forecast</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between border-b border-amber-100 pb-1">
-                    <span className="text-amber-800">Estimated Cost of Goods (COGS):</span>
-                    <strong className="tabular-nums">{money.format(estimatedCogs)}</strong>
-                  </div>
-                  <div className="flex justify-between border-b border-amber-100 pb-1">
-                    <span className="text-amber-800">Est. Merchant Card Fees (2.5%):</span>
-                    <strong className="tabular-nums text-red-700">-{money.format(estimatedCardFees)}</strong>
-                  </div>
-                  <div className="flex justify-between pt-1">
-                    <span className="font-semibold text-amber-950">Net Operating Realization:</span>
-                    <strong className="tabular-nums text-emerald-800">{money.format(grossProfit - estimatedCardFees)}</strong>
-                  </div>
-                </div>
+              <div className="rounded-xl border border-sky-200 bg-sky-50/60 p-3.5">
+                <p className="text-xs font-semibold text-sky-800">📲 GCash E-Wallet Tenders</p>
+                <strong className="mt-1 block text-lg font-bold text-sky-950 tabular-nums">{money.format(paymentBreakdown.gcash)}</strong>
+              </div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-3.5">
+                <p className="text-xs font-semibold text-blue-800">💳 Card POS Terminal Tenders</p>
+                <strong className="mt-1 block text-lg font-bold text-blue-950 tabular-nums">{money.format(paymentBreakdown.card)}</strong>
+                <span className="text-[10px] text-blue-700">Est. Merchant Fee: {money.format(estimatedCardFees)}</span>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-100/60 p-3.5">
+                <p className="text-xs font-semibold text-amber-900">📋 Account Charge Tenders</p>
+                <strong className="mt-1 block text-lg font-bold text-amber-950 tabular-nums">{money.format(paymentBreakdown.account)}</strong>
               </div>
             </div>
-          </section>
-
-          {isAdmin && (
-            <section className="border-t border-amber-100 pt-6">
-              <h2 className="font-bakery text-lg font-bold text-amber-950 mb-4">Executive Period Summaries (EOW / EOM / EOY)</h2>
-              <div className="grid gap-4 md:grid-cols-3">
-                <PeriodCard label="End of Week (EOW)" period={report.week} />
-                <PeriodCard label="End of Month (EOM)" period={report.month} />
-                <PeriodCard label="End of Year (EOY)" period={report.year} />
-              </div>
-            </section>
-          )}
+          </div>
         </div>
       )}
     </Panel>
@@ -412,79 +218,71 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 }
 
 /* ==========================================================================
-   BUSINESS INTELLIGENCE VIEW (MONTHLY VS YEARLY VELOCITY)
+   BUSINESS INTELLIGENCE VIEW (STOCK VELOCITY & TIME-SERIES MOVEMENT)
    ========================================================================== */
 function BiView(): JSX.Element {
   const [timeframe, setTimeframe] = useState<VelocityTimeframe>('monthly');
-  const [selectedDate] = useState<string>(today());
   const [report, setReport] = useState<CloudSalesReport | null>(null);
-  const [inventory, setInventory] = useState<CloudInventoryRow[]>([]);
+  const [inventoryRows, setInventoryRows] = useState<CloudInventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async (): Promise<void> => {
-    setLoading(true);
-    try {
-      const [salesData, invData] = await Promise.all([api.salesReport(selectedDate), api.inventory()]);
-      setReport(salesData);
-      setInventory(invData);
-    } catch (err) {
-      console.error('Failed to load BI analytics:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const selectedDate = today();
 
   useEffect(() => {
-    void loadData();
-  }, [selectedDate]);
+    const load = async (): Promise<void> => {
+      setLoading(true);
+      try {
+        const [salesData, invData] = await Promise.all([api.salesReport(selectedDate), api.inventory()]);
+        setReport(salesData);
+        setInventoryRows(invData);
+      } catch (error) {
+        console.error('BI metric load failed:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [timeframe]);
 
-  const productSalesMap = new Map<string, { sku: string; name: string; quantity: number; amount: number }>();
-  let retailGross = 0;
-  let commercialGross = 0;
+  const items = report?.items || [];
+  const fastThreshold = timeframe === 'monthly' ? 30 : 300;
+  const slowThreshold = timeframe === 'monthly' ? 5 : 50;
 
-  (report?.items || []).forEach((item) => {
-    const existing = productSalesMap.get(item.sku) || { sku: item.sku, name: item.itemName, quantity: 0, amount: 0 };
-    const qty = Number(item.quantity) || 0;
-    const amt = Number(item.amount) || 0;
-    existing.quantity += qty;
-    existing.amount += amt;
-    productSalesMap.set(item.sku, existing);
-
-    if (item.customerName && item.customerName !== 'Walk-in') {
-      commercialGross += amt;
-    } else {
-      retailGross += amt;
+  const itemSalesMap = items.reduce<Record<string, { name: string; sku: string; quantity: number; amount: number }>>((acc, item) => {
+    const key = item.sku || item.itemName;
+    if (!acc[key]) {
+      acc[key] = { name: item.itemName, sku: item.sku, quantity: 0, amount: 0 };
     }
-  });
+    acc[key].quantity += Number(item.quantity) || 0;
+    acc[key].amount += Number(item.amount) || 0;
+    return acc;
+  }, {});
 
-  const sortedSales = Array.from(productSalesMap.values()).sort((a, b) => b.quantity - a.quantity);
+  const aggregatedSales = Object.values(itemSalesMap);
+  const fastMovers = aggregatedSales.filter((i) => i.quantity >= fastThreshold).sort((a, b) => b.quantity - a.quantity);
 
-  const fastThreshold = timeframe === 'monthly' ? 15 : 150;
-  const slowThreshold = timeframe === 'monthly' ? 3 : 15;
-
-  const fastMovers = sortedSales.filter((item) => item.quantity >= fastThreshold);
-
-  const slowMovers = inventory
-    .filter((inv) => Number(inv.quantityOnHand) > 0)
+  const slowMovers = inventoryRows
     .map((inv) => {
-      const sold = productSalesMap.get(inv.sku)?.quantity || 0;
+      const sold = itemSalesMap[inv.sku]?.quantity || 0;
       return { ...inv, soldQty: sold };
     })
-    .filter((inv) => inv.soldQty < slowThreshold)
-    .sort((a, b) => Number(b.quantityOnHand) - Number(a.quantityOnHand));
+    .filter((inv) => inv.soldQty < slowThreshold && Number(inv.quantityOnHand) > 0)
+    .sort((a, b) => a.soldQty - b.soldQty);
 
-  const totalSegmentGross = retailGross + commercialGross;
-  const retailPct = totalSegmentGross > 0 ? (retailGross / totalSegmentGross) * 100 : 0;
-  const commercialPct = totalSegmentGross > 0 ? (commercialGross / totalSegmentGross) * 100 : 0;
+  const retailGross = items.filter((i) => !i.customerName || i.customerName.includes('Walk-in')).reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+  const commercialGross = items.filter((i) => i.customerName && !i.customerName.includes('Walk-in')).reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+  const totalChannelGross = retailGross + commercialGross;
+  const retailPct = totalChannelGross > 0 ? (retailGross / totalChannelGross) * 100 : 100;
+  const commercialPct = totalChannelGross > 0 ? (commercialGross / totalChannelGross) * 100 : 0;
 
   return (
-    <Panel title="Business Intelligence & Marketing Analytics">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-amber-100 pb-4">
+    <Panel title="Stock Velocity & Intelligence">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-amber-100 pb-4">
         <div>
-          <p className="text-sm font-semibold text-amber-950">Stock Movement Velocity Window</p>
-          <p className="text-xs text-amber-700">Stable monthly and yearly velocity thresholds without daily fluctuations.</p>
+          <p className="text-xs uppercase tracking-wide text-amber-700">Movement Analysis Horizon</p>
+          <p className="text-sm font-semibold text-amber-950">Evaluate product turnover and deadstock risks</p>
         </div>
-        <div className="flex gap-2 rounded-xl bg-amber-100/60 p-1">
+        <div className="flex rounded-xl bg-amber-100/60 p-1">
           <button
             type="button"
             onClick={() => setTimeframe('monthly')}
@@ -772,7 +570,6 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     
     if (!statusMatch) return false;
     
-    // Search filter (case-insensitive across SKU, product name, variant name)
     const searchLower = searchTerm.toLowerCase().trim();
     if (searchLower) {
       return r.sku.toLowerCase().includes(searchLower) ||
@@ -1394,7 +1191,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
 
   const refresh = async (): Promise<void> => {
     try {
-      setEmployees(await api.employees());
+      setEmployees(await api.employees(selectedDate));
       setShifts(await api.shifts(selectedDate));
       setError(null);
     } catch (reason) {
