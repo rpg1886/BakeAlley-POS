@@ -508,3 +508,4 @@
 {"level":"info","message":"Bake Alley cloud API listening on port 3000","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:03:29"}
 {"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:12:19"}
 {"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:31:08"}
+{"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:59:27"}

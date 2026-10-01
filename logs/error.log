@@ -20,3 +20,4 @@
 {"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 21:59:27"}
 {"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:12:19"}
 {"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:31:08"}
+{"error":"Cannot use a pool after calling end on the pool","level":"error","message":"Failed to cleanup expired sessions","service":"bake-alley-cloud-pos","timestamp":"2026-10-01 22:59:27"}
