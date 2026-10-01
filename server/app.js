@@ -2,9 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const crypto = require('node:crypto');
-
-console.log('[APP-STARTUP-DEBUG] app.js loaded as main module:', require.main === module);
-
 require('dotenv').config();
 const { pool, migrate } = require('./db');
 const { createAuthRouter } = require('./auth');
@@ -734,7 +731,6 @@ async function start(port = Number(process.env.PORT ?? 3000)) {
 }
 
 if (require.main === module) {
-  console.log('[APP-STARTUP-DEBUG] app.js is the main module, starting server...');
   logger.info('Starting Bake Alley Cloud API...');
   start().catch((error) => { 
     logger.error('Fatal startup error', { 
@@ -744,8 +740,6 @@ if (require.main === module) {
     });
     process.exitCode = 1; 
   });
-} else {
-  console.log('[APP-STARTUP-DEBUG] app.js is NOT the main module, skipping start()');
 }
 
 module.exports = { app, start };
