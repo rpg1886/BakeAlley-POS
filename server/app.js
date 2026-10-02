@@ -500,18 +500,23 @@ app.post('/api/v1/employees', auth.requireSession, auth.requireAdmin, async (req
 
 app.post('/api/v1/employees/clock-in', auth.requireSession, async (request, response, next) => {
   try {
+    const payload = request.body ?? {};
+    const rawFloat = payload.openingFloat !== undefined && payload.openingFloat !== null ? Number(payload.openingFloat) : 1500.00;
+    const openingFloat = Number.isFinite(rawFloat) && rawFloat >= 0 ? rawFloat : 1500.00;
+    const notes = typeof payload.notes === 'string' ? payload.notes.trim() : null;
+
     const result = await pool.query(
-      `INSERT INTO employee_shifts (shift_id, user_id, clock_in) 
-       SELECT gen_random_uuid(), $1, now() 
+      `INSERT INTO employee_shifts (shift_id, user_id, clock_in, opening_float, notes) 
+       SELECT gen_random_uuid(), $1, now(), $2, $3 
        WHERE NOT EXISTS (SELECT 1 FROM employee_shifts WHERE user_id = $1 AND clock_out IS NULL) 
-       RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn"`, 
-      [request.user.userId]
+       RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", notes`, 
+      [request.user.userId, openingFloat, notes]
     );
     if (!result.rowCount) {
       logger.warn('Clock-in failed - shift already open', { userId: request.user.userId });
       return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN' });
     }
-    logger.info('Employee clocked in', { userId: request.user.userId });
+    logger.info('Employee clocked in with opening float', { userId: request.user.userId, openingFloat });
     response.status(201).json(result.rows[0]);
   } catch (error) { 
     logger.error('Clock-in failed', { error: error.message });
@@ -521,16 +526,67 @@ app.post('/api/v1/employees/clock-in', auth.requireSession, async (request, resp
 
 app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, response, next) => {
   try {
-    const result = await pool.query(
-      `UPDATE employee_shifts SET clock_out = now() WHERE user_id = $1 AND clock_out IS NULL 
-       RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn", clock_out AS "clockOut"`, 
+    const payload = request.body ?? {};
+    const rawClosingCount = payload.closingCashCount !== undefined && payload.closingCashCount !== null ? Number(payload.closingCashCount) : null;
+    const closingCashCount = rawClosingCount !== null && Number.isFinite(rawClosingCount) && rawClosingCount >= 0 ? rawClosingCount : null;
+    const notes = typeof payload.notes === 'string' ? payload.notes.trim() : null;
+
+    const openShiftCheck = await pool.query(
+      `SELECT shift_id AS "shiftId", clock_in AS "clockIn", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat"
+       FROM employee_shifts
+       WHERE user_id = $1 AND clock_out IS NULL`,
       [request.user.userId]
     );
-    if (!result.rowCount) {
+
+    if (!openShiftCheck.rowCount) {
       logger.warn('Clock-out failed - no open shift', { userId: request.user.userId });
       return response.status(409).json({ error: 'NO_OPEN_SHIFT' });
     }
-    logger.info('Employee clocked out', { userId: request.user.userId });
+
+    const openShift = openShiftCheck.rows[0];
+    const clockInTime = openShift.clockIn;
+    const openingFloat = Number(openShift.openingFloat) || 1500.00;
+
+    const salesResult = await pool.query(
+      `SELECT COALESCE(SUM(
+         CASE 
+           WHEN o.payment_method ILIKE '%cash%' THEN oi.total_price 
+           ELSE 0 
+         END
+       ), 0)::numeric AS "shiftCashSales"
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.order_id
+       WHERE o.employee_id = $1
+         AND o.status = 'completed'
+         AND o.created_at >= $2::timestamptz
+         AND o.created_at <= now()`,
+      [request.user.userId, clockInTime]
+    );
+
+    const shiftCashSales = Number(salesResult.rows[0].shiftCashSales) || 0;
+    const expectedCash = openingFloat + shiftCashSales;
+    const cashDiscrepancy = closingCashCount !== null ? closingCashCount - expectedCash : null;
+
+    const result = await pool.query(
+      `UPDATE employee_shifts 
+       SET clock_out = now(),
+           closing_cash_count = $2,
+           expected_cash = $3,
+           cash_discrepancy = $4,
+           notes = COALESCE($5, notes)
+       WHERE shift_id = $1 
+       RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn", clock_out AS "clockOut", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", closing_cash_count AS "closingCashCount", expected_cash AS "expectedCash", cash_discrepancy AS "cashDiscrepancy", notes`, 
+      [openShift.shiftId, closingCashCount, expectedCash, cashDiscrepancy, notes]
+    );
+
+    logger.info('Employee clocked out with cash drawer reconciliation', { 
+      userId: request.user.userId, 
+      openingFloat, 
+      shiftCashSales, 
+      expectedCash, 
+      closingCashCount, 
+      cashDiscrepancy 
+    });
     response.json(result.rows[0]);
   } catch (error) { 
     logger.error('Clock-out failed', { error: error.message });
@@ -592,7 +648,7 @@ app.get('/api/v1/employees/shifts', auth.requireSession, async (request, respons
     }
 
     const result = await pool.query(
-      `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", u.role AS "role", s.clock_in AS "clockIn", s.clock_out AS "clockOut" 
+      `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", u.role AS "role", s.clock_in AS "clockIn", s.clock_out AS "clockOut", COALESCE(s.opening_float, 1500.00)::numeric AS "openingFloat", s.closing_cash_count AS "closingCashCount", s.expected_cash AS "expectedCash", s.cash_discrepancy AS "cashDiscrepancy", s.notes 
        FROM employee_shifts s 
        JOIN app_users u ON u.user_id=s.user_id 
        WHERE ($1 = 'admin' OR s.user_id = $2) ${dateFilter} 
@@ -910,10 +966,26 @@ app.use((error, _request, response, _next) => {
   }); 
 });
 
+async function ensureShiftColumns() {
+  try {
+    await pool.query(`
+      ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS opening_float NUMERIC(12,2) DEFAULT 1500.00;
+      ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS closing_cash_count NUMERIC(12,2);
+      ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS expected_cash NUMERIC(12,2);
+      ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS cash_discrepancy NUMERIC(12,2);
+      ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS notes TEXT;
+    `);
+    logger.info('Employee shift audit columns ensured');
+  } catch (error) {
+    logger.error('Failed to ensure employee shift audit columns', { error: error.message });
+  }
+}
+
 async function start(port = Number(process.env.PORT ?? 3000)) { 
   try {
     logger.info('Running database migration...');
     await migrate(); 
+    await ensureShiftColumns(); 
     logger.info('Migration complete, starting server...');
     
     return new Promise((resolve, reject) => {
