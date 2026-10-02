@@ -289,10 +289,11 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       ['Total Consolidated Realized Tender', totalConsolidatedTenderDaily.toFixed(2)],
       ['Estimated Card Merchant Fees (2.5%)', estimatedCardFeesDaily.toFixed(2)],
       [''],
-      ['Time', 'Customer', 'Item Name', 'SKU', 'Quantity', 'Amount (PHP)', 'Payment Method'],
+      ['Time', 'Customer', 'Cashier', 'Item Name', 'SKU', 'Quantity', 'Amount (PHP)', 'Payment Method'],
       ...items.map((item) => [
         new Date(item.soldAt).toLocaleTimeString(),
         `"${(item.customerName || 'Walk-in').replace(/"/g, '""')}"`,
+        `"${((item as { cashierName?: string }).cashierName || 'System').replace(/"/g, '""')}"`,
         `"${(item.itemName || '').replace(/"/g, '""')}"`,
         item.sku,
         Number(item.quantity).toFixed(4),
@@ -393,13 +394,14 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           <h3>Line Item Transaction Audit</h3>
           <table>
             <thead>
-              <tr><th>Time</th><th>Customer</th><th>Item Name</th><th>SKU</th><th class="text-right">Qty</th><th class="text-right">Amount</th><th>Method</th></tr>
+              <tr><th>Time</th><th>Customer</th><th>Cashier</th><th>Item Name</th><th>SKU</th><th class="text-right">Qty</th><th class="text-right">Amount</th><th>Method</th></tr>
             </thead>
             <tbody>
               ${(report.items || []).map((item) => `
                 <tr>
                   <td>${new Date(item.soldAt).toLocaleTimeString()}</td>
                   <td>${item.customerName || 'Walk-in'}</td>
+                  <td>${(item as { cashierName?: string }).cashierName || 'System'}</td>
                   <td>${item.itemName}</td>
                   <td>${item.sku}</td>
                   <td class="text-right">${Number(item.quantity).toFixed(2)}</td>
@@ -1122,6 +1124,7 @@ interface GroupedTransaction {
   orderId: string;
   soldAt: string;
   customerName: string;
+  cashierName: string;
   paymentMethod: string;
   totalAmount: number;
   cashReceived: number;
@@ -1175,6 +1178,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           orderId: item.orderId,
           soldAt: item.soldAt,
           customerName: item.customerName || 'Walk-in',
+          cashierName: (item as { cashierName?: string }).cashierName || 'System',
           paymentMethod: item.paymentMethod || 'cash',
           totalAmount: Number((item as { totalAmount?: number }).totalAmount) || 0,
           cashReceived: Number((item as { cashReceived?: number }).cashReceived) || 0,
@@ -1236,6 +1240,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               <thead className="border-b text-xs uppercase text-amber-700">
                 <tr>
                   <th className="py-2.5 px-3">Time / Customer</th>
+                  <th className="py-2.5 px-3">Cashier</th>
                   <th className="py-2.5 px-3">Purchased Items</th>
                   <th className="py-2.5 px-3">Total Amount</th>
                   <th className="py-2.5 px-3">Payment</th>
@@ -1266,6 +1271,11 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                           <div className="font-semibold text-amber-950">{new Date(tx.soldAt).toLocaleTimeString()}</div>
                           <div className="text-xs text-amber-700">{tx.customerName}</div>
                         </td>
+                        <td className="py-3 px-3">
+                          <span className="inline-flex items-center rounded-md bg-amber-100/80 px-2 py-0.5 text-xs font-medium text-amber-900">
+                            {tx.cashierName}
+                          </span>
+                        </td>
                         <td className="py-3 px-3 font-medium text-amber-900">
                           {tx.items.length} {tx.items.length === 1 ? 'item' : 'items'}
                         </td>
@@ -1289,12 +1299,17 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
                       {isExpanded && (
                         <tr className="bg-amber-50/40">
-                          <td colSpan={5} className="p-3 sm:p-4">
+                          <td colSpan={6} className="p-3 sm:p-4">
                             <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
                               <div className="flex flex-wrap items-center justify-between border-b border-amber-100 pb-2 mb-3">
-                                <h4 className="font-bold text-amber-950 text-sm">
-                                  Transaction Receipt {"\u2014"} {new Date(tx.soldAt).toLocaleTimeString()}
-                                </h4>
+                                <div>
+                                  <h4 className="font-bold text-amber-950 text-sm">
+                                    Transaction Receipt {"\u2014"} {new Date(tx.soldAt).toLocaleTimeString()}
+                                  </h4>
+                                  <p className="text-xs text-amber-800">
+                                    Cashier: <strong className="text-amber-950">{tx.cashierName}</strong>
+                                  </p>
+                                </div>
                                 <span className="text-xs font-mono text-amber-700">Order ID: {tx.orderId}</span>
                               </div>
 
@@ -1321,6 +1336,10 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
                               <div className="flex flex-wrap items-center justify-between rounded-lg bg-amber-50/80 p-3 text-xs border border-amber-200/60">
                                 <div className="space-y-1">
+                                  <div>
+                                    <span className="font-semibold text-amber-800">Processed By:</span>{' '}
+                                    <strong className="text-amber-950">{tx.cashierName}</strong>
+                                  </div>
                                   <div>
                                     <span className="font-semibold text-amber-800">Payment Method:</span>{' '}
                                     <span className="capitalize font-bold text-amber-950">{tx.paymentMethod}</span>

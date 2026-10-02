@@ -726,12 +726,13 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
 
     const start = `${date}T00:00:00+08:00`;
     const result = await pool.query(
-      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType" 
+      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", COALESCE(u.display_name, u.username, 'System') AS "cashierName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType" 
        FROM order_items oi 
        JOIN orders o ON o.order_id=oi.order_id 
        JOIN product_variants v ON v.variant_id=oi.variant_id 
        JOIN products p ON p.product_id=v.product_id 
        LEFT JOIN customers c ON c.customer_id=o.customer_id 
+       LEFT JOIN app_users u ON u.user_id=o.employee_id 
        WHERE o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < ($1::timestamptz + interval '1 day') 
        ORDER BY o.created_at DESC, o.order_id, oi.order_item_id`, 
       [start]
@@ -745,7 +746,8 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
       changeDue: Number(row.changeDue) || 0,
       totalAmount: Number(row.totalAmount) || 0,
       initialCost: Number(row.initialCost) || 0,
-      orderType: row.orderType || 'retail'
+      orderType: row.orderType || 'retail',
+      cashierName: row.cashierName || 'System'
     }));
     
     const summary = async (periodStart, periodEnd) => {
