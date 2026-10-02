@@ -726,11 +726,10 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
 
     const start = `${date}T00:00:00+08:00`;
     const result = await pool.query(
-      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost" 
+      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount" 
        FROM order_items oi 
        JOIN orders o ON o.order_id=oi.order_id 
        JOIN product_variants v ON v.variant_id=oi.variant_id 
-       JOIN products p ON p.product_id=v.product_id 
        LEFT JOIN customers c ON c.customer_id=o.customer_id 
        WHERE o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < ($1::timestamptz + interval '1 day') 
        ORDER BY o.created_at DESC, o.order_id, oi.order_item_id`, 
@@ -743,8 +742,7 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
       amount: Number(row.amount) || 0,
       cashReceived: Number(row.cashReceived) || 0,
       changeDue: Number(row.changeDue) || 0,
-      totalAmount: Number(row.totalAmount) || 0,
-      initialCost: Number(row.initialCost) || 0
+      totalAmount: Number(row.totalAmount) || 0
     }));
     
     const summary = async (periodStart, periodEnd) => {
@@ -790,101 +788,6 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
   } catch (error) { 
     logger.error('Sales report failed', { error: error.message });
     next(error); 
-  }
-});
-
-
-// Monthly Sales & Financial Aggregation Endpoint (Actual COGS & 12-Month Performance)
-app.get('/api/v1/sales/monthly', auth.requireSession, async (request, response, next) => {
-  try {
-    const rawYear = String(request.query.year ?? '').trim();
-    const yearMatch = rawYear.match(/^(\d{4})/);
-    const targetYear = yearMatch ? parseInt(yearMatch[1], 10) : new Date().getFullYear();
-
-    const yearStart = `${targetYear}-01-01T00:00:00+08:00`;
-
-    const result = await pool.query(
-      `SELECT 
-         EXTRACT(MONTH FROM o.created_at AT TIME ZONE 'Asia/Manila')::int AS "month",
-         COALESCE(SUM(oi.total_price), 0)::numeric AS "grossSales",
-         COALESCE(SUM(oi.quantity * COALESCE(p.initial_cost, 0)), 0)::numeric AS "cogs",
-         COUNT(DISTINCT o.order_id)::int AS "orderCount",
-         COALESCE(SUM(oi.quantity), 0)::numeric AS "itemsSold",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%cash%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "cashSales",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%gcash%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "gcashSales",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%card%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "cardSales",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%account%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "accountSales"
-       FROM orders o
-       JOIN order_items oi ON oi.order_id = o.order_id
-       JOIN product_variants v ON v.variant_id = oi.variant_id
-       JOIN products p ON p.product_id = v.product_id
-       WHERE o.status = 'completed'
-         AND o.created_at >= $1::timestamptz
-         AND o.created_at < ($1::timestamptz + interval '1 year')
-       GROUP BY EXTRACT(MONTH FROM o.created_at AT TIME ZONE 'Asia/Manila')
-       ORDER BY "month" ASC`,
-      [yearStart]
-    );
-
-    const monthlyMap = new Map();
-    for (const row of result.rows) {
-      const gross = Number(row.grossSales) || 0;
-      const cogs = Number(row.cogs) || 0;
-      const profit = gross - cogs;
-      const margin = gross > 0 ? (profit / gross) * 100 : 0;
-      const orders = Number(row.orderCount) || 0;
-      const items = Number(row.itemsSold) || 0;
-      const card = Number(row.cardSales) || 0;
-
-      monthlyMap.set(Number(row.month), {
-        month: Number(row.month),
-        grossSales: gross,
-        cogs: cogs,
-        grossProfit: profit,
-        profitMarginPct: margin,
-        orderCount: orders,
-        itemsSold: items,
-        aov: orders > 0 ? gross / orders : 0,
-        avgUnitsPerOrder: orders > 0 ? items / orders : 0,
-        cashSales: Number(row.cashSales) || 0,
-        gcashSales: Number(row.gcashSales) || 0,
-        cardSales: card,
-        accountSales: Number(row.accountSales) || 0,
-        estimatedCardFees: card * 0.025
-      });
-    }
-
-    const months = [];
-    for (let m = 1; m <= 12; m++) {
-      if (monthlyMap.has(m)) {
-        months.push(monthlyMap.get(m));
-      } else {
-        months.push({
-          month: m,
-          grossSales: 0,
-          cogs: 0,
-          grossProfit: 0,
-          profitMarginPct: 0,
-          orderCount: 0,
-          itemsSold: 0,
-          aov: 0,
-          avgUnitsPerOrder: 0,
-          cashSales: 0,
-          gcashSales: 0,
-          cardSales: 0,
-          accountSales: 0,
-          estimatedCardFees: 0
-        });
-      }
-    }
-
-    response.json({
-      year: targetYear,
-      months
-    });
-  } catch (error) {
-    logger.error('Monthly sales report failed', { error: error.message });
-    next(error);
   }
 });
 
@@ -943,3 +846,5 @@ if (require.main === module) {
 }
 
 module.exports = { app, start };
+
+
