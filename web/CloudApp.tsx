@@ -2020,15 +2020,7 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
   );
 }
 
-interface ExtendedShift extends CloudShift {
-  openingFloat?: number;
-  closingCashCount?: number;
-  expectedCash?: number;
-  cashDiscrepancy?: number;
-  notes?: string;
-}
-
-async function clockInWithFloat(openingFloat: number, notes?: string): Promise<ExtendedShift> {
+const clockInWithFloat = async (openingFloat: number, notes?: string): Promise<CloudShift> => {
   const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
   const baseUrl = import.meta.env.VITE_API_URL ?? '';
   const response = await fetch(`${baseUrl}/api/v1/employees/clock-in`, {
@@ -2044,9 +2036,9 @@ async function clockInWithFloat(openingFloat: number, notes?: string): Promise<E
     throw new Error(body.error ?? 'Clock-in failed');
   }
   return response.json();
-}
+};
 
-async function clockOutWithCount(closingCashCount: number, notes?: string): Promise<ExtendedShift> {
+const clockOutWithCount = async (closingCashCount: number, notes?: string): Promise<CloudShift> => {
   const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
   const baseUrl = import.meta.env.VITE_API_URL ?? '';
   const response = await fetch(`${baseUrl}/api/v1/employees/clock-out`, {
@@ -2062,11 +2054,21 @@ async function clockOutWithCount(closingCashCount: number, notes?: string): Prom
     throw new Error(body.error ?? 'Clock-out failed');
   }
   return response.json();
-}
+};
 
-function EmployeesView({ session }: { session: CloudSession }): JSX.Element {function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
+function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
+  // Clock In / Clock Out Modals State
+  const [clockInModalOpen, setClockInModalOpen] = useState(false);
+  const [openingFloat, setOpeningFloat] = useState('1500.00');
+  const [clockInNotes, setClockInNotes] = useState('');
+  const [clockingIn, setClockingIn] = useState(false);
+
+  const [clockOutModalOpen, setClockOutModalOpen] = useState(false);
+  const [closingCashCount, setClosingCashCount] = useState('');
+  const [clockOutNotes, setClockOutNotes] = useState('');
+  const [clockingOut, setClockingOut] = useState(false);
   const [employees, setEmployees] = useState<CloudEmployee[]>([]);
-  const [shifts, setShifts] = useState<ExtendedShift[]>([]);
+  const [shifts, setShifts] = useState<CloudShift[]>([]);
 
   const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_emp_date') || today());
 
@@ -2085,14 +2087,6 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {fun
   const [deleteConfirm, setDeleteConfirm] = useState<{ userId: string; displayName: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Shift Reconciliation Modals State
-  const [clockInModalOpen, setClockInModalOpen] = useState(false);
-  const [clockOutModalOpen, setClockOutModalOpen] = useState(false);
-  const [openingFloatInput, setOpeningFloatInput] = useState('1500.00');
-  const [closingCashInput, setClosingCashInput] = useState('');
-  const [shiftNotesInput, setShiftNotesInput] = useState('');
-  const [clockBusy, setClockBusy] = useState(false);
-
   useEffect(() => {
     localStorage.setItem('bakealley_pos_emp_date', selectedDate);
   }, [selectedDate]);
@@ -2106,7 +2100,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {fun
   const refresh = async (): Promise<void> => {
     try {
       setEmployees(await api.employees(selectedDate));
-      setShifts((await api.shifts(selectedDate)) as ExtendedShift[]);
+      setShifts(await api.shifts(selectedDate));
       setError(null);
     } catch (reason) {
       setError(errorText(reason, 'Unable to load employees.'));
@@ -2121,49 +2115,50 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {fun
 
   const handleOpenClockModal = () => {
     setError(null);
-    setMessage(null);
     if (ownShift) {
-      setClosingCashInput('');
-      setShiftNotesInput('');
+      setClosingCashCount('');
+      setClockOutNotes('');
       setClockOutModalOpen(true);
     } else {
-      setOpeningFloatInput('1500.00');
-      setShiftNotesInput('');
+      setOpeningFloat('1500.00');
+      setClockInNotes('');
       setClockInModalOpen(true);
     }
   };
 
-  const handleConfirmClockIn = async () => {
-    setClockBusy(true);
+  const submitClockIn = async (): Promise<void> => {
+    setClockingIn(true);
     setError(null);
     try {
-      const floatVal = Number(openingFloatInput);
-      const validFloat = Number.isFinite(floatVal) && floatVal >= 0 ? floatVal : 1500.00;
-      await clockInWithFloat(validFloat, shiftNotesInput);
-      setMessage(`Clocked in successfully with \u20B1${validFloat.toFixed(2)} opening float.`);
+      const floatVal = Number(openingFloat) || 1500.00;
+      await clockInWithFloat(floatVal, clockInNotes);
+      setMessage('Clocked in successfully with opening float.');
       setClockInModalOpen(false);
       await refresh();
     } catch (reason) {
       setError(errorText(reason, 'Unable to clock in.'));
     } finally {
-      setClockBusy(false);
+      setClockingIn(false);
     }
   };
 
-  const handleConfirmClockOut = async () => {
-    setClockBusy(true);
+  const submitClockOut = async (): Promise<void> => {
+    if (!closingCashCount || Number(closingCashCount) < 0) {
+      setError('Please enter a valid physical cash count.');
+      return;
+    }
+    setClockingOut(true);
     setError(null);
     try {
-      const countVal = Number(closingCashInput);
-      const validCount = Number.isFinite(countVal) && countVal >= 0 ? countVal : 0;
-      await clockOutWithCount(validCount, shiftNotesInput);
-      setMessage('Clocked out successfully and cash drawer reconciled.');
+      const countVal = Number(closingCashCount);
+      await clockOutWithCount(countVal, clockOutNotes);
+      setMessage('Clocked out successfully with cash drawer count.');
       setClockOutModalOpen(false);
       await refresh();
     } catch (reason) {
       setError(errorText(reason, 'Unable to clock out.'));
     } finally {
-      setClockBusy(false);
+      setClockingOut(false);
     }
   };
 
@@ -2254,13 +2249,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {fun
                     <td className="px-3 py-4 text-right">{employee.salesCount}</td>
                     <td className="pr-5 text-right">
                       {isSelf && (
-                        <button 
-                          className={`rounded-lg px-3 py-2 text-xs font-bold text-white shadow-sm transition ${
-                            ownShift ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'
-                          }`} 
-                          type="button" 
-                          onClick={handleOpenClockModal}
-                        >
+                        <button className="rounded-lg border border-amber-200/80 px-3 py-2 text-xs font-semibold" type="button" onClick={handleOpenClockModal}>
                           {ownShift ? 'Clock out' : 'Clock in'}
                         </button>
                       )}
@@ -2281,206 +2270,59 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {fun
         <div className="mt-6 rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="font-semibold">Shift calendar & Cash Reconciliation Audit</h2>
-              <p className="text-sm text-amber-700">Clock-in, clock-out, and cash drawer variance audit records.</p>
+              <h2 className="font-semibold">Shift calendar</h2>
+              <p className="text-sm text-amber-700">Clock-in and clock-out records for the selected day.</p>
             </div>
             <input className="rounded-lg border border-amber-200/80 px-3 py-2" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
           </div>
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-amber-700 bg-amber-50/60 border-b border-amber-200/80">
+              <thead className="text-xs uppercase tracking-wide text-amber-700">
                 <tr>
-                  <th className="py-2.5 px-3">Employee</th>
-                  <th className="py-2.5 px-3">Role</th>
-                  <th className="py-2.5 px-3">Clock In</th>
-                  <th className="py-2.5 px-3">Clock Out</th>
-                  <th className="py-2.5 px-3 text-right">Opening Float</th>
-                  <th className="py-2.5 px-3 text-right">Physical Count</th>
-                  <th className="py-2.5 px-3 text-right">Expected Cash</th>
-                  <th className="py-2.5 px-3 text-center">Audit Status</th>
+                  <th className="py-3 px-2">Employee</th>
+                  <th className="py-3 px-2">Role</th>
+                  <th className="py-3 px-2">Clock in</th>
+                  <th className="py-3 px-2">Clock out</th>
+                  <th className="py-3 px-2 text-right">Opening Float</th>
+                  <th className="py-3 px-2 text-right">Physical Count</th>
+                  <th className="py-3 px-2 text-right">Expected Cash</th>
+                  <th className="py-3 px-2 text-right">Cash Audit / Variance</th>
                 </tr>
               </thead>
               <tbody>
                 {shifts.map((shift) => {
                   const shiftEmployee = employees.find((employee) => employee.userId === shift.userId);
-                  const isShiftOpen = !shift.clockOut;
-                  const discrepancy = Number(shift.cashDiscrepancy) || 0;
+                  const openingFloatVal = (shift as any).openingFloat !== undefined && (shift as any).openingFloat !== null ? Number((shift as any).openingFloat) : 1500;
+                  const closingCountVal = (shift as any).closingCashCount !== undefined && (shift as any).closingCashCount !== null ? Number((shift as any).closingCashCount) : null;
+                  const expectedVal = (shift as any).expectedCash !== undefined && (shift as any).expectedCash !== null ? Number((shift as any).expectedCash) : null;
+                  const discrepancyVal = (shift as any).cashDiscrepancy !== undefined && (shift as any).cashDiscrepancy !== null ? Number((shift as any).cashDiscrepancy) : null;
 
-                  let statusBadge = (
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
-                      {"\u{1F7E2}"} On Shift
-                    </span>
-                  );
-
-                  if (!isShiftOpen) {
-                    if (discrepancy === 0) {
-                      statusBadge = (
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
-                          {"\u2705"} Balanced
-                        </span>
-                      );
-                    } else if (discrepancy < 0) {
-                      statusBadge = (
-                        <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold text-red-800">
-                          {"\u26A0"} {money.format(discrepancy)} Short
-                        </span>
-                      );
+                  let auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{"\u{1F7E2}"} On Shift</span>;
+                  if (shift.clockOut) {
+                    if (discrepancyVal === 0 || discrepancyVal === null) {
+                      auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{"\u2705"} {"\u20B1"}0.00 Balanced</span>;
+                    } else if (discrepancyVal < 0) {
+                      auditBadge = <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">{"\u26A0\uFE0F"} -{"\u20B1"}{Math.abs(discrepancyVal).toFixed(2)} Short</span>;
                     } else {
-                      statusBadge = (
-                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
-                          {"\u2139"} +{money.format(discrepancy)} Over
-                        </span>
-                      );
+                      auditBadge = <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">{"\u2139\uFE0F"} +{"\u20B1"}{discrepancyVal.toFixed(2)} Over</span>;
                     }
                   }
 
                   return (
                     <tr className="border-t border-amber-100/60" key={shift.shiftId}>
-                      <td className="py-3 px-3 font-semibold text-amber-950">{shift.displayName}</td>
-                      <td className="py-3 px-3 capitalize text-amber-800">{shiftEmployee?.role ?? '\u2014'}</td>
-                      <td className="py-3 px-3 font-mono text-xs">{new Date(shift.clockIn).toLocaleTimeString()}</td>
-                      <td className="py-3 px-3 font-mono text-xs">{shift.clockOut ? new Date(shift.clockOut).toLocaleTimeString() : 'Still clocked in'}</td>
-                      <td className="py-3 px-3 text-right tabular-nums text-amber-900">{money.format(Number(shift.openingFloat) || 1500)}</td>
-                      <td className="py-3 px-3 text-right tabular-nums font-semibold text-amber-950">
-                        {shift.closingCashCount !== undefined && shift.closingCashCount !== null ? money.format(Number(shift.closingCashCount)) : '\u2014'}
-                      </td>
-                      <td className="py-3 px-3 text-right tabular-nums text-amber-900">
-                        {shift.expectedCash !== undefined && shift.expectedCash !== null ? money.format(Number(shift.expectedCash)) : '\u2014'}
-                      </td>
-                      <td className="py-3 px-3 text-center">{statusBadge}</td>
+                      <td className="py-3 px-2 font-semibold text-amber-950">{shift.displayName}</td>
+                      <td className="py-3 px-2 capitalize">{shiftEmployee?.role ?? '\u2014'}</td>
+                      <td className="py-3 px-2">{new Date(shift.clockIn).toLocaleTimeString()}</td>
+                      <td className="py-3 px-2">{shift.clockOut ? new Date(shift.clockOut).toLocaleTimeString() : 'Still clocked in'}</td>
+                      <td className="py-3 px-2 text-right tabular-nums">{money.format(openingFloatVal)}</td>
+                      <td className="py-3 px-2 text-right tabular-nums">{closingCountVal !== null ? money.format(closingCountVal) : '\u2014'}</td>
+                      <td className="py-3 px-2 text-right tabular-nums">{expectedVal !== null ? money.format(expectedVal) : '\u2014'}</td>
+                      <td className="py-3 px-2 text-right">{auditBadge}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* Clock-In Opening Float Modal */}
-      {clockInModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/50 p-4" role="presentation">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-amber-100 pb-3">
-              <h3 className="font-bakery text-lg font-bold text-amber-950">{"\u23F1"} Start Shift & Cash Drawer Initialization</h3>
-              <button type="button" onClick={() => setClockInModalOpen(false)} className="text-xl text-amber-600 hover:text-amber-900">{"\u00D7"}</button>
-            </div>
-
-            <div className="mt-4 space-y-4">
-              <p className="text-xs text-amber-800">
-                Welcome back, <strong>{session.user.displayName}</strong>! Please initialize your register cash drawer float before starting sales operations.
-              </p>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">Opening Cash Float (\u20B1)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className="w-full rounded-xl border border-amber-200/80 px-4 py-2.5 text-lg font-bold text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
-                  value={openingFloatInput}
-                  onChange={(e) => setOpeningFloatInput(e.target.value)}
-                />
-                <p className="mt-1 text-[11px] text-amber-700">
-                  {"\u{1F4A1}"} Enter physical starting cash provided in register drawer for change (default: \u20B11,500.00).
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-amber-900 mb-1">Shift Notes (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Received 10x \u20B1100, 10x \u20B150 bills"
-                  className="w-full rounded-lg border border-amber-200/80 px-3 py-2 text-xs outline-none focus:border-amber-500"
-                  value={shiftNotesInput}
-                  onChange={(e) => setShiftNotesInput(e.target.value)}
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setClockInModalOpen(false)}
-                  disabled={clockBusy}
-                  className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleConfirmClockIn()}
-                  disabled={clockBusy}
-                  className="flex-1 rounded-lg bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
-                >
-                  {clockBusy ? 'Opening...' : '\u{1F680} Confirm & Open Shift'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Clock-Out Blind Cash Count Modal */}
-      {clockOutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/50 p-4" role="presentation">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-amber-100 pb-3">
-              <h3 className="font-bakery text-lg font-bold text-amber-950">{"\u{1F512}"} End Shift & Cash Drawer Blind Count</h3>
-              <button type="button" onClick={() => setClockOutModalOpen(false)} className="text-xl text-amber-600 hover:text-amber-900">{"\u00D7"}</button>
-            </div>
-
-            <div className="mt-4 space-y-4">
-              <div className="rounded-xl bg-amber-50/80 p-3 text-xs border border-amber-200/60 text-amber-900">
-                <p><strong>Cashier:</strong> {session.user.displayName}</p>
-                <p className="mt-0.5"><strong>Shift Started:</strong> {ownShift ? new Date(ownShift.clockIn).toLocaleTimeString() : 'Active'}</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">Physical Cash Count in Drawer (\u20B1)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  className="w-full rounded-xl border border-amber-200/80 px-4 py-2.5 text-lg font-bold text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
-                  value={closingCashInput}
-                  onChange={(e) => setClosingCashInput(e.target.value)}
-                />
-                <p className="mt-1 text-[11px] text-amber-700">
-                  {"\u{1F512}"} Blind Audit: Enter exact physical cash counted in register drawer (including opening float).
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-amber-900 mb-1">Closing Remarks / Discrepancy Reason (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Short \u20B120.00 due to lack of coins"
-                  className="w-full rounded-lg border border-amber-200/80 px-3 py-2 text-xs outline-none focus:border-amber-500"
-                  value={shiftNotesInput}
-                  onChange={(e) => setShiftNotesInput(e.target.value)}
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setClockOutModalOpen(false)}
-                  disabled={clockBusy}
-                  className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleConfirmClockOut()}
-                  disabled={clockBusy || !closingCashInput.trim()}
-                  className="flex-1 rounded-lg bg-amber-800 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-amber-900 disabled:opacity-50"
-                >
-                  {clockBusy ? 'Closing...' : '\u{1F3C1} Confirm & Close Shift'}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -2514,10 +2356,141 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {fun
           </div>
         </div>
       )}
+      {/* Clock-In Modal */}
+      {clockInModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
+          <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
+            <div className="flex items-start justify-between border-b border-amber-100 pb-3">
+              <div>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">{"\u{1F230}"} Start Shift & Cash Drawer Float</h3>
+                <p className="text-xs text-amber-700 mt-0.5">Welcome back, {session.user.displayName}! Please initialize your cash drawer.</p>
+              </div>
+              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockInModalOpen(false)}>{"\u00D7"}</button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Opening Cash Float ({"\u20B1"})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full rounded-xl border border-amber-200/80 bg-amber-50/20 px-3.5 py-2.5 text-lg font-bold text-amber-950 outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/30"
+                value={openingFloat}
+                onChange={(e) => setOpeningFloat(e.target.value)}
+                autoFocus
+              />
+              <p className="mt-1 text-[11px] text-amber-700 leading-normal">
+                {"\u{1F4A1}"} Enter the physical starting cash provided in your drawer for giving change (default: {"\u20B1"}1,500.00).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Shift Notes (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Received 10x 100 bills, 10x 50 bills, 25x 20 coins"
+                className="w-full rounded-xl border border-amber-200/80 px-3.5 py-2 text-xs text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+                value={clockInNotes}
+                onChange={(e) => setClockInNotes(e.target.value)}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-amber-100">
+              <button
+                type="button"
+                className="flex-1 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                onClick={() => setClockInModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
+                onClick={() => void submitClockIn()}
+                disabled={clockingIn || !openingFloat}
+              >
+                {clockingIn ? 'Opening Shift...' : '{"\u{1F680}"} Confirm & Open Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clock-Out Modal */}
+      {clockOutModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
+          <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
+            <div className="flex items-start justify-between border-b border-amber-100 pb-3">
+              <div>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">{"\u{1F512}"} End Shift & Cash Drawer Blind Count</h3>
+                <p className="text-xs text-amber-700 mt-0.5">Cashier: {session.user.displayName}</p>
+              </div>
+              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockOutModalOpen(false)}>{"\u00D7"}</button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Physical Cash Count in Drawer ({"\u20B1"})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                className="w-full rounded-xl border border-amber-200/80 bg-amber-50/20 px-3.5 py-2.5 text-lg font-bold text-amber-950 outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/30"
+                value={closingCashCount}
+                onChange={(e) => setClosingCashCount(e.target.value)}
+                autoFocus
+              />
+              <p className="mt-1 text-[11px] text-amber-700 leading-normal">
+                {"\u{1F512}"} Blind Audit Security: Enter the exact physical cash counted in your register drawer (including your opening float).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Shift Closing Remarks / Discrepancy Reason (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Short 20.00 due to lack of 5 coins for change"
+                className="w-full rounded-xl border border-amber-200/80 px-3.5 py-2 text-xs text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+                value={clockOutNotes}
+                onChange={(e) => setClockOutNotes(e.target.value)}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-amber-100">
+              <button
+                type="button"
+                className="flex-1 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                onClick={() => setClockOutModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
+                onClick={() => void submitClockOut()}
+                disabled={clockingOut || !closingCashCount}
+              >
+                {clockingOut ? 'Closing Shift...' : '{"\u{1F3C1}"} Confirm & Close Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
 
+/* ==========================================================================
+   MAIN APPLICATION SHELL WITH ROLE-BASED SESSION TIMEOUT & TAB SECURITY
+   ========================================================================== */
 export function CloudApp(): JSX.Element {
   const [session, setSession] = useState<CloudSession | null>(() => {
     const token = localStorage.getItem('bakealley_cloud_token');
