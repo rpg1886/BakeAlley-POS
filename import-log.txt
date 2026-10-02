@@ -180,3 +180,7 @@ Imported 1383 rows from c:\Users\Ryan\Projects\BakeAlley-POS\BakeAlley-POS\Inven
 {"createdCategories":37,"createdProducts":1372,"updatedProducts":0,"createdLots":1372,"updatedLots":0}
 2026-10-01 21:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
 2026-10-01 22:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
+2026-10-01 23:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
+2026-10-02 00:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
+2026-10-02 01:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
+2026-10-02 02:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
