@@ -168,25 +168,7 @@ export function CheckoutScreen({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
-    const searchInputRef = useRef<HTMLInputElement>(null);
-  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
-  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
-  const customerDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        customerDropdownRef.current &&
-        !customerDropdownRef.current.contains(event.target as Node)
-      ) {
-        setCustomerDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     localStorage.setItem('bakealley_pos_cart', JSON.stringify(cart));
@@ -214,14 +196,7 @@ export function CheckoutScreen({
   }, [dataSource]);
 
   const selectedCustomer = customers.find((customer) => customer.customerId === customerId) ?? null;
-  const isWholesaleCustomer = Boolean(selectedCustomer && selectedCustomer.tierId !== retailTierId);
   const pricingTierId = selectedCustomer?.tierId ?? retailTierId;
-
-  const filteredCustomers = customers.filter((customer) => {
-    const term = customerSearchTerm.toLowerCase().trim();
-    if (!term) return true;
-    return customer.displayName.toLowerCase().includes(term);
-  });
   const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
   const taxAmount = subtotal * taxRate;
   const totalAmount = subtotal + taxAmount;
@@ -368,7 +343,7 @@ export function CheckoutScreen({
       const result = await dataSource.createOrderWithOutbox({
         customerId,
         pricingTierId,
-        orderType: isWholesaleCustomer ? 'commercial' : 'retail',
+        orderType: selectedCustomer ? 'commercial' : 'retail',
         items: orderItems,
         subtotal: Number(subtotal.toFixed(2)),
         taxAmount: Number(taxAmount.toFixed(2)),
@@ -399,10 +374,10 @@ export function CheckoutScreen({
 
   // Payment Options Config with Logos / Visual Badges
   const paymentOptions = [
-    { id: 'cash', label: 'Cash', icon: '{"\u{1F4B5}"}', color: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
-    { id: 'card', label: 'Card / POS', icon: '{"\u{1F4B3}"}', color: 'border-blue-500 bg-blue-50 text-blue-800' },
-    { id: 'gcash', label: 'GCash', icon: '{"\u{1F4F2}"}', color: 'border-sky-500 bg-sky-50 text-sky-800' },
-    { id: 'account', label: 'Account', icon: '{"\u{1F4CB}"}', color: 'border-amber-500 bg-amber-50 text-amber-800' },
+    { id: 'cash', label: 'Cash', icon: '{\u{1F4B5}}', color: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
+    { id: 'card', label: 'Card / POS', icon: '{\u{1F4B3}}', color: 'border-blue-500 bg-blue-50 text-blue-800' },
+    { id: 'gcash', label: 'GCash', icon: '{\u{1F4F2}}', color: 'border-sky-500 bg-sky-50 text-sky-800' },
+    { id: 'account', label: 'Account', icon: '{\u{1F4CB}}', color: 'border-amber-500 bg-amber-50 text-amber-800' },
   ] as const;
 
   return (
@@ -416,97 +391,21 @@ export function CheckoutScreen({
               <h1 className="font-bakery text-3xl font-bold tracking-tight text-amber-950">Checkout</h1>
             </div>
           </div>
-          <div ref={customerDropdownRef} className="relative w-full max-w-md sm:w-80">
-            <label className="block text-sm font-semibold text-amber-900 mb-1">
-              Customer
-            </label>
-            <div
-              className="flex items-center justify-between rounded-lg border border-amber-200/80 bg-white px-3 py-2 text-sm shadow-sm cursor-pointer hover:border-amber-400 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/40"
-              onClick={() => setCustomerDropdownOpen((prev) => !prev)}
+          <label className="w-full max-w-md text-sm font-semibold sm:w-auto">
+            Customer pricing
+            <select
+              className="mt-2 block w-full rounded-lg border border-amber-200/80 bg-white px-3 py-2 font-normal shadow-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
+              value={customerId ?? ''}
+              onChange={(event) => setCustomerId(event.target.value || null)}
             >
-              <span className="truncate font-medium text-amber-950">
-                {!selectedCustomer
-                  ? "{\u{1F464}} Retail Walk-in (New Client)"
-                  : isWholesaleCustomer
-                  ? "{\u{1F3E2}} " + selectedCustomer.displayName + " (Wholesale)"
-                  : "{\u{1F501}} " + selectedCustomer.displayName + " (Return Client)"}
-              </span>
-              <span className="ml-2 text-xs text-amber-600 font-bold">
-                {customerDropdownOpen ? '\u25B2' : '\u25BC'}
-              </span>
-            </div>
-
-            {customerDropdownOpen && (
-              <div className="absolute right-0 z-30 mt-1 w-full rounded-xl border border-amber-200 bg-white p-2 shadow-2xl">
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="Search customer name..."
-                  value={customerSearchTerm}
-                  onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                  className="w-full rounded-lg border border-amber-200 px-3 py-1.5 text-xs outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <div className="mt-2 max-h-56 overflow-y-auto space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomerId(null);
-                      setCustomerSearchTerm('');
-                      setCustomerDropdownOpen(false);
-                    }}
-                    className={`w-full text-left rounded-lg px-3 py-2 text-xs font-semibold transition ${
-                      !selectedCustomer
-                        ? 'bg-amber-100 font-bold text-amber-950'
-                        : 'hover:bg-amber-50 text-amber-900'
-                    }`}
-                  >
-                    {"{\u{1F464}}"} Retail Walk-in (New Client)
-                  </button>
-
-                  {filteredCustomers.length === 0 ? (
-                    <p className="py-3 text-center text-xs text-amber-600">
-                      No matching customers found.
-                    </p>
-                  ) : (
-                    filteredCustomers.map((customer) => {
-                      const isSelected = customer.customerId === customerId;
-                      const isWholesale = customer.tierId !== retailTierId;
-                      return (
-                        <button
-                          key={customer.customerId}
-                          type="button"
-                          onClick={() => {
-                            setCustomerId(customer.customerId);
-                            setCustomerSearchTerm('');
-                            setCustomerDropdownOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs transition ${
-                            isSelected
-                              ? 'bg-emerald-50 font-bold text-emerald-950'
-                              : 'hover:bg-amber-50/80 text-amber-900'
-                          }`}
-                        >
-                          <span className="truncate">
-                            {isWholesale ? "{\u{1F3E2}}" : "{\u{1F501}}"} {customer.displayName}
-                          </span>
-                          <span
-                            className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                              isWholesale
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}
-                          >
-                            {isWholesale ? 'Wholesale' : 'Return Client'}
-                          </span>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+              <option value="">Retail walk-in</option>
+              {customers.map((customer) => (
+                <option key={customer.customerId} value={customer.customerId}>
+                  {customer.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
         </header>
 
         {/* Barcode & SKU Search Bar */}
@@ -734,7 +633,7 @@ export function CheckoutScreen({
 
             {paymentMethod === 'gcash' && (
               <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3.5 text-xs text-sky-900">
-                <p className="font-bold flex items-center gap-1.5">{"\u{1F4F2}"} GCash Payment Scan</p>
+                <p className="font-bold flex items-center gap-1.5">{\u{1F4F2}} GCash Payment Scan</p>
                 <p className="mt-1">Confirm client transaction reference on the store GCash QR terminal before clicking payment.</p>
               </div>
             )}

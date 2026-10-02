@@ -289,10 +289,11 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       ['Total Consolidated Realized Tender', totalConsolidatedTenderDaily.toFixed(2)],
       ['Estimated Card Merchant Fees (2.5%)', estimatedCardFeesDaily.toFixed(2)],
       [''],
-      ['Time', 'Customer', 'Item Name', 'SKU', 'Quantity', 'Amount (PHP)', 'Payment Method'],
+      ['Time', 'Customer', 'Cashier', 'Item Name', 'SKU', 'Quantity', 'Amount (PHP)', 'Payment Method'],
       ...items.map((item) => [
         new Date(item.soldAt).toLocaleTimeString(),
         `"${(item.customerName || 'Walk-in').replace(/"/g, '""')}"`,
+        `"${((item as any).cashierName || 'System').replace(/"/g, '""')}"`,
         `"${(item.itemName || '').replace(/"/g, '""')}"`,
         item.sku,
         Number(item.quantity).toFixed(4),
@@ -393,13 +394,14 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           <h3>Line Item Transaction Audit</h3>
           <table>
             <thead>
-              <tr><th>Time</th><th>Customer</th><th>Item Name</th><th>SKU</th><th class="text-right">Qty</th><th class="text-right">Amount</th><th>Method</th></tr>
+              <tr><th>Time</th><th>Customer</th><th>Cashier</th><th>Item Name</th><th>SKU</th><th class="text-right">Qty</th><th class="text-right">Amount</th><th>Method</th></tr>
             </thead>
             <tbody>
               ${(report.items || []).map((item) => `
                 <tr>
                   <td>${new Date(item.soldAt).toLocaleTimeString()}</td>
                   <td>${item.customerName || 'Walk-in'}</td>
+                  <td>${(item as any).cashierName || 'System'}</td>
                   <td>${item.itemName}</td>
                   <td>${item.sku}</td>
                   <td class="text-right">${Number(item.quantity).toFixed(2)}</td>
@@ -913,9 +915,8 @@ function BiView(): JSX.Element {
   }, [selectedDate]);
 
   const productSalesMap = new Map<string, { sku: string; name: string; quantity: number; amount: number }>();
-  let walkInGross = 0;
-  let returnClientGross = 0;
-  let wholesaleGross = 0;
+  let retailGross = 0;
+  let commercialGross = 0;
 
   (report?.items || []).forEach((item) => {
     const existing = productSalesMap.get(item.sku) || { sku: item.sku, name: item.itemName, quantity: 0, amount: 0 };
@@ -925,16 +926,10 @@ function BiView(): JSX.Element {
     existing.amount += amt;
     productSalesMap.set(item.sku, existing);
 
-    const custName = String(item.customerName || '').trim();
-    const isWalkIn = !custName || custName === 'Walk-in' || custName.endsWith('- Walk-in');
-    const isCommercial = (item as any).orderType === 'commercial';
-
-    if (isWalkIn) {
-      walkInGross += amt;
-    } else if (isCommercial) {
-      wholesaleGross += amt;
+    if (item.customerName && item.customerName !== 'Walk-in') {
+      commercialGross += amt;
     } else {
-      returnClientGross += amt;
+      retailGross += amt;
     }
   });
 
@@ -954,10 +949,9 @@ function BiView(): JSX.Element {
     .filter((inv) => inv.soldQty < slowThreshold)
     .sort((a, b) => Number(b.quantityOnHand) - Number(a.quantityOnHand));
 
-  const totalSegmentGross = walkInGross + returnClientGross + wholesaleGross;
-  const walkInPct = totalSegmentGross > 0 ? (walkInGross / totalSegmentGross) * 100 : 0;
-  const returnClientPct = totalSegmentGross > 0 ? (returnClientGross / totalSegmentGross) * 100 : 0;
-  const wholesalePct = totalSegmentGross > 0 ? (wholesaleGross / totalSegmentGross) * 100 : 0;
+  const totalSegmentGross = retailGross + commercialGross;
+  const retailPct = totalSegmentGross > 0 ? (retailGross / totalSegmentGross) * 100 : 0;
+  const commercialPct = totalSegmentGross > 0 ? (commercialGross / totalSegmentGross) * 100 : 0;
 
   return (
     <Panel title="Business Intelligence & Marketing Analytics">
@@ -1064,35 +1058,24 @@ function BiView(): JSX.Element {
           <div className="grid gap-6 md:grid-cols-2">
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
               <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">{"\u{1F3AF}"} Customer Channel Revenue Split</h3>
-              <p className="text-xs text-amber-700 mb-4">Walk-in retail vs. Return CRM clients vs. Wholesale accounts.</p>
+              <p className="text-xs text-amber-700 mb-4">Walk-in retail customers vs. Commercial wholesale account volume.</p>
               <div className="space-y-3">
                 <div>
                   <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span>{"\u{1F464}"} Walk-in Retail (New Clients)</span>
-                    <span>{money.format(walkInGross)} ({walkInPct.toFixed(1)}%)</span>
+                    <span>Retail Walk-in Customers</span>
+                    <span>{money.format(retailGross)} ({retailPct.toFixed(1)}%)</span>
                   </div>
-                  <div className="h-2.5 w-full rounded-full bg-amber-100 overflow-hidden">
-                    <div className="h-full bg-amber-700" style={{ width: `${walkInPct}%` }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span>{"\u{1F501}"} Return CRM Clients</span>
-                    <span>{money.format(returnClientGross)} ({returnClientPct.toFixed(1)}%)</span>
-                  </div>
-                  <div className="h-2.5 w-full rounded-full bg-amber-100 overflow-hidden">
-                    <div className="h-full bg-emerald-600" style={{ width: `${returnClientPct}%` }} />
+                  <div className="h-3 w-full rounded-full bg-amber-100 overflow-hidden">
+                    <div className="h-full bg-amber-700" style={{ width: `${retailPct}%` }} />
                   </div>
                 </div>
-
                 <div>
                   <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span>{"\u{1F3E2}"} Wholesale & Commercial Accounts</span>
-                    <span>{money.format(wholesaleGross)} ({wholesalePct.toFixed(1)}%)</span>
+                    <span>Wholesale & Commercial Accounts</span>
+                    <span>{money.format(commercialGross)} ({commercialPct.toFixed(1)}%)</span>
                   </div>
-                  <div className="h-2.5 w-full rounded-full bg-amber-100 overflow-hidden">
-                    <div className="h-full bg-blue-600" style={{ width: `${wholesalePct}%` }} />
+                  <div className="h-3 w-full rounded-full bg-amber-100 overflow-hidden">
+                    <div className="h-full bg-emerald-600" style={{ width: `${commercialPct}%` }} />
                   </div>
                 </div>
               </div>
@@ -1122,6 +1105,7 @@ interface GroupedTransaction {
   orderId: string;
   soldAt: string;
   customerName: string;
+  cashierName: string;
   paymentMethod: string;
   totalAmount: number;
   cashReceived: number;
@@ -1175,6 +1159,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           orderId: item.orderId,
           soldAt: item.soldAt,
           customerName: item.customerName || 'Walk-in',
+          cashierName: (item as { cashierName?: string }).cashierName || 'System',
           paymentMethod: item.paymentMethod || 'cash',
           totalAmount: Number((item as { totalAmount?: number }).totalAmount) || 0,
           cashReceived: Number((item as { cashReceived?: number }).cashReceived) || 0,
@@ -1265,6 +1250,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                         <td className="py-3 px-3">
                           <div className="font-semibold text-amber-950">{new Date(tx.soldAt).toLocaleTimeString()}</div>
                           <div className="text-xs text-amber-700">{tx.customerName}</div>
+                          <div className="text-[11px] text-amber-800 font-medium">Cashier: {tx.cashierName}</div>
                         </td>
                         <td className="py-3 px-3 font-medium text-amber-900">
                           {tx.items.length} {tx.items.length === 1 ? 'item' : 'items'}
@@ -1292,9 +1278,12 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                           <td colSpan={5} className="p-3 sm:p-4">
                             <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
                               <div className="flex flex-wrap items-center justify-between border-b border-amber-100 pb-2 mb-3">
-                                <h4 className="font-bold text-amber-950 text-sm">
-                                  Transaction Receipt {"\u2014"} {new Date(tx.soldAt).toLocaleTimeString()}
-                                </h4>
+                                <div>
+                                  <h4 className="font-bold text-amber-950 text-sm">
+                                    Transaction Receipt {"\u2014"} {new Date(tx.soldAt).toLocaleTimeString()}
+                                  </h4>
+                                  <span className="text-xs text-amber-800 font-semibold">Cashier: {tx.cashierName}</span>
+                                </div>
                                 <span className="text-xs font-mono text-amber-700">Order ID: {tx.orderId}</span>
                               </div>
 
@@ -1324,6 +1313,10 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                                   <div>
                                     <span className="font-semibold text-amber-800">Payment Method:</span>{' '}
                                     <span className="capitalize font-bold text-amber-950">{tx.paymentMethod}</span>
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-amber-800">Processed By (Cashier):</span>{' '}
+                                    <span className="font-bold text-amber-950">{tx.cashierName}</span>
                                   </div>
                                   {methodStr.includes('cash') && (
                                     <>
