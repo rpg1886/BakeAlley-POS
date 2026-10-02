@@ -726,20 +726,23 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
 
     const start = `${date}T00:00:00+08:00`;
     const result = await pool.query(
-      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod" 
+      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount" 
        FROM order_items oi 
        JOIN orders o ON o.order_id=oi.order_id 
        JOIN product_variants v ON v.variant_id=oi.variant_id 
        LEFT JOIN customers c ON c.customer_id=o.customer_id 
        WHERE o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < ($1::timestamptz + interval '1 day') 
-       ORDER BY o.created_at, o.order_id, oi.order_item_id`, 
+       ORDER BY o.created_at DESC, o.order_id, oi.order_item_id`, 
       [start]
     );
     
     const items = result.rows.map((row) => ({ 
       ...row, 
       quantity: Number(row.quantity) || 0, 
-      amount: Number(row.amount) || 0 
+      amount: Number(row.amount) || 0,
+      cashReceived: Number(row.cashReceived) || 0,
+      changeDue: Number(row.changeDue) || 0,
+      totalAmount: Number(row.totalAmount) || 0
     }));
     
     const summary = async (periodStart, periodEnd) => {
