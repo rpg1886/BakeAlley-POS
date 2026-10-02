@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type JSX, type ReactNode } from 'react';
 import { CheckoutScreen, type CheckoutCustomer, type CheckoutOrderPayload, type CheckoutProduct } from '../src/components/CheckoutScreen';
 import { LoginScreen } from '../src/renderer/LoginScreen';
 import { CloudPosApi, type CloudSession } from './cloudApi';
@@ -150,7 +150,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     if (!report) return;
     const items = report.items || [];
     const csvData = [
-      ['Bake Alley Cloud POS — End of Day Financial Audit Statement'],
+      ['Bake Alley Cloud POS â€” End of Day Financial Audit Statement'],
       ['Audit Date', selectedDate],
       ['Generated Date/Time', new Date().toLocaleString()],
       [''],
@@ -221,7 +221,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           </style>
         </head>
         <body>
-          <h1>🍞 Bake Alley Cloud POS — End of Day Financial Audit</h1>
+          <h1>ðŸž Bake Alley Cloud POS â€” End of Day Financial Audit</h1>
           <div class="header-info">
             <div><strong>Audit Date:</strong> ${selectedDate}</div>
             <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
@@ -234,12 +234,12 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           </div>
           <h3>Payment Method Consolidation & Tender Breakdown</h3>
           <p style="font-size: 13px;">
-            <strong>💵 Cash Drawer:</strong> PHP ${paymentBreakdown.cash.toFixed(2)} | 
-            <strong>📲 GCash E-Wallet:</strong> PHP ${paymentBreakdown.gcash.toFixed(2)} | 
-            <strong>💳 Card / POS:</strong> PHP ${paymentBreakdown.card.toFixed(2)} | 
-            <strong>📋 Commercial Account:</strong> PHP ${paymentBreakdown.account.toFixed(2)}<br>
-            <strong>🌐 Total Digital Tenders:</strong> PHP ${totalDigitalTender.toFixed(2)} | 
-            <strong>💰 Total Consolidated Realization:</strong> PHP ${totalConsolidatedTender.toFixed(2)}
+            <strong>ðŸ’µ Cash Drawer:</strong> PHP ${paymentBreakdown.cash.toFixed(2)} | 
+            <strong>ðŸ“² GCash E-Wallet:</strong> PHP ${paymentBreakdown.gcash.toFixed(2)} | 
+            <strong>ðŸ’³ Card / POS:</strong> PHP ${paymentBreakdown.card.toFixed(2)} | 
+            <strong>ðŸ“‹ Commercial Account:</strong> PHP ${paymentBreakdown.account.toFixed(2)}<br>
+            <strong>ðŸŒ Total Digital Tenders:</strong> PHP ${totalDigitalTender.toFixed(2)} | 
+            <strong>ðŸ’° Total Consolidated Realization:</strong> PHP ${totalConsolidatedTender.toFixed(2)}
           </p>
           <h3>Line Item Transaction Audit</h3>
           <table>
@@ -289,7 +289,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
             disabled={loading || !report}
             className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-100 disabled:opacity-50"
           >
-            📥 Export CSV
+            ðŸ“¥ Export CSV
           </button>
           <button
             type="button"
@@ -297,7 +297,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
             disabled={loading || !report}
             className="rounded-lg bg-amber-800 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-900 disabled:opacity-50"
           >
-            🖨️ Print / Save PDF
+            ðŸ–¨ï¸ Print / Save PDF
           </button>
           <ActionButton disabled={loading} onClick={() => void refresh()}>{loading ? 'Generating...' : 'Refresh'}</ActionButton>
         </div>
@@ -309,7 +309,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
         <div className="space-y-8">
           <section>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit — {selectedDate}</h2>
+              <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit â€” {selectedDate}</h2>
               <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Verified EOD Statement</span>
             </div>
 
@@ -348,27 +348,27 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-sm">
                   <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
-                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">💵 Cash</span>
+                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">ðŸ’µ Cash</span>
                     <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.cash)}</strong>
                     <span className="text-[9px] text-amber-700 block mt-0.5">Cash Drawer</span>
                   </div>
                   <div className="rounded-lg bg-white p-2.5 border border-sky-200 shadow-sm">
-                    <span className="text-[10px] text-sky-800 font-bold block uppercase tracking-wider">📲 GCash</span>
+                    <span className="text-[10px] text-sky-800 font-bold block uppercase tracking-wider">ðŸ“² GCash</span>
                     <strong className="text-sky-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.gcash)}</strong>
                     <span className="text-[9px] text-sky-700 block mt-0.5">E-Wallet</span>
                   </div>
                   <div className="rounded-lg bg-white p-2.5 border border-blue-200 shadow-sm">
-                    <span className="text-[10px] text-blue-800 font-bold block uppercase tracking-wider">💳 Card</span>
+                    <span className="text-[10px] text-blue-800 font-bold block uppercase tracking-wider">ðŸ’³ Card</span>
                     <strong className="text-blue-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.card)}</strong>
                     <span className="text-[9px] text-blue-700 block mt-0.5">POS Terminal</span>
                   </div>
                   <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
-                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">📋 Account</span>
+                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">ðŸ“‹ Account</span>
                     <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.account)}</strong>
                     <span className="text-[9px] text-amber-700 block mt-0.5">Receivable</span>
                   </div>
                   <div className="col-span-2 sm:col-span-1 rounded-lg bg-emerald-800 p-2.5 text-white shadow-sm">
-                    <span className="text-[10px] text-emerald-200 font-bold block uppercase tracking-wider">🌐 Digital Total</span>
+                    <span className="text-[10px] text-emerald-200 font-bold block uppercase tracking-wider">ðŸŒ Digital Total</span>
                     <strong className="text-white text-xs tabular-nums block mt-1">{money.format(totalDigitalTender)}</strong>
                     <span className="text-[9px] text-emerald-200 block mt-0.5">Non-Cash Tenders</span>
                   </div>
@@ -492,7 +492,7 @@ function BiView(): JSX.Element {
               timeframe === 'monthly' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'
             }`}
           >
-            🗓️ Monthly (30 Days)
+            ðŸ—“ï¸ Monthly (30 Days)
           </button>
           <button
             type="button"
@@ -501,7 +501,7 @@ function BiView(): JSX.Element {
               timeframe === 'yearly' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'
             }`}
           >
-            📅 Yearly (365 Days)
+            ðŸ“… Yearly (365 Days)
           </button>
         </div>
       </div>
@@ -514,11 +514,11 @@ function BiView(): JSX.Element {
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">🔥</span>
+                  <span className="text-xl">ðŸ”¥</span>
                   <h2 className="font-bakery text-base font-bold text-amber-950">Fast-Moving Stock</h2>
                 </div>
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900">
-                  ≥ {fastThreshold} sold / {timeframe}
+                  â‰¥ {fastThreshold} sold / {timeframe}
                 </span>
               </div>
               <p className="text-xs text-amber-700 mb-4">High-turnover products driving primary cash flow.</p>
@@ -548,7 +548,7 @@ function BiView(): JSX.Element {
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">💤</span>
+                  <span className="text-xl">ðŸ’¤</span>
                   <h2 className="font-bakery text-base font-bold text-amber-950">Slow-Moving Stock</h2>
                 </div>
                 <span className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-900">
@@ -581,7 +581,7 @@ function BiView(): JSX.Element {
 
           <div className="grid gap-6 md:grid-cols-2">
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
-              <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">🎯 Customer Channel Revenue Split</h3>
+              <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">ðŸŽ¯ Customer Channel Revenue Split</h3>
               <p className="text-xs text-amber-700 mb-4">Walk-in retail customers vs. Commercial wholesale account volume.</p>
               <div className="space-y-3">
                 <div>
@@ -606,10 +606,10 @@ function BiView(): JSX.Element {
             </div>
 
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
-              <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">⏰ Store Purchasing Peak Hours</h3>
+              <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">â° Store Purchasing Peak Hours</h3>
               <p className="text-xs text-amber-700 mb-3">Optimal staffing and baking batch delivery recommendation.</p>
               <div className="rounded-lg bg-amber-50 p-4 border border-amber-200/60 text-sm">
-                <p className="font-semibold text-amber-950 mb-1">💡 Marketing & Staffing Actionable Advice:</p>
+                <p className="font-semibold text-amber-950 mb-1">ðŸ’¡ Marketing & Staffing Actionable Advice:</p>
                 <p className="text-xs text-amber-800 leading-relaxed">
                   Peak store traffic occurs around <strong>9:00 AM - 11:00 AM</strong> and <strong>4:00 PM - 6:00 PM</strong>. Schedule fresh baking batches 30 minutes prior to peak hours to maximize fresh bread aroma and impulse cross-sells.
                 </p>
@@ -625,11 +625,31 @@ function BiView(): JSX.Element {
 /* ==========================================================================
    SALES VIEW (DAILY SALES SUMMARY WITH FORMATTED PAYMENT BADGES)
    ========================================================================== */
+interface GroupedTransaction {
+  orderId: string;
+  soldAt: string;
+  customerName: string;
+  paymentMethod: string;
+  totalAmount: number;
+  cashReceived: number;
+  changeDue: number;
+  items: Array<{
+    itemName: string;
+    sku: string;
+    quantity: number;
+    amount: number;
+  }>;
+}
+
+/* ==========================================================================
+   SALES VIEW (GROUPED TRANSACTIONS WITH EXPANDABLE RECEIPT & CASH DETAILS)
+   ========================================================================== */
 function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_sales_date') || today());
   const [report, setReport] = useState<CloudSalesReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem('bakealley_pos_sales_date', selectedDate);
@@ -650,6 +670,45 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   useEffect(() => {
     void refresh();
   }, [selectedDate]);
+
+  const groupedTransactions = useMemo(() => {
+    if (!report?.items) return [];
+
+    const map = new Map<string, GroupedTransaction>();
+
+    for (const item of report.items) {
+      if (!map.has(item.orderId)) {
+        map.set(item.orderId, {
+          orderId: item.orderId,
+          soldAt: item.soldAt,
+          customerName: item.customerName || 'Walk-in',
+          paymentMethod: item.paymentMethod || 'cash',
+          totalAmount: Number((item as { totalAmount?: number }).totalAmount) || 0,
+          cashReceived: Number((item as { cashReceived?: number }).cashReceived) || 0,
+          changeDue: Number((item as { changeDue?: number }).changeDue) || 0,
+          items: [],
+        });
+      }
+
+      const tx = map.get(item.orderId)!;
+      tx.items.push({
+        itemName: item.itemName,
+        sku: item.sku,
+        quantity: Number(item.quantity) || 0,
+        amount: Number(item.amount) || 0,
+      });
+
+      if (!tx.totalAmount) {
+        tx.totalAmount = tx.items.reduce((sum, i) => sum + i.amount, 0);
+      }
+    }
+
+    return Array.from(map.values());
+  }, [report]);
+
+  const toggleExpand = (orderId: string) => {
+    setExpandedOrderId((prev) => (prev === orderId ? null : orderId));
+  };
 
   return (
     <Panel title="Sales report">
@@ -682,37 +741,125 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           <div className="mt-5 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b text-xs uppercase text-amber-700">
-                <tr><th className="py-2">Time / customer</th><th>Item</th><th>SKU</th><th>Qty</th><th>Amount</th><th>Payment</th></tr>
+                <tr>
+                  <th className="py-2.5 px-3">Time / Customer</th>
+                  <th className="py-2.5 px-3">Purchased Items</th>
+                  <th className="py-2.5 px-3">Total Amount</th>
+                  <th className="py-2.5 px-3">Payment</th>
+                  <th className="py-2.5 px-3 text-right">Details</th>
+                </tr>
               </thead>
               <tbody>
-                {report.items.map((item, index) => {
-                  const methodStr = String(item.paymentMethod || 'cash').toLowerCase();
-                  let paymentBadge = <span className="font-semibold text-amber-950">💵 Cash</span>;
+                {groupedTransactions.map((tx) => {
+                  const methodStr = String(tx.paymentMethod || 'cash').toLowerCase();
+                  let paymentBadge = <span className="font-semibold text-amber-950">ðŸ’µ Cash</span>;
                   if (methodStr.includes('gcash')) {
-                    paymentBadge = <span className="font-bold text-sky-700">📲 GCash</span>;
+                    paymentBadge = <span className="font-bold text-sky-700">ðŸ“² GCash</span>;
                   } else if (methodStr.includes('card')) {
-                    paymentBadge = <span className="font-bold text-blue-700">💳 Card</span>;
+                    paymentBadge = <span className="font-bold text-blue-700">ðŸ’³ Card</span>;
                   } else if (methodStr.includes('account')) {
-                    paymentBadge = <span className="font-semibold text-amber-900">📋 Account</span>;
+                    paymentBadge = <span className="font-semibold text-amber-900">ðŸ“‹ Account</span>;
                   }
 
+                  const isExpanded = expandedOrderId === tx.orderId;
+
                   return (
-                    <tr className="border-b last:border-0" key={`${item.orderId}-${index}`}>
-                      <td className="py-3">
-                        <div>{new Date(item.soldAt).toLocaleTimeString()}</div>
-                        <div className="text-xs text-amber-700">{item.customerName}</div>
-                      </td>
-                      <td className="font-semibold">{item.itemName}</td>
-                      <td className="font-mono text-xs">{item.sku}</td>
-                      <td>{Number(item.quantity).toFixed(4)}</td>
-                      <td>{money.format(Number(item.amount) || 0)}</td>
-                      <td>{paymentBadge}</td>
-                    </tr>
+                    <Fragment key={tx.orderId}>
+                      <tr 
+                        className={`border-b cursor-pointer transition-colors ${isExpanded ? 'bg-amber-50/70' : 'hover:bg-amber-50/30'}`}
+                        onClick={() => toggleExpand(tx.orderId)}
+                      >
+                        <td className="py-3 px-3">
+                          <div className="font-semibold text-amber-950">{new Date(tx.soldAt).toLocaleTimeString()}</div>
+                          <div className="text-xs text-amber-700">{tx.customerName}</div>
+                        </td>
+                        <td className="py-3 px-3 font-medium text-amber-900">
+                          {tx.items.length} {tx.items.length === 1 ? 'item' : 'items'}
+                        </td>
+                        <td className="py-3 px-3 font-bold text-amber-950 tabular-nums">
+                          {money.format(tx.totalAmount)}
+                        </td>
+                        <td className="py-3 px-3">{paymentBadge}</td>
+                        <td className="py-3 px-3 text-right">
+                          <button
+                            type="button"
+                            className="rounded-lg bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900 hover:bg-amber-200"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpand(tx.orderId);
+                            }}
+                          >
+                            {isExpanded ? 'â–² Hide' : 'â–¼ View Items'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {isExpanded && (
+                        <tr className="bg-amber-50/40">
+                          <td colSpan={5} className="p-3 sm:p-4">
+                            <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
+                              <div className="flex flex-wrap items-center justify-between border-b border-amber-100 pb-2 mb-3">
+                                <h4 className="font-bold text-amber-950 text-sm">
+                                  Transaction Receipt â€” {new Date(tx.soldAt).toLocaleTimeString()}
+                                </h4>
+                                <span className="text-xs font-mono text-amber-700">Order ID: {tx.orderId}</span>
+                              </div>
+
+                              <table className="w-full text-left text-xs mb-3">
+                                <thead className="border-b bg-amber-50/60 text-amber-800">
+                                  <tr>
+                                    <th className="py-2 px-2">Item Name</th>
+                                    <th className="py-2 px-2">SKU</th>
+                                    <th className="py-2 px-2 text-right">Quantity</th>
+                                    <th className="py-2 px-2 text-right">Amount</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {tx.items.map((subItem, idx) => (
+                                    <tr key={idx} className="border-b last:border-0 border-amber-100/60">
+                                      <td className="py-2 px-2 font-semibold text-amber-950">{subItem.itemName}</td>
+                                      <td className="py-2 px-2 font-mono text-amber-700">{subItem.sku}</td>
+                                      <td className="py-2 px-2 text-right tabular-nums">{subItem.quantity.toFixed(4)}</td>
+                                      <td className="py-2 px-2 text-right font-semibold text-amber-950 tabular-nums">{money.format(subItem.amount)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+
+                              <div className="flex flex-wrap items-center justify-between rounded-lg bg-amber-50/80 p-3 text-xs border border-amber-200/60">
+                                <div className="space-y-1">
+                                  <div>
+                                    <span className="font-semibold text-amber-800">Payment Method:</span>{' '}
+                                    <span className="capitalize font-bold text-amber-950">{tx.paymentMethod}</span>
+                                  </div>
+                                  {methodStr.includes('cash') && (
+                                    <>
+                                      <div>
+                                        <span className="text-amber-800">Cash Received:</span>{' '}
+                                        <strong className="text-emerald-800 tabular-nums">{money.format(tx.cashReceived)}</strong>
+                                      </div>
+                                      <div>
+                                        <span className="text-amber-800">Change Given:</span>{' '}
+                                        <strong className="text-amber-950 tabular-nums">{money.format(tx.changeDue)}</strong>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                                <div className="text-right mt-2 sm:mt-0">
+                                  <span className="text-amber-800 font-semibold block">Total Transaction Amount</span>
+                                  <strong className="text-base text-amber-950 tabular-nums">{money.format(tx.totalAmount)}</strong>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
             </table>
-            {report.items.length === 0 && <p className="py-8 text-center text-amber-700">No completed sales for this date.</p>}
+            {groupedTransactions.length === 0 && <p className="py-8 text-center text-amber-700">No completed sales for this date.</p>}
           </div>
         </>
       )}
@@ -953,7 +1100,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               filterStatus === 'out' ? 'bg-red-700 text-white shadow-sm ring-2 ring-red-400' : 'bg-red-100 text-red-800 hover:bg-red-200'
             }`}
           >
-            {outOfStockCount} Out of Stock {filterStatus === 'out' && '✓'}
+            {outOfStockCount} Out of Stock {filterStatus === 'out' && 'âœ“'}
           </button>
           <button
             type="button"
@@ -962,7 +1109,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               filterStatus === 'low' ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-400' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
             }`}
           >
-            {lowStockCount} Low Stock Alert {filterStatus === 'low' && '✓'}
+            {lowStockCount} Low Stock Alert {filterStatus === 'low' && 'âœ“'}
           </button>
         </div>
         <div className="flex gap-2">
@@ -1088,7 +1235,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-950">Retail Price (₱)</label>
+                <label className="block text-sm font-semibold text-amber-950">Retail Price (â‚±)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1099,7 +1246,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-950">Initial Cost (₱)</label>
+                <label className="block text-sm font-semibold text-amber-950">Initial Cost (â‚±)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1190,7 +1337,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-950">Retail Price (₱)</label>
+                <label className="block text-sm font-semibold text-amber-950">Retail Price (â‚±)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1201,7 +1348,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-950">Initial Cost (₱)</label>
+                <label className="block text-sm font-semibold text-amber-950">Initial Cost (â‚±)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1340,8 +1487,8 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
                 <tr className="border-b last:border-0" key={customer.customerId}>
                   <td className="py-3 font-semibold text-amber-950">{parts.at(-1)}</td>
                   <td>{parts.length > 1 ? parts : 'Walk-in'}</td>
-                  <td>{customer.email || '—'}</td>
-                  <td>{customer.phone || '—'}</td>
+                  <td>{customer.email || 'â€”'}</td>
+                  <td>{customer.phone || 'â€”'}</td>
                   <td>{customer.tierId === retailTierId ? 'Retail' : 'Wholesale'}</td>
                   <td className="text-right font-bold text-amber-950 tabular-nums">{money.format(lifetimeAmount)}</td>
                   <td className="text-right">
@@ -1543,7 +1690,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
                   return (
                     <tr className="border-t border-amber-100/60" key={shift.shiftId}>
                       <td className="py-3">{shift.displayName}</td>
-                      <td className="py-3 capitalize">{shiftEmployee?.role ?? '—'}</td>
+                      <td className="py-3 capitalize">{shiftEmployee?.role ?? 'â€”'}</td>
                       <td className="py-3">{new Date(shift.clockIn).toLocaleTimeString()}</td>
                       <td className="py-3">{shift.clockOut ? new Date(shift.clockOut).toLocaleTimeString() : 'Still clocked in'}</td>
                     </tr>
@@ -1725,7 +1872,7 @@ export function CloudApp(): JSX.Element {
             <img alt="Bake Alley logo" className="h-9 w-9 rounded-full border border-amber-200/80 object-cover shadow-sm" src={logoUrl} />
             <strong className="font-bakery text-lg text-amber-950">Bake Alley Cloud POS</strong>
             <span className="ml-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
-              {session.user.displayName} · {session.user.role}
+              {session.user.displayName} Â· {session.user.role}
             </span>
           </div>
           <button
