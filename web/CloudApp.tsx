@@ -83,32 +83,115 @@ function PeriodCard({ label, period }: { label: string; period?: CloudSalesRepor
 /* ==========================================================================
    FINANCIAL REPORT VIEW (EOD AUDIT + CONSOLIDATED TENDER RECONCILIATION)
    ========================================================================== */
+/* ==========================================================================
+   MONTHLY & 12-MONTH PERFORMANCE TYPES AND HELPERS
+   ========================================================================== */
+interface CloudMonthlyMetric {
+  month: number;
+  grossSales: number;
+  cogs: number;
+  grossProfit: number;
+  profitMarginPct: number;
+  orderCount: number;
+  itemsSold: number;
+  aov: number;
+  avgUnitsPerOrder: number;
+  cashSales: number;
+  gcashSales: number;
+  cardSales: number;
+  accountSales: number;
+  estimatedCardFees: number;
+}
+
+interface CloudMonthlyReport {
+  year: number;
+  months: CloudMonthlyMetric[];
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const FULL_MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+async function fetchMonthlyReport(apiInstance: any, year: string): Promise<CloudMonthlyReport> {
+  if (typeof apiInstance.monthlyReport === 'function') {
+    return apiInstance.monthlyReport(year);
+  }
+  const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
+  const baseUrl = import.meta.env.VITE_API_URL ?? '';
+  const response = await fetch(`${baseUrl}/api/v1/sales/monthly?year=${encodeURIComponent(year)}`, {
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error('Failed to load monthly sales report');
+  }
+  return response.json();
+}
+
+/* ==========================================================================
+   FINANCIAL REPORT VIEW (DAILY EOD AUDIT + OPTIONS A & B MONTHLY ANALYTICS)
+   ========================================================================== */
 function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly'>(() => {
+    return (localStorage.getItem('bakealley_pos_financial_view_mode') as 'daily' | 'monthly') || 'daily';
+  });
+
+  // Daily State
   const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_financial_date') || today());
   const [report, setReport] = useState<CloudSalesReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [dailyError, setDailyError] = useState<string | null>(null);
+
+  // Monthly State (Option A & Option B)
+  const [selectedYear, setSelectedYear] = useState<string>(() => new Date().getFullYear().toString());
+  const [selectedMonthNum, setSelectedMonthNum] = useState<number>(() => new Date().getMonth() + 1); // 1 to 12
+  const [monthlyReport, setMonthlyReport] = useState<CloudMonthlyReport | null>(null);
+  const [monthlyLoading, setMonthlyLoading] = useState(false);
+  const [monthlyError, setMonthlyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_financial_view_mode', viewMode);
+  }, [viewMode]);
 
   useEffect(() => {
     localStorage.setItem('bakealley_pos_financial_date', selectedDate);
   }, [selectedDate]);
 
-  const refresh = async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
+  const refreshDaily = async (): Promise<void> => {
+    setDailyLoading(true);
+    setDailyError(null);
     try {
       setReport(await api.salesReport(selectedDate));
     } catch (reason) {
-      setError(errorText(reason, 'Unable to generate financial report.'));
+      setDailyError(errorText(reason, 'Unable to generate financial report.'));
     } finally {
-      setLoading(false);
+      setDailyLoading(false);
+    }
+  };
+
+  const refreshMonthly = async (): Promise<void> => {
+    setMonthlyLoading(true);
+    setMonthlyError(null);
+    try {
+      const data = await fetchMonthlyReport(api, selectedYear);
+      setMonthlyReport(data);
+    } catch (reason) {
+      setMonthlyError(errorText(reason, 'Unable to load monthly financial analytics.'));
+    } finally {
+      setMonthlyLoading(false);
     }
   };
 
   useEffect(() => {
-    void refresh();
-  }, [selectedDate]);
+    if (viewMode === 'daily') {
+      void refreshDaily();
+    } else {
+      void refreshMonthly();
+    }
+  }, [selectedDate, selectedYear, viewMode]);
 
+  // Daily Metrics
   const dayGross = Number(report?.dayGrossTotal) || 0;
   const dayNet = Number(report?.dayNetTotal) || 0;
   const orderCount = Number(report?.dayOrderCount) || 0;
@@ -116,12 +199,18 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const totalItemsSold = (report?.items || []).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const avgUnitsPerOrder = orderCount > 0 ? totalItemsSold / orderCount : 0;
 
-  const estimatedCogs = dayGross / 1.20;
-  const grossProfit = dayGross - estimatedCogs;
-  const profitMarginPct = dayGross > 0 ? (grossProfit / dayGross) * 100 : 0;
+  // Actual COGS calculation using products.initial_cost
+  const actualCogsDaily = (report?.items || []).reduce(
+    (sum, item) => sum + (Number(item.quantity) || 0) * (Number((item as any).initialCost) || 0),
+    0
+  );
+  const estimatedCogsDaily = dayGross / 1.20;
+  const dailyCogs = actualCogsDaily > 0 ? actualCogsDaily : estimatedCogsDaily;
+  const isActualCogsUsedDaily = actualCogsDaily > 0;
+  const grossProfitDaily = dayGross - dailyCogs;
+  const profitMarginPctDaily = dayGross > 0 ? (grossProfitDaily / dayGross) * 100 : 0;
 
-  // Normalized payment reducer matching all tender variations
-  const paymentBreakdown = (report?.items || []).reduce(
+  const paymentBreakdownDaily = (report?.items || []).reduce(
     (acc, item) => {
       const rawMethod = String(item.paymentMethod || 'cash').toLowerCase().trim();
       const amount = Number(item.amount) || 0;
@@ -142,11 +231,38 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     { cash: 0, card: 0, gcash: 0, account: 0, other: 0 }
   );
 
-  const totalDigitalTender = paymentBreakdown.card + paymentBreakdown.gcash + paymentBreakdown.account + paymentBreakdown.other;
-  const totalConsolidatedTender = paymentBreakdown.cash + totalDigitalTender;
-  const estimatedCardFees = paymentBreakdown.card * CARD_FEE_RATE;
+  const totalDigitalTenderDaily = paymentBreakdownDaily.card + paymentBreakdownDaily.gcash + paymentBreakdownDaily.account + paymentBreakdownDaily.other;
+  const totalConsolidatedTenderDaily = paymentBreakdownDaily.cash + totalDigitalTenderDaily;
+  const estimatedCardFeesDaily = paymentBreakdownDaily.card * CARD_FEE_RATE;
 
-  const exportCsv = (): void => {
+  // Selected Month Metric (Option A)
+  const currentMonthMetric: CloudMonthlyMetric = monthlyReport?.months.find((m) => m.month === selectedMonthNum) || {
+    month: selectedMonthNum,
+    grossSales: 0,
+    cogs: 0,
+    grossProfit: 0,
+    profitMarginPct: 0,
+    orderCount: 0,
+    itemsSold: 0,
+    aov: 0,
+    avgUnitsPerOrder: 0,
+    cashSales: 0,
+    gcashSales: 0,
+    cardSales: 0,
+    accountSales: 0,
+    estimatedCardFees: 0,
+  };
+
+  // Month-over-Month (MoM) Comparison
+  const prevMonthNum = selectedMonthNum > 1 ? selectedMonthNum - 1 : 12;
+  const prevMonthMetric = monthlyReport?.months.find((m) => m.month === prevMonthNum);
+  const prevMonthGross = prevMonthMetric?.grossSales || 0;
+  const momGrowthPct = prevMonthGross > 0 ? ((currentMonthMetric.grossSales - prevMonthGross) / prevMonthGross) * 100 : 0;
+
+  const totalDigitalTenderMonthly = currentMonthMetric.cardSales + currentMonthMetric.gcashSales + currentMonthMetric.accountSales;
+  const totalConsolidatedTenderMonthly = currentMonthMetric.cashSales + totalDigitalTenderMonthly;
+
+  const exportDailyCsv = (): void => {
     if (!report) return;
     const items = report.items || [];
     const csvData = [
@@ -157,21 +273,21 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       ['FINANCIAL METRIC', 'VALUE (PHP)'],
       ['Gross Sales Revenue', dayGross.toFixed(2)],
       ['Net Revenue', dayNet.toFixed(2)],
-      ['Estimated Cost of Goods Sold (COGS)', estimatedCogs.toFixed(2)],
-      ['Estimated Gross Profit', grossProfit.toFixed(2)],
-      ['Profit Margin %', `${profitMarginPct.toFixed(1)}%`],
+      [isActualCogsUsedDaily ? 'Cost of Goods Sold (Actual COGS)' : 'Estimated Cost of Goods Sold (COGS)', dailyCogs.toFixed(2)],
+      ['Gross Profit', grossProfitDaily.toFixed(2)],
+      ['Profit Margin %', `${profitMarginPctDaily.toFixed(1)}%`],
       ['Total Orders Completed', orderCount],
       ['Average Order Value (AOV)', avgOrderValue.toFixed(2)],
       ['Average Units Per Basket', avgUnitsPerOrder.toFixed(2)],
       [''],
       ['TENDER RECONCILIATION & CONSOLIDATION', 'AMOUNT (PHP)'],
-      ['Cash Payments Received (Cash Drawer)', paymentBreakdown.cash.toFixed(2)],
-      ['GCash E-Wallet Payments Received', paymentBreakdown.gcash.toFixed(2)],
-      ['Card / POS Terminal Payments Received', paymentBreakdown.card.toFixed(2)],
-      ['Account Charges Received', paymentBreakdown.account.toFixed(2)],
-      ['Total Digital / Non-Cash Tenders', totalDigitalTender.toFixed(2)],
-      ['Total Consolidated Realized Tender', totalConsolidatedTender.toFixed(2)],
-      ['Estimated Card Merchant Fees (2.5%)', estimatedCardFees.toFixed(2)],
+      ['Cash Payments Received (Cash Drawer)', paymentBreakdownDaily.cash.toFixed(2)],
+      ['GCash E-Wallet Payments Received', paymentBreakdownDaily.gcash.toFixed(2)],
+      ['Card / POS Terminal Payments Received', paymentBreakdownDaily.card.toFixed(2)],
+      ['Account Charges Received', paymentBreakdownDaily.account.toFixed(2)],
+      ['Total Digital / Non-Cash Tenders', totalDigitalTenderDaily.toFixed(2)],
+      ['Total Consolidated Realized Tender', totalConsolidatedTenderDaily.toFixed(2)],
+      ['Estimated Card Merchant Fees (2.5%)', estimatedCardFeesDaily.toFixed(2)],
       [''],
       ['Time', 'Customer', 'Item Name', 'SKU', 'Quantity', 'Amount (PHP)', 'Payment Method'],
       ...items.map((item) => [
@@ -190,6 +306,39 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     const downloadLink = document.createElement('a');
     downloadLink.setAttribute('href', encodedUri);
     downloadLink.setAttribute('download', `EOD_Financial_Report_${selectedDate}.csv`);
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  };
+
+  const exportMonthlyCsv = (): void => {
+    if (!monthlyReport) return;
+    const csvData = [
+      [`Bake Alley Cloud POS \u2014 12-Month Financial Performance (${selectedYear})`],
+      ['Generated Date/Time', new Date().toLocaleString()],
+      [''],
+      ['Month', 'Gross Sales (PHP)', 'Actual COGS (PHP)', 'Gross Profit (PHP)', 'Margin %', 'Orders', 'AOV (PHP)', 'Cash (PHP)', 'GCash (PHP)', 'Card (PHP)', 'Account (PHP)', 'Est. Card Fees (PHP)'],
+      ...monthlyReport.months.map((m) => [
+        FULL_MONTH_NAMES[m.month - 1],
+        m.grossSales.toFixed(2),
+        m.cogs.toFixed(2),
+        m.grossProfit.toFixed(2),
+        `${m.profitMarginPct.toFixed(1)}%`,
+        m.orderCount,
+        m.aov.toFixed(2),
+        m.cashSales.toFixed(2),
+        m.gcashSales.toFixed(2),
+        m.cardSales.toFixed(2),
+        m.accountSales.toFixed(2),
+        m.estimatedCardFees.toFixed(2),
+      ]),
+    ];
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + csvData.map((row) => row.join(',')).join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const downloadLink = document.createElement('a');
+    downloadLink.setAttribute('href', encodedUri);
+    downloadLink.setAttribute('download', `Monthly_Financial_Report_${selectedYear}.csv`);
     document.body.appendChild(downloadLink);
     downloadLink.click();
     document.body.removeChild(downloadLink);
@@ -221,7 +370,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           </style>
         </head>
         <body>
-          <h1>\u{1F35E} Bake Alley Cloud POS \u2014 End of Day Financial Audit</h1>
+          <h1>Bake Alley Cloud POS \u2014 End of Day Financial Audit</h1>
           <div class="header-info">
             <div><strong>Audit Date:</strong> ${selectedDate}</div>
             <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
@@ -229,17 +378,17 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           <div class="summary-grid">
             <div class="card"><p>Gross Revenue</p><strong>PHP ${dayGross.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong></div>
             <div class="card"><p>Net Revenue</p><strong>PHP ${dayNet.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong></div>
-            <div class="card"><p>Estimated COGS</p><strong>PHP ${estimatedCogs.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong></div>
-            <div class="card"><p>Gross Profit Margin</p><strong>${profitMarginPct.toFixed(1)}%</strong></div>
+            <div class="card"><p>${isActualCogsUsedDaily ? 'Actual COGS' : 'Estimated COGS'}</p><strong>PHP ${dailyCogs.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</strong></div>
+            <div class="card"><p>Gross Profit Margin</p><strong>${profitMarginPctDaily.toFixed(1)}%</strong></div>
           </div>
           <h3>Payment Method Consolidation & Tender Breakdown</h3>
           <p style="font-size: 13px;">
-            <strong>{"\u{1F4B5}"} Cash Drawer:</strong> PHP ${paymentBreakdown.cash.toFixed(2)} | 
-            <strong>{"\u{1F4F2}"} GCash E-Wallet:</strong> PHP ${paymentBreakdown.gcash.toFixed(2)} | 
-            <strong>{"\u{1F4B3}"} Card / POS:</strong> PHP ${paymentBreakdown.card.toFixed(2)} | 
-            <strong>{"\u{1F4CB}"} Commercial Account:</strong> PHP ${paymentBreakdown.account.toFixed(2)}<br>
-            <strong>{"\u{1F310}"} Total Digital Tenders:</strong> PHP ${totalDigitalTender.toFixed(2)} | 
-            <strong>{"\u{1F4B0}"} Total Consolidated Realization:</strong> PHP ${totalConsolidatedTender.toFixed(2)}
+            <strong>{"\u{1F4B5}"} Cash Drawer:</strong> PHP ${paymentBreakdownDaily.cash.toFixed(2)} | 
+            <strong>{"\u{1F4F2}"} GCash E-Wallet:</strong> PHP ${paymentBreakdownDaily.gcash.toFixed(2)} | 
+            <strong>{"\u{1F4B3}"} Card / POS:</strong> PHP ${paymentBreakdownDaily.card.toFixed(2)} | 
+            <strong>{"\u{1F4CB}"} Commercial Account:</strong> PHP ${paymentBreakdownDaily.account.toFixed(2)}<br>
+            <strong>{"\u{1F310}"} Total Digital Tenders:</strong> PHP ${totalDigitalTenderDaily.toFixed(2)} | 
+            <strong>{"\u{1F4B0}"} Total Consolidated Realization:</strong> PHP ${totalConsolidatedTenderDaily.toFixed(2)}
           </p>
           <h3>Line Item Transaction Audit</h3>
           <table>
@@ -272,140 +421,465 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
   return (
     <Panel title="Financial Statements & Accounting Audit">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4 border-b border-amber-100 pb-4">
-        <div>
-          <label className="text-sm font-semibold text-amber-900 block mb-1">Select Audit Date</label>
-          <input
-            className="rounded-lg border border-amber-200/80 px-3 py-2 text-sm outline-none focus:border-amber-500"
-            type="date"
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      {/* View Switcher Tabs */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-amber-200/80 pb-4">
+        <div className="flex rounded-xl bg-amber-100/60 p-1">
           <button
             type="button"
-            onClick={exportCsv}
-            disabled={loading || !report}
-            className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-100 disabled:opacity-50"
+            onClick={() => setViewMode('daily')}
+            className={`rounded-lg px-4 py-2 text-xs font-bold transition ${
+              viewMode === 'daily' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'
+            }`}
           >
-            {"\u{1F4E5}"} Export CSV
+            {"\u{1F4C5}"} Daily EOD Audit
           </button>
           <button
             type="button"
-            onClick={exportPdfPrint}
-            disabled={loading || !report}
-            className="rounded-lg bg-amber-800 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-900 disabled:opacity-50"
+            onClick={() => setViewMode('monthly')}
+            className={`rounded-lg px-4 py-2 text-xs font-bold transition ${
+              viewMode === 'monthly' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'
+            }`}
           >
-            {"\u{1F5A8}"} Print / Save PDF
+            {"\u{1F4C8}"} Monthly & 12-Month Performance (Options A & B)
           </button>
-          <ActionButton disabled={loading} onClick={() => void refresh()}>{loading ? 'Generating...' : 'Refresh'}</ActionButton>
         </div>
+
+        {viewMode === 'daily' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <div>
+              <input
+                className="rounded-lg border border-amber-200/80 px-3 py-1.5 text-xs outline-none focus:border-amber-500"
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={exportDailyCsv}
+              disabled={dailyLoading || !report}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-100 disabled:opacity-50"
+            >
+              {"\u{1F4E5}"} Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportPdfPrint}
+              disabled={dailyLoading || !report}
+              className="rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-amber-900 disabled:opacity-50"
+            >
+              {"\u{1F5A8}"} Print / Save PDF
+            </button>
+            <ActionButton disabled={dailyLoading} onClick={() => void refreshDaily()}>
+              {dailyLoading ? 'Generating...' : 'Refresh'}
+            </ActionButton>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-amber-900">Fiscal Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="rounded-lg border border-amber-200/80 bg-white px-3 py-1.5 text-xs font-bold text-amber-950 outline-none focus:border-amber-500"
+              >
+                {[2024, 2025, 2026, 2027].map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={exportMonthlyCsv}
+              disabled={monthlyLoading || !monthlyReport}
+              className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-100 disabled:opacity-50"
+            >
+              {"\u{1F4E5}"} Export Year CSV
+            </button>
+            <ActionButton disabled={monthlyLoading} onClick={() => void refreshMonthly()}>
+              {monthlyLoading ? 'Loading...' : 'Refresh'}
+            </ActionButton>
+          </div>
+        )}
       </div>
 
-      {error && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
+      {/* DAILY EOD VIEW */}
+      {viewMode === 'daily' && (
+        <>
+          {dailyError && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{dailyError}</p>}
 
-      {report && !loading && (
-        <div className="space-y-8">
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit {"\u2014"} {selectedDate}</h2>
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Verified EOD Statement</span>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-amber-200/80 bg-amber-950 p-4 text-white shadow-sm">
-                <p className="text-xs uppercase tracking-wider text-amber-200/80">EOD Gross Revenue</p>
-                <strong className="mt-1 block text-2xl font-bold tabular-nums">{money.format(dayGross)}</strong>
-                <p className="mt-1 text-xs text-amber-200/70">{orderCount} completed transactions</p>
-              </div>
-              <div className="rounded-xl border border-amber-200/80 bg-emerald-700 p-4 text-white shadow-sm">
-                <p className="text-xs uppercase tracking-wider text-emerald-100">EOD Net Revenue</p>
-                <strong className="mt-1 block text-2xl font-bold tabular-nums">{money.format(dayNet)}</strong>
-                <p className="mt-1 text-xs text-emerald-100/80">Realized revenue</p>
-              </div>
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wider text-amber-700">Est. Gross Profit & Margin</p>
-                <strong className="mt-1 block text-2xl font-bold text-amber-950 tabular-nums">{money.format(grossProfit)}</strong>
-                <p className="mt-1 text-xs font-semibold text-emerald-700">{profitMarginPct.toFixed(1)}% Profit Margin</p>
-              </div>
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-wider text-amber-700">Basket & Size Metrics</p>
-                <strong className="mt-1 block text-2xl font-bold text-amber-950 tabular-nums">{money.format(avgOrderValue)}</strong>
-                <p className="mt-1 text-xs text-amber-700">{avgUnitsPerOrder.toFixed(1)} items avg / basket</p>
-              </div>
-            </div>
-
-            {/* CONSOLIDATED TENDER RECONCILIATION CARD */}
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800">Register Cash Drawer vs Digital Tender</h3>
-                  <span className="text-xs font-bold text-amber-950">
-                    Total Realized: <span className="text-emerald-700">{money.format(totalConsolidatedTender)}</span>
-                  </span>
+          {report && !dailyLoading && (
+            <div className="space-y-8">
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit {"\u2014"} {selectedDate}</h2>
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Verified EOD Statement</span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-sm">
-                  <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
-                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">{"\u{1F4B5}"} Cash</span>
-                    <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.cash)}</strong>
-                    <span className="text-[9px] text-amber-700 block mt-0.5">Cash Drawer</span>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-xl border border-amber-200/80 bg-amber-950 p-4 text-white shadow-sm">
+                    <p className="text-xs uppercase tracking-wider text-amber-200/80">EOD Gross Revenue</p>
+                    <strong className="mt-1 block text-2xl font-bold tabular-nums">{money.format(dayGross)}</strong>
+                    <p className="mt-1 text-xs text-amber-200/70">{orderCount} completed transactions</p>
                   </div>
-                  <div className="rounded-lg bg-white p-2.5 border border-sky-200 shadow-sm">
-                    <span className="text-[10px] text-sky-800 font-bold block uppercase tracking-wider">{"\u{1F4F2}"} GCash</span>
-                    <strong className="text-sky-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.gcash)}</strong>
-                    <span className="text-[9px] text-sky-700 block mt-0.5">E-Wallet</span>
+                  <div className="rounded-xl border border-amber-200/80 bg-emerald-700 p-4 text-white shadow-sm">
+                    <p className="text-xs uppercase tracking-wider text-emerald-100">EOD Net Revenue</p>
+                    <strong className="mt-1 block text-2xl font-bold tabular-nums">{money.format(dayNet)}</strong>
+                    <p className="mt-1 text-xs text-emerald-100/80">Realized revenue</p>
                   </div>
-                  <div className="rounded-lg bg-white p-2.5 border border-blue-200 shadow-sm">
-                    <span className="text-[10px] text-blue-800 font-bold block uppercase tracking-wider">{"\u{1F4B3}"} Card</span>
-                    <strong className="text-blue-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.card)}</strong>
-                    <span className="text-[9px] text-blue-700 block mt-0.5">POS Terminal</span>
+                  <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-wider text-amber-700">
+                      {isActualCogsUsedDaily ? 'Actual Gross Profit & Margin' : 'Est. Gross Profit & Margin'}
+                    </p>
+                    <strong className="mt-1 block text-2xl font-bold text-amber-950 tabular-nums">{money.format(grossProfitDaily)}</strong>
+                    <p className="mt-1 text-xs font-semibold text-emerald-700">{profitMarginPctDaily.toFixed(1)}% Margin</p>
                   </div>
-                  <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
-                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">{"\u{1F4CB}"} Account</span>
-                    <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.account)}</strong>
-                    <span className="text-[9px] text-amber-700 block mt-0.5">Receivable</span>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1 rounded-lg bg-emerald-800 p-2.5 text-white shadow-sm">
-                    <span className="text-[10px] text-emerald-200 font-bold block uppercase tracking-wider">{"\u{1F310}"} Digital Total</span>
-                    <strong className="text-white text-xs tabular-nums block mt-1">{money.format(totalDigitalTender)}</strong>
-                    <span className="text-[9px] text-emerald-200 block mt-0.5">Non-Cash Tenders</span>
+                  <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm">
+                    <p className="text-xs uppercase tracking-wider text-amber-700">Basket & Size Metrics</p>
+                    <strong className="mt-1 block text-2xl font-bold text-amber-950 tabular-nums">{money.format(avgOrderValue)}</strong>
+                    <p className="mt-1 text-xs text-amber-700">{avgUnitsPerOrder.toFixed(1)} items avg / basket</p>
                   </div>
                 </div>
-              </div>
 
-              <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-3">Cost Analysis & Processing Fee Forecast</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between border-b border-amber-100 pb-1">
-                    <span className="text-amber-800">Estimated Cost of Goods (COGS):</span>
-                    <strong className="tabular-nums">{money.format(estimatedCogs)}</strong>
+                {/* CONSOLIDATED TENDER RECONCILIATION CARD */}
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800">Register Cash Drawer vs Digital Tender</h3>
+                      <span className="text-xs font-bold text-amber-950">
+                        Total Realized: <span className="text-emerald-700">{money.format(totalConsolidatedTenderDaily)}</span>
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-sm">
+                      <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
+                        <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">{"\u{1F4B5}"} Cash</span>
+                        <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdownDaily.cash)}</strong>
+                        <span className="text-[9px] text-amber-700 block mt-0.5">Cash Drawer</span>
+                      </div>
+                      <div className="rounded-lg bg-white p-2.5 border border-sky-200 shadow-sm">
+                        <span className="text-[10px] text-sky-800 font-bold block uppercase tracking-wider">{"\u{1F4F2}"} GCash</span>
+                        <strong className="text-sky-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdownDaily.gcash)}</strong>
+                        <span className="text-[9px] text-sky-700 block mt-0.5">E-Wallet</span>
+                      </div>
+                      <div className="rounded-lg bg-white p-2.5 border border-blue-200 shadow-sm">
+                        <span className="text-[10px] text-blue-800 font-bold block uppercase tracking-wider">{"\u{1F4B3}"} Card</span>
+                        <strong className="text-blue-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdownDaily.card)}</strong>
+                        <span className="text-[9px] text-blue-700 block mt-0.5">POS Terminal</span>
+                      </div>
+                      <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
+                        <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">{"\u{1F4CB}"} Account</span>
+                        <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdownDaily.account)}</strong>
+                        <span className="text-[9px] text-amber-700 block mt-0.5">Receivable</span>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 rounded-lg bg-emerald-800 p-2.5 text-white shadow-sm">
+                        <span className="text-[10px] text-emerald-200 font-bold block uppercase tracking-wider">{"\u{1F310}"} Digital Total</span>
+                        <strong className="text-white text-xs tabular-nums block mt-1">{money.format(totalDigitalTenderDaily)}</strong>
+                        <span className="text-[9px] text-emerald-200 block mt-0.5">Non-Cash Tenders</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between border-b border-amber-100 pb-1">
-                    <span className="text-amber-800">Est. Merchant Card Fees (2.5%):</span>
-                    <strong className="tabular-nums text-red-700">-{money.format(estimatedCardFees)}</strong>
-                  </div>
-                  <div className="flex justify-between pt-1">
-                    <span className="font-semibold text-amber-950">Net Operating Realization:</span>
-                    <strong className="tabular-nums text-emerald-800">{money.format(grossProfit - estimatedCardFees)}</strong>
+
+                  <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-3">Cost Analysis & Processing Fee Forecast</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between border-b border-amber-100 pb-1">
+                        <span className="text-amber-800">
+                          {isActualCogsUsedDaily ? 'Cost of Goods Sold (Actual COGS):' : 'Estimated Cost of Goods (COGS):'}
+                        </span>
+                        <strong className="tabular-nums">{money.format(dailyCogs)}</strong>
+                      </div>
+                      <div className="flex justify-between border-b border-amber-100 pb-1">
+                        <span className="text-amber-800">Est. Merchant Card Fees (2.5%):</span>
+                        <strong className="tabular-nums text-red-700">-{money.format(estimatedCardFeesDaily)}</strong>
+                      </div>
+                      <div className="flex justify-between pt-1">
+                        <span className="font-semibold text-amber-950">Net Operating Realization:</span>
+                        <strong className="tabular-nums text-emerald-800">{money.format(grossProfitDaily - estimatedCardFeesDaily)}</strong>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </section>
+
+              {isAdmin && (
+                <section className="border-t border-amber-100 pt-6">
+                  <h2 className="font-bakery text-lg font-bold text-amber-950 mb-4">Executive Period Summaries (EOW / EOM / EOY)</h2>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <PeriodCard label="End of Week (EOW)" period={report.week} />
+                    <PeriodCard label="End of Month (EOM)" period={report.month} />
+                    <PeriodCard label="End of Year (EOY)" period={report.year} />
+                  </div>
+                </section>
+              )}
             </div>
-          </section>
-
-          {isAdmin && (
-            <section className="border-t border-amber-100 pt-6">
-              <h2 className="font-bakery text-lg font-bold text-amber-950 mb-4">Executive Period Summaries (EOW / EOM / EOY)</h2>
-              <div className="grid gap-4 md:grid-cols-3">
-                <PeriodCard label="End of Week (EOW)" period={report.week} />
-                <PeriodCard label="End of Month (EOM)" period={report.month} />
-                <PeriodCard label="End of Year (EOY)" period={report.year} />
-              </div>
-            </section>
           )}
-        </div>
+        </>
+      )}
+
+      {/* MONTHLY & 12-MONTH PERFORMANCE VIEW (OPTIONS A & B) */}
+      {viewMode === 'monthly' && (
+        <>
+          {monthlyError && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{monthlyError}</p>}
+
+          {monthlyLoading ? (
+            <p className="py-12 text-center text-amber-700">Loading monthly financial performance analytics...</p>
+          ) : (
+            monthlyReport && (
+              <div className="space-y-8">
+                {/* OPTION B: 12-MONTH PERFORMANCE COMPARISON MATRIX */}
+                <section>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h2 className="font-bakery text-lg font-bold text-amber-950">Option B {"\u2014"} 12-Month Performance Matrix ({selectedYear})</h2>
+                      <p className="text-xs text-amber-700">Click any month column to inspect its full interactive statement below.</p>
+                    </div>
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                      Annual Comparative View
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-amber-200/80 bg-white shadow-sm">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-amber-50/80 text-[11px] uppercase tracking-wider text-amber-900 border-b border-amber-200">
+                        <tr>
+                          <th className="py-3 px-3 font-bold sticky left-0 bg-amber-50 z-10">Financial Metric</th>
+                          {monthlyReport.months.map((m) => (
+                            <th
+                              key={m.month}
+                              onClick={() => setSelectedMonthNum(m.month)}
+                              className={`py-3 px-2 text-center cursor-pointer transition hover:bg-amber-100/80 ${
+                                selectedMonthNum === m.month ? 'bg-amber-200/80 font-bold text-amber-950 ring-2 ring-amber-500' : ''
+                              }`}
+                            >
+                              {MONTH_NAMES[m.month - 1]}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-amber-100 text-amber-950 font-medium">
+                        <tr>
+                          <td className="py-2.5 px-3 font-bold bg-white sticky left-0 shadow-sm">Gross Sales</td>
+                          {monthlyReport.months.map((m) => (
+                            <td
+                              key={m.month}
+                              onClick={() => setSelectedMonthNum(m.month)}
+                              className={`py-2.5 px-2 text-center cursor-pointer tabular-nums ${
+                                selectedMonthNum === m.month ? 'bg-amber-50/80 font-bold' : ''
+                              }`}
+                            >
+                              {money.format(m.grossSales)}
+                            </td>
+                          ))}
+                        </tr>
+                        <tr>
+                          <td className="py-2.5 px-3 font-bold bg-white sticky left-0 shadow-sm text-amber-800">Actual COGS</td>
+                          {monthlyReport.months.map((m) => (
+                            <td
+                              key={m.month}
+                              onClick={() => setSelectedMonthNum(m.month)}
+                              className={`py-2.5 px-2 text-center cursor-pointer tabular-nums text-amber-800 ${
+                                selectedMonthNum === m.month ? 'bg-amber-50/80 font-bold' : ''
+                              }`}
+                            >
+                              -{money.format(m.cogs)}
+                            </td>
+                          ))}
+                        </tr>
+                        <tr className="bg-emerald-50/30">
+                          <td className="py-2.5 px-3 font-bold bg-emerald-50/50 sticky left-0 shadow-sm text-emerald-900">Gross Profit</td>
+                          {monthlyReport.months.map((m) => (
+                            <td
+                              key={m.month}
+                              onClick={() => setSelectedMonthNum(m.month)}
+                              className={`py-2.5 px-2 text-center cursor-pointer tabular-nums font-semibold text-emerald-900 ${
+                                selectedMonthNum === m.month ? 'bg-emerald-100/60 font-bold' : ''
+                              }`}
+                            >
+                              {money.format(m.grossProfit)}
+                            </td>
+                          ))}
+                        </tr>
+                        <tr>
+                          <td className="py-2.5 px-3 font-bold bg-white sticky left-0 shadow-sm text-emerald-700">Gross Margin %</td>
+                          {monthlyReport.months.map((m) => (
+                            <td
+                              key={m.month}
+                              onClick={() => setSelectedMonthNum(m.month)}
+                              className={`py-2.5 px-2 text-center cursor-pointer tabular-nums font-bold text-emerald-700 ${
+                                selectedMonthNum === m.month ? 'bg-amber-50/80' : ''
+                              }`}
+                            >
+                              {m.profitMarginPct.toFixed(1)}%
+                            </td>
+                          ))}
+                        </tr>
+                        <tr>
+                          <td className="py-2.5 px-3 font-bold bg-white sticky left-0 shadow-sm">Completed Orders</td>
+                          {monthlyReport.months.map((m) => (
+                            <td
+                              key={m.month}
+                              onClick={() => setSelectedMonthNum(m.month)}
+                              className={`py-2.5 px-2 text-center cursor-pointer tabular-nums ${
+                                selectedMonthNum === m.month ? 'bg-amber-50/80 font-bold' : ''
+                              }`}
+                            >
+                              {m.orderCount}
+                            </td>
+                          ))}
+                        </tr>
+                        <tr>
+                          <td className="py-2.5 px-3 font-bold bg-white sticky left-0 shadow-sm">Average Order Value (AOV)</td>
+                          {monthlyReport.months.map((m) => (
+                            <td
+                              key={m.month}
+                              onClick={() => setSelectedMonthNum(m.month)}
+                              className={`py-2.5 px-2 text-center cursor-pointer tabular-nums ${
+                                selectedMonthNum === m.month ? 'bg-amber-50/80 font-bold' : ''
+                              }`}
+                            >
+                              {money.format(m.aov)}
+                            </td>
+                          ))}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                {/* OPTION A: INTERACTIVE SELECTED MONTH FINANCIAL STATEMENT */}
+                <section className="border-t border-amber-200/80 pt-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div>
+                      <h2 className="font-bakery text-lg font-bold text-amber-950">
+                        Option A {"\u2014"} Monthly Audit Statement ({FULL_MONTH_NAMES[selectedMonthNum - 1]} {selectedYear})
+                      </h2>
+                      <p className="text-xs text-amber-700">Detailed month-specific audit using actual inventory product costs.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-amber-900">Select Month:</span>
+                      <select
+                        value={selectedMonthNum}
+                        onChange={(e) => setSelectedMonthNum(Number(e.target.value))}
+                        className="rounded-lg border border-amber-200/80 bg-white px-3 py-1.5 text-xs font-bold text-amber-950 outline-none focus:border-amber-500 shadow-sm"
+                      >
+                        {FULL_MONTH_NAMES.map((name, idx) => (
+                          <option key={idx + 1} value={idx + 1}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-xl border border-amber-200/80 bg-amber-950 p-4 text-white shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-wider text-amber-200/80">Monthly Gross Revenue</p>
+                        {prevMonthGross > 0 && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              momGrowthPct >= 0 ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+                            }`}
+                          >
+                            {momGrowthPct >= 0 ? '+' : ''}
+                            {momGrowthPct.toFixed(1)}% MoM
+                          </span>
+                        )}
+                      </div>
+                      <strong className="mt-2 block text-2xl font-bold tabular-nums">{money.format(currentMonthMetric.grossSales)}</strong>
+                      <p className="mt-1 text-xs text-amber-200/70">{currentMonthMetric.orderCount} total orders completed</p>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-200/80 bg-amber-800 p-4 text-white shadow-sm">
+                      <p className="text-xs uppercase tracking-wider text-amber-100">Actual COGS (Inventory Cost)</p>
+                      <strong className="mt-2 block text-2xl font-bold tabular-nums">{money.format(currentMonthMetric.cogs)}</strong>
+                      <p className="mt-1 text-xs text-amber-100/80">Direct wholesale cost of stock sold</p>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-200/80 bg-emerald-700 p-4 text-white shadow-sm">
+                      <p className="text-xs uppercase tracking-wider text-emerald-100">Gross Profit & Real Margin</p>
+                      <strong className="mt-2 block text-2xl font-bold tabular-nums">{money.format(currentMonthMetric.grossProfit)}</strong>
+                      <p className="mt-1 text-xs font-semibold text-emerald-100">{currentMonthMetric.profitMarginPct.toFixed(1)}% Real Profit Margin</p>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-4 shadow-sm">
+                      <p className="text-xs uppercase tracking-wider text-amber-700">Basket & Size Metrics</p>
+                      <strong className="mt-2 block text-2xl font-bold text-amber-950 tabular-nums">{money.format(currentMonthMetric.aov)}</strong>
+                      <p className="mt-1 text-xs text-amber-700">{currentMonthMetric.avgUnitsPerOrder.toFixed(1)} items avg / basket</p>
+                    </div>
+                  </div>
+
+                  {/* MONTHLY TENDER RECONCILIATION & FEE FORECAST */}
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                          Monthly Tender Breakdown ({FULL_MONTH_NAMES[selectedMonthNum - 1]})
+                        </h3>
+                        <span className="text-xs font-bold text-amber-950">
+                          Total Realized: <span className="text-emerald-700">{money.format(totalConsolidatedTenderMonthly)}</span>
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-sm">
+                        <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
+                          <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">{"\u{1F4B5}"} Cash</span>
+                          <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(currentMonthMetric.cashSales)}</strong>
+                          <span className="text-[9px] text-amber-700 block mt-0.5">Cash Drawer</span>
+                        </div>
+                        <div className="rounded-lg bg-white p-2.5 border border-sky-200 shadow-sm">
+                          <span className="text-[10px] text-sky-800 font-bold block uppercase tracking-wider">{"\u{1F4F2}"} GCash</span>
+                          <strong className="text-sky-950 text-xs tabular-nums block mt-1">{money.format(currentMonthMetric.gcashSales)}</strong>
+                          <span className="text-[9px] text-sky-700 block mt-0.5">E-Wallet</span>
+                        </div>
+                        <div className="rounded-lg bg-white p-2.5 border border-blue-200 shadow-sm">
+                          <span className="text-[10px] text-blue-800 font-bold block uppercase tracking-wider">{"\u{1F4B3}"} Card</span>
+                          <strong className="text-blue-950 text-xs tabular-nums block mt-1">{money.format(currentMonthMetric.cardSales)}</strong>
+                          <span className="text-[9px] text-blue-700 block mt-0.5">POS Terminal</span>
+                        </div>
+                        <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
+                          <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">{"\u{1F4CB}"} Account</span>
+                          <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(currentMonthMetric.accountSales)}</strong>
+                          <span className="text-[9px] text-amber-700 block mt-0.5">Receivable</span>
+                        </div>
+                        <div className="col-span-2 sm:col-span-1 rounded-lg bg-emerald-800 p-2.5 text-white shadow-sm">
+                          <span className="text-[10px] text-emerald-200 font-bold block uppercase tracking-wider">{"\u{1F310}"} Digital Total</span>
+                          <strong className="text-white text-xs tabular-nums block mt-1">{money.format(totalDigitalTenderMonthly)}</strong>
+                          <span className="text-[9px] text-emerald-200 block mt-0.5">Non-Cash Tenders</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-200/60 bg-amber-50/30 p-5">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-3">
+                        Monthly Overhead & Card Merchant Fees
+                      </h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between border-b border-amber-100 pb-1">
+                          <span className="text-amber-800">Cost of Goods Sold (Actual COGS):</span>
+                          <strong className="tabular-nums">{money.format(currentMonthMetric.cogs)}</strong>
+                        </div>
+                        <div className="flex justify-between border-b border-amber-100 pb-1">
+                          <span className="text-amber-800">Est. Merchant Card Fees (2.5%):</span>
+                          <strong className="tabular-nums text-red-700">-{money.format(currentMonthMetric.estimatedCardFees)}</strong>
+                        </div>
+                        <div className="flex justify-between pt-1">
+                          <span className="font-semibold text-amber-950">Net Monthly Operating Realization:</span>
+                          <strong className="tabular-nums text-emerald-800">
+                            {money.format(currentMonthMetric.grossProfit - currentMonthMetric.estimatedCardFees)}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )
+          )}
+        </>
       )}
     </Panel>
   );
