@@ -726,7 +726,7 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
 
     const start = `${date}T00:00:00+08:00`;
     const result = await pool.query(
-      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost" 
+      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType" 
        FROM order_items oi 
        JOIN orders o ON o.order_id=oi.order_id 
        JOIN product_variants v ON v.variant_id=oi.variant_id 
@@ -744,7 +744,8 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
       cashReceived: Number(row.cashReceived) || 0,
       changeDue: Number(row.changeDue) || 0,
       totalAmount: Number(row.totalAmount) || 0,
-      initialCost: Number(row.initialCost) || 0
+      initialCost: Number(row.initialCost) || 0,
+      orderType: row.orderType || 'retail'
     }));
     
     const summary = async (periodStart, periodEnd) => {

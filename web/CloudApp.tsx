@@ -913,8 +913,9 @@ function BiView(): JSX.Element {
   }, [selectedDate]);
 
   const productSalesMap = new Map<string, { sku: string; name: string; quantity: number; amount: number }>();
-  let retailGross = 0;
-  let commercialGross = 0;
+  let walkInGross = 0;
+  let returnClientGross = 0;
+  let wholesaleGross = 0;
 
   (report?.items || []).forEach((item) => {
     const existing = productSalesMap.get(item.sku) || { sku: item.sku, name: item.itemName, quantity: 0, amount: 0 };
@@ -924,10 +925,16 @@ function BiView(): JSX.Element {
     existing.amount += amt;
     productSalesMap.set(item.sku, existing);
 
-    if (item.customerName && item.customerName !== 'Walk-in') {
-      commercialGross += amt;
+    const custName = String(item.customerName || '').trim();
+    const isWalkIn = !custName || custName === 'Walk-in' || custName.endsWith('- Walk-in');
+    const isCommercial = (item as any).orderType === 'commercial';
+
+    if (isWalkIn) {
+      walkInGross += amt;
+    } else if (isCommercial) {
+      wholesaleGross += amt;
     } else {
-      retailGross += amt;
+      returnClientGross += amt;
     }
   });
 
@@ -947,9 +954,10 @@ function BiView(): JSX.Element {
     .filter((inv) => inv.soldQty < slowThreshold)
     .sort((a, b) => Number(b.quantityOnHand) - Number(a.quantityOnHand));
 
-  const totalSegmentGross = retailGross + commercialGross;
-  const retailPct = totalSegmentGross > 0 ? (retailGross / totalSegmentGross) * 100 : 0;
-  const commercialPct = totalSegmentGross > 0 ? (commercialGross / totalSegmentGross) * 100 : 0;
+  const totalSegmentGross = walkInGross + returnClientGross + wholesaleGross;
+  const walkInPct = totalSegmentGross > 0 ? (walkInGross / totalSegmentGross) * 100 : 0;
+  const returnClientPct = totalSegmentGross > 0 ? (returnClientGross / totalSegmentGross) * 100 : 0;
+  const wholesalePct = totalSegmentGross > 0 ? (wholesaleGross / totalSegmentGross) * 100 : 0;
 
   return (
     <Panel title="Business Intelligence & Marketing Analytics">
@@ -1056,24 +1064,35 @@ function BiView(): JSX.Element {
           <div className="grid gap-6 md:grid-cols-2">
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
               <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">{"\u{1F3AF}"} Customer Channel Revenue Split</h3>
-              <p className="text-xs text-amber-700 mb-4">Walk-in retail customers vs. Commercial wholesale account volume.</p>
+              <p className="text-xs text-amber-700 mb-4">Walk-in retail vs. Return CRM clients vs. Wholesale accounts.</p>
               <div className="space-y-3">
                 <div>
                   <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span>Retail Walk-in Customers</span>
-                    <span>{money.format(retailGross)} ({retailPct.toFixed(1)}%)</span>
+                    <span>{"\u{1F464}"} Walk-in Retail (New Clients)</span>
+                    <span>{money.format(walkInGross)} ({walkInPct.toFixed(1)}%)</span>
                   </div>
-                  <div className="h-3 w-full rounded-full bg-amber-100 overflow-hidden">
-                    <div className="h-full bg-amber-700" style={{ width: `${retailPct}%` }} />
+                  <div className="h-2.5 w-full rounded-full bg-amber-100 overflow-hidden">
+                    <div className="h-full bg-amber-700" style={{ width: `${walkInPct}%` }} />
                   </div>
                 </div>
+
                 <div>
                   <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span>Wholesale & Commercial Accounts</span>
-                    <span>{money.format(commercialGross)} ({commercialPct.toFixed(1)}%)</span>
+                    <span>{"\u{1F501}"} Return CRM Clients</span>
+                    <span>{money.format(returnClientGross)} ({returnClientPct.toFixed(1)}%)</span>
                   </div>
-                  <div className="h-3 w-full rounded-full bg-amber-100 overflow-hidden">
-                    <div className="h-full bg-emerald-600" style={{ width: `${commercialPct}%` }} />
+                  <div className="h-2.5 w-full rounded-full bg-amber-100 overflow-hidden">
+                    <div className="h-full bg-emerald-600" style={{ width: `${returnClientPct}%` }} />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span>{"\u{1F3E2}"} Wholesale & Commercial Accounts</span>
+                    <span>{money.format(wholesaleGross)} ({wholesalePct.toFixed(1)}%)</span>
+                  </div>
+                  <div className="h-2.5 w-full rounded-full bg-amber-100 overflow-hidden">
+                    <div className="h-full bg-blue-600" style={{ width: `${wholesalePct}%` }} />
                   </div>
                 </div>
               </div>
