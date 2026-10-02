@@ -150,7 +150,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     if (!report) return;
     const items = report.items || [];
     const csvData = [
-      ['Bake Alley Cloud POS â€” End of Day Financial Audit Statement'],
+      ['Bake Alley Cloud POS \u2014 End of Day Financial Audit Statement'],
       ['Audit Date', selectedDate],
       ['Generated Date/Time', new Date().toLocaleString()],
       [''],
@@ -221,7 +221,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           </style>
         </head>
         <body>
-          <h1>ðŸž Bake Alley Cloud POS â€” End of Day Financial Audit</h1>
+          <h1>\u{1F35E} Bake Alley Cloud POS \u2014 End of Day Financial Audit</h1>
           <div class="header-info">
             <div><strong>Audit Date:</strong> ${selectedDate}</div>
             <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
@@ -234,12 +234,12 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           </div>
           <h3>Payment Method Consolidation & Tender Breakdown</h3>
           <p style="font-size: 13px;">
-            <strong>ðŸ’µ Cash Drawer:</strong> PHP ${paymentBreakdown.cash.toFixed(2)} | 
-            <strong>ðŸ“² GCash E-Wallet:</strong> PHP ${paymentBreakdown.gcash.toFixed(2)} | 
-            <strong>ðŸ’³ Card / POS:</strong> PHP ${paymentBreakdown.card.toFixed(2)} | 
-            <strong>ðŸ“‹ Commercial Account:</strong> PHP ${paymentBreakdown.account.toFixed(2)}<br>
-            <strong>ðŸŒ Total Digital Tenders:</strong> PHP ${totalDigitalTender.toFixed(2)} | 
-            <strong>ðŸ’° Total Consolidated Realization:</strong> PHP ${totalConsolidatedTender.toFixed(2)}
+            <strong>{"\u{1F4B5}"} Cash Drawer:</strong> PHP ${paymentBreakdown.cash.toFixed(2)} | 
+            <strong>{"\u{1F4F2}"} GCash E-Wallet:</strong> PHP ${paymentBreakdown.gcash.toFixed(2)} | 
+            <strong>{"\u{1F4B3}"} Card / POS:</strong> PHP ${paymentBreakdown.card.toFixed(2)} | 
+            <strong>{"\u{1F4CB}"} Commercial Account:</strong> PHP ${paymentBreakdown.account.toFixed(2)}<br>
+            <strong>{"\u{1F310}"} Total Digital Tenders:</strong> PHP ${totalDigitalTender.toFixed(2)} | 
+            <strong>{"\u{1F4B0}"} Total Consolidated Realization:</strong> PHP ${totalConsolidatedTender.toFixed(2)}
           </p>
           <h3>Line Item Transaction Audit</h3>
           <table>
@@ -289,7 +289,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
             disabled={loading || !report}
             className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-900 shadow-sm hover:bg-amber-100 disabled:opacity-50"
           >
-            ðŸ“¥ Export CSV
+            {"\u{1F4E5}"} Export CSV
           </button>
           <button
             type="button"
@@ -297,7 +297,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
             disabled={loading || !report}
             className="rounded-lg bg-amber-800 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-900 disabled:opacity-50"
           >
-            ðŸ–¨ï¸ Print / Save PDF
+            {"\u{1F5A8}"} Print / Save PDF
           </button>
           <ActionButton disabled={loading} onClick={() => void refresh()}>{loading ? 'Generating...' : 'Refresh'}</ActionButton>
         </div>
@@ -309,7 +309,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
         <div className="space-y-8">
           <section>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit â€” {selectedDate}</h2>
+              <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit {"\u2014"} {selectedDate}</h2>
               <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Verified EOD Statement</span>
             </div>
 
@@ -348,27 +348,27 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-sm">
                   <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
-                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">ðŸ’µ Cash</span>
+                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">{"\u{1F4B5}"} Cash</span>
                     <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.cash)}</strong>
                     <span className="text-[9px] text-amber-700 block mt-0.5">Cash Drawer</span>
                   </div>
                   <div className="rounded-lg bg-white p-2.5 border border-sky-200 shadow-sm">
-                    <span className="text-[10px] text-sky-800 font-bold block uppercase tracking-wider">ðŸ“² GCash</span>
+                    <span className="text-[10px] text-sky-800 font-bold block uppercase tracking-wider">{"\u{1F4F2}"} GCash</span>
                     <strong className="text-sky-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.gcash)}</strong>
                     <span className="text-[9px] text-sky-700 block mt-0.5">E-Wallet</span>
                   </div>
                   <div className="rounded-lg bg-white p-2.5 border border-blue-200 shadow-sm">
-                    <span className="text-[10px] text-blue-800 font-bold block uppercase tracking-wider">ðŸ’³ Card</span>
+                    <span className="text-[10px] text-blue-800 font-bold block uppercase tracking-wider">{"\u{1F4B3}"} Card</span>
                     <strong className="text-blue-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.card)}</strong>
                     <span className="text-[9px] text-blue-700 block mt-0.5">POS Terminal</span>
                   </div>
                   <div className="rounded-lg bg-white p-2.5 border border-amber-200/60 shadow-sm">
-                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">ðŸ“‹ Account</span>
+                    <span className="text-[10px] text-amber-800 font-bold block uppercase tracking-wider">{"\u{1F4CB}"} Account</span>
                     <strong className="text-amber-950 text-xs tabular-nums block mt-1">{money.format(paymentBreakdown.account)}</strong>
                     <span className="text-[9px] text-amber-700 block mt-0.5">Receivable</span>
                   </div>
                   <div className="col-span-2 sm:col-span-1 rounded-lg bg-emerald-800 p-2.5 text-white shadow-sm">
-                    <span className="text-[10px] text-emerald-200 font-bold block uppercase tracking-wider">ðŸŒ Digital Total</span>
+                    <span className="text-[10px] text-emerald-200 font-bold block uppercase tracking-wider">{"\u{1F310}"} Digital Total</span>
                     <strong className="text-white text-xs tabular-nums block mt-1">{money.format(totalDigitalTender)}</strong>
                     <span className="text-[9px] text-emerald-200 block mt-0.5">Non-Cash Tenders</span>
                   </div>
@@ -492,7 +492,7 @@ function BiView(): JSX.Element {
               timeframe === 'monthly' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'
             }`}
           >
-            ðŸ—“ï¸ Monthly (30 Days)
+            {"\u{1F5D3}"} Monthly (30 Days)
           </button>
           <button
             type="button"
@@ -501,7 +501,7 @@ function BiView(): JSX.Element {
               timeframe === 'yearly' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'
             }`}
           >
-            ðŸ“… Yearly (365 Days)
+            {"\u{1F4C5}"} Yearly (365 Days)
           </button>
         </div>
       </div>
@@ -514,11 +514,11 @@ function BiView(): JSX.Element {
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">ðŸ”¥</span>
+                  <span className="text-xl">{"\u{1F525}"}</span>
                   <h2 className="font-bakery text-base font-bold text-amber-950">Fast-Moving Stock</h2>
                 </div>
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900">
-                  â‰¥ {fastThreshold} sold / {timeframe}
+                  {"\u2265"} {fastThreshold} sold / {timeframe}
                 </span>
               </div>
               <p className="text-xs text-amber-700 mb-4">High-turnover products driving primary cash flow.</p>
@@ -548,7 +548,7 @@ function BiView(): JSX.Element {
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">ðŸ’¤</span>
+                  <span className="text-xl">{"\u{1F4A4}"}</span>
                   <h2 className="font-bakery text-base font-bold text-amber-950">Slow-Moving Stock</h2>
                 </div>
                 <span className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-900">
@@ -581,7 +581,7 @@ function BiView(): JSX.Element {
 
           <div className="grid gap-6 md:grid-cols-2">
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
-              <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">ðŸŽ¯ Customer Channel Revenue Split</h3>
+              <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">{"\u{1F3AF}"} Customer Channel Revenue Split</h3>
               <p className="text-xs text-amber-700 mb-4">Walk-in retail customers vs. Commercial wholesale account volume.</p>
               <div className="space-y-3">
                 <div>
@@ -606,10 +606,10 @@ function BiView(): JSX.Element {
             </div>
 
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
-              <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">â° Store Purchasing Peak Hours</h3>
+              <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">{"\u23F0"} Store Purchasing Peak Hours</h3>
               <p className="text-xs text-amber-700 mb-3">Optimal staffing and baking batch delivery recommendation.</p>
               <div className="rounded-lg bg-amber-50 p-4 border border-amber-200/60 text-sm">
-                <p className="font-semibold text-amber-950 mb-1">ðŸ’¡ Marketing & Staffing Actionable Advice:</p>
+                <p className="font-semibold text-amber-950 mb-1">{"\u{1F4A1}"} Marketing & Staffing Actionable Advice:</p>
                 <p className="text-xs text-amber-800 leading-relaxed">
                   Peak store traffic occurs around <strong>9:00 AM - 11:00 AM</strong> and <strong>4:00 PM - 6:00 PM</strong>. Schedule fresh baking batches 30 minutes prior to peak hours to maximize fresh bread aroma and impulse cross-sells.
                 </p>
@@ -752,13 +752,13 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               <tbody>
                 {groupedTransactions.map((tx) => {
                   const methodStr = String(tx.paymentMethod || 'cash').toLowerCase();
-                  let paymentBadge = <span className="font-semibold text-amber-950">ðŸ’µ Cash</span>;
+                  let paymentBadge = <span className="font-semibold text-amber-950">{"\u{1F4B5}"} Cash</span>;
                   if (methodStr.includes('gcash')) {
-                    paymentBadge = <span className="font-bold text-sky-700">ðŸ“² GCash</span>;
+                    paymentBadge = <span className="font-bold text-sky-700">{"\u{1F4F2}"} GCash</span>;
                   } else if (methodStr.includes('card')) {
-                    paymentBadge = <span className="font-bold text-blue-700">ðŸ’³ Card</span>;
+                    paymentBadge = <span className="font-bold text-blue-700">{"\u{1F4B3}"} Card</span>;
                   } else if (methodStr.includes('account')) {
-                    paymentBadge = <span className="font-semibold text-amber-900">ðŸ“‹ Account</span>;
+                    paymentBadge = <span className="font-semibold text-amber-900">{"\u{1F4CB}"} Account</span>;
                   }
 
                   const isExpanded = expandedOrderId === tx.orderId;
@@ -789,7 +789,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                               toggleExpand(tx.orderId);
                             }}
                           >
-                            {isExpanded ? 'â–² Hide' : 'â–¼ View Items'}
+                            {isExpanded ? '\u25B2 Hide' : '\u25BC View Items'}
                           </button>
                         </td>
                       </tr>
@@ -800,7 +800,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                             <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
                               <div className="flex flex-wrap items-center justify-between border-b border-amber-100 pb-2 mb-3">
                                 <h4 className="font-bold text-amber-950 text-sm">
-                                  Transaction Receipt â€” {new Date(tx.soldAt).toLocaleTimeString()}
+                                  Transaction Receipt {"\u2014"} {new Date(tx.soldAt).toLocaleTimeString()}
                                 </h4>
                                 <span className="text-xs font-mono text-amber-700">Order ID: {tx.orderId}</span>
                               </div>
@@ -1100,7 +1100,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               filterStatus === 'out' ? 'bg-red-700 text-white shadow-sm ring-2 ring-red-400' : 'bg-red-100 text-red-800 hover:bg-red-200'
             }`}
           >
-            {outOfStockCount} Out of Stock {filterStatus === 'out' && 'âœ“'}
+            {outOfStockCount} Out of Stock {filterStatus === 'out' && '\u2713'}
           </button>
           <button
             type="button"
@@ -1109,7 +1109,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               filterStatus === 'low' ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-400' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
             }`}
           >
-            {lowStockCount} Low Stock Alert {filterStatus === 'low' && 'âœ“'}
+            {lowStockCount} Low Stock Alert {filterStatus === 'low' && '\u2713'}
           </button>
         </div>
         <div className="flex gap-2">
@@ -1235,7 +1235,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-950">Retail Price (â‚±)</label>
+                <label className="block text-sm font-semibold text-amber-950">Retail Price (PHP)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1246,7 +1246,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-950">Initial Cost (â‚±)</label>
+                <label className="block text-sm font-semibold text-amber-950">Initial Cost (PHP)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1337,7 +1337,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-950">Retail Price (â‚±)</label>
+                <label className="block text-sm font-semibold text-amber-950">Retail Price (PHP)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1348,7 +1348,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-amber-950">Initial Cost (â‚±)</label>
+                <label className="block text-sm font-semibold text-amber-950">Initial Cost (PHP)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1487,8 +1487,8 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
                 <tr className="border-b last:border-0" key={customer.customerId}>
                   <td className="py-3 font-semibold text-amber-950">{parts.at(-1)}</td>
                   <td>{parts.length > 1 ? parts : 'Walk-in'}</td>
-                  <td>{customer.email || 'â€”'}</td>
-                  <td>{customer.phone || 'â€”'}</td>
+                  <td>{customer.email || '\u2014'}</td>
+                  <td>{customer.phone || '\u2014'}</td>
                   <td>{customer.tierId === retailTierId ? 'Retail' : 'Wholesale'}</td>
                   <td className="text-right font-bold text-amber-950 tabular-nums">{money.format(lifetimeAmount)}</td>
                   <td className="text-right">
@@ -1690,7 +1690,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
                   return (
                     <tr className="border-t border-amber-100/60" key={shift.shiftId}>
                       <td className="py-3">{shift.displayName}</td>
-                      <td className="py-3 capitalize">{shiftEmployee?.role ?? 'â€”'}</td>
+                      <td className="py-3 capitalize">{shiftEmployee?.role ?? '\u2014'}</td>
                       <td className="py-3">{new Date(shift.clockIn).toLocaleTimeString()}</td>
                       <td className="py-3">{shift.clockOut ? new Date(shift.clockOut).toLocaleTimeString() : 'Still clocked in'}</td>
                     </tr>
@@ -1872,7 +1872,7 @@ export function CloudApp(): JSX.Element {
             <img alt="Bake Alley logo" className="h-9 w-9 rounded-full border border-amber-200/80 object-cover shadow-sm" src={logoUrl} />
             <strong className="font-bakery text-lg text-amber-950">Bake Alley Cloud POS</strong>
             <span className="ml-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
-              {session.user.displayName} Â· {session.user.role}
+              {session.user.displayName} {"\u00B7"} {session.user.role}
             </span>
           </div>
           <button
