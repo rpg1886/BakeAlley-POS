@@ -25,7 +25,12 @@ export function LoginScreen({ onLogin }: LoginScreenProps): JSX.Element {
         try {
             await onLogin(username, password);
         } catch (loginError) {
-            setError(loginError instanceof Error ? loginError.message : 'Unable to sign in.');
+            const rawMsg = loginError instanceof Error ? loginError.message : 'Unable to sign in.';
+            if (rawMsg.includes('Failed to fetch') || rawMsg.includes('NetworkError')) {
+                setError('Unable to connect to POS cloud server. If the server was sleeping, please wait 10-15 seconds and try signing in again.');
+            } else {
+                setError(rawMsg);
+            }
         } finally {
             setBusy(false);
         }
@@ -64,7 +69,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps): JSX.Element {
                     </div>
                 </div>
 
-                {/* Input Fields Section (Shifted inward with px-3 and pl-1) */}
+                {/* Input Fields Section */}
                 <div className="mt-6 space-y-4 px-3">
                     <label className="block text-left text-sm font-semibold text-amber-900 pl-1">
                         Username
@@ -96,7 +101,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps): JSX.Element {
                     </div>
                 )}
 
-                {/* Button Container (Matching px-3 inset) */}
+                {/* Button Container - High Contrast Disabled Styles */}
                 <div className="px-3 mt-6">
                     <button 
                         className="w-full rounded-lg border border-amber-800 bg-amber-700 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:border-amber-300/80 disabled:bg-amber-200 disabled:text-amber-900/60" 
