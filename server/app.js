@@ -505,21 +505,27 @@ app.post('/api/v1/employees/clock-in', auth.requireSession, async (request, resp
     const openingFloat = Number.isFinite(rawFloat) && rawFloat >= 0 ? rawFloat : 1500.00;
     const notes = typeof payload.notes === 'string' ? payload.notes.trim() : null;
 
+    const openShiftCheck = await pool.query(
+      `SELECT shift_id FROM employee_shifts WHERE user_id = $1 AND clock_out IS NULL LIMIT 1`,
+      [request.user.userId]
+    );
+
+    if (openShiftCheck.rowCount > 0) {
+      logger.warn('Clock-in failed - shift already open', { userId: request.user.userId });
+      return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN', message: 'You already have an active open shift.' });
+    }
+
     const result = await pool.query(
       `INSERT INTO employee_shifts (shift_id, user_id, clock_in, opening_float, notes) 
-       SELECT gen_random_uuid(), $1, now(), $2, $3 
-       WHERE NOT EXISTS (SELECT 1 FROM employee_shifts WHERE user_id = $1 AND clock_out IS NULL) 
+       VALUES (gen_random_uuid(), $1, now(), $2, $3) 
        RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", notes`, 
       [request.user.userId, openingFloat, notes]
     );
-    if (!result.rowCount) {
-      logger.warn('Clock-in failed - shift already open', { userId: request.user.userId });
-      return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN' });
-    }
+
     logger.info('Employee clocked in with opening float', { userId: request.user.userId, openingFloat });
     response.status(201).json(result.rows[0]);
   } catch (error) { 
-    logger.error('Clock-in failed', { error: error.message });
+    logger.error('Clock-in failed', { error: error.message, stack: error.stack });
     next(error); 
   }
 });
@@ -635,7 +641,6 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
 // Employee Shifts List Endpoint (Strict YYYY-MM-DD Date Filter)
 app.get('/api/v1/employees/shifts', auth.requireSession, async (request, response, next) => {
   try {
-    await autoCloseOvernightShifts();
     const rawDate = String(request.query.date ?? '').trim();
     const match = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
     const date = match ? match[1] : null;
@@ -649,14 +654,7 @@ app.get('/api/v1/employees/shifts', auth.requireSession, async (request, respons
     }
 
     const result = await pool.query(
-      `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", u.role AS "role", 
-              s.clock_in AS "clockIn", s.clock_out AS "clockOut", 
-              COALESCE(s.opening_float, 1500.00)::numeric AS "openingFloat", 
-              s.closing_cash_count AS "closingCashCount", 
-              s.expected_cash AS "expectedCash", 
-              s.cash_discrepancy AS "cashDiscrepancy", 
-              COALESCE(s.status, CASE WHEN s.clock_out IS NULL THEN 'OPEN' ELSE 'CLOSED' END) AS status, 
-              s.notes 
+      `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", u.role AS "role", s.clock_in AS "clockIn", s.clock_out AS "clockOut", COALESCE(s.opening_float, 1500.00)::numeric AS "openingFloat", s.closing_cash_count AS "closingCashCount", s.expected_cash AS "expectedCash", s.cash_discrepancy AS "cashDiscrepancy", s.notes 
        FROM employee_shifts s 
        JOIN app_users u ON u.user_id=s.user_id 
        WHERE ($1 = 'admin' OR s.user_id = $2) ${dateFilter} 
@@ -679,6 +677,18 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   }
 
   const validatedPayload = validation.data;
+
+  if (request.user.role !== 'admin') {
+    const shiftCheck = await pool.query(
+      `SELECT shift_id FROM employee_shifts WHERE user_id = $1 AND clock_out IS NULL LIMIT 1`,
+      [request.user.userId]
+    );
+    if (!shiftCheck.rowCount) {
+      logger.warn('Order rejected - cashier has no active open shift', { userId: request.user.userId });
+      return response.status(403).json({ error: 'SHIFT_REQUIRED', message: 'You must clock in and set starting cash float before taking orders.' });
+    }
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -981,6 +991,7 @@ async function ensureShiftColumns() {
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS closing_cash_count NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS expected_cash NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS cash_discrepancy NUMERIC(12,2);
+      ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'OPEN';
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS notes TEXT;
     `);
     logger.info('Employee shift audit columns ensured');

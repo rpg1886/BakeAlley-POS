@@ -743,18 +743,17 @@ export function CheckoutScreen({
             
             <div className="mt-6 flex gap-3">
               <button
+                className="flex-1 rounded-lg border border-amber-300/80 bg-amber-50 px-4 py-3 font-semibold text-amber-900 transition hover:bg-amber-100 shadow-sm"
                 type="button"
-                className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-900 hover:bg-amber-100 transition shadow-sm"
                 onClick={() => {
                   setPaymentError(null);
                   setPaymentOpen(false);
                 }}
-                disabled={busy}
               >
-                {"\u21A9\uFE0F"} Back to Cart
+                {\"\\u21A9\\uFE0F\"} Back to Cart
               </button>
               <button
-                className="flex-1 rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition shadow-sm"
+                className="flex-1 rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50 shadow-sm"
                 disabled={busy || (paymentMethod === 'cash' && changeDue < 0)}
                 type="button"
                 onClick={() => void submitOrder()}
