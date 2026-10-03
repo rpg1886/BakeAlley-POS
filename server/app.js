@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -517,7 +518,7 @@ app.post('/api/v1/employees/clock-in', auth.requireSession, async (request, resp
     if (openShiftCheck.rowCount > 0) {
       const currentStatus = openShiftCheck.rows[0].status;
       if (currentStatus === 'PENDING_PHYSICAL_COUNT') {
-        return response.status(409).json({ error: 'PENDING_SHIFT_COUNT_REQUIRED', message: "You have a pending cash count for yesterday\\'s shift." });
+        return response.status(409).json({ error: 'PENDING_SHIFT_COUNT_REQUIRED', message: "You have a pending cash count for yesterday's shift." });
       }
       return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN' });
     }
