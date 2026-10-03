@@ -741,14 +741,27 @@ export function CheckoutScreen({
 
             {paymentError && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{paymentError}</p>}
             
-            <button
-              className="mt-6 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50 shadow-sm"
-              disabled={busy || (paymentMethod === 'cash' && changeDue < 0)}
-              type="button"
-              onClick={() => void submitOrder()}
-            >
-              {busy ? 'Saving...' : 'Confirm payment'}
-            </button>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-900 hover:bg-amber-100 transition shadow-sm"
+                onClick={() => {
+                  setPaymentError(null);
+                  setPaymentOpen(false);
+                }}
+                disabled={busy}
+              >
+                {"\u21A9\uFE0F"} Back to Cart
+              </button>
+              <button
+                className="flex-1 rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition shadow-sm"
+                disabled={busy || (paymentMethod === 'cash' && changeDue < 0)}
+                type="button"
+                onClick={() => void submitOrder()}
+              >
+                {busy ? 'Saving...' : 'Confirm payment'}
+              </button>
+            </div>
           </section>
         </div>
       )}

@@ -5,11 +5,8 @@ import { CloudPosApi, type CloudSession } from './cloudApi';
 import logoUrl from '../Images/bakeAlley-Logo.jpg';
 import type { CloudCustomer, CloudEmployee, CloudInventoryRow, CloudOrderPayload, CloudSalesReport, CloudShift } from './apiClient';
 
-const DEFAULT_API_URL = 'https://bakealley-pos-production.up.railway.app';
-const rawApiUrl = import.meta.env.VITE_API_URL || DEFAULT_API_URL;
-const sanitizedApiUrl = rawApiUrl.replace(/\/+$/, '');
 const api = new CloudPosApi({
-  baseUrl: sanitizedApiUrl,
+  baseUrl: import.meta.env.VITE_API_URL ?? '',
   getToken: () => localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token'),
 });
 
@@ -26,40 +23,6 @@ const today = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/M
 
 type Tab = 'checkout' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees';
 type VelocityTimeframe = 'monthly' | 'yearly';
-
-async function clockInWithFloat(openingFloat: number, notes?: string): Promise<CloudShift> {
-  const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
-  const response = await fetch(`${sanitizedApiUrl}/api/v1/employees/clock-in`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ openingFloat, notes }),
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.message || body.error || 'Failed to clock in');
-  }
-  return response.json();
-}
-
-async function clockOutWithCount(closingCashCount: number | null, notes?: string): Promise<CloudShift> {
-  const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
-  const response = await fetch(`${sanitizedApiUrl}/api/v1/employees/clock-out`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ closingCashCount, notes }),
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.message || body.error || 'Failed to clock out');
-  }
-  return response.json();
-}
 
 function getInactivityTimeout(): number {
   return INACTIVITY_TIMEOUT_MS;  // 5 minutes for all users
@@ -153,7 +116,8 @@ async function fetchMonthlyReport(apiInstance: any, year: string): Promise<Cloud
     return apiInstance.monthlyReport(year);
   }
   const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
-  const response = await fetch(`${sanitizedApiUrl}/api/v1/sales/monthly?year=${encodeURIComponent(year)}`, {
+  const baseUrl = import.meta.env.VITE_API_URL ?? '';
+  const response = await fetch(`${baseUrl}/api/v1/sales/monthly?year=${encodeURIComponent(year)}`, {
     headers: {
       'content-type': 'application/json',
       ...(token ? { authorization: `Bearer ${token}` } : {}),
@@ -2056,7 +2020,41 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
   );
 }
 
+const clockInWithFloat = async (openingFloat: number, notes?: string): Promise<CloudShift> => {
+  const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
+  const baseUrl = import.meta.env.VITE_API_URL ?? '';
+  const response = await fetch(`${baseUrl}/api/v1/employees/clock-in`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ openingFloat, notes }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error ?? 'Clock-in failed');
+  }
+  return response.json();
+};
 
+const clockOutWithCount = async (closingCashCount: number, notes?: string): Promise<CloudShift> => {
+  const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
+  const baseUrl = import.meta.env.VITE_API_URL ?? '';
+  const response = await fetch(`${baseUrl}/api/v1/employees/clock-out`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ closingCashCount, notes }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error ?? 'Clock-out failed');
+  }
+  return response.json();
+};
 
 function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
   // Clock In / Clock Out Modals State
@@ -2071,6 +2069,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
   const [clockingOut, setClockingOut] = useState(false);
   const [employees, setEmployees] = useState<CloudEmployee[]>([]);
   const [shifts, setShifts] = useState<CloudShift[]>([]);
+  const [activeShifts, setActiveShifts] = useState<CloudShift[]>([]);
 
   const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_emp_date') || today());
 
@@ -2103,6 +2102,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
     try {
       setEmployees(await api.employees(selectedDate));
       setShifts(await api.shifts(selectedDate));
+      setActiveShifts(await api.shifts());
       setError(null);
     } catch (reason) {
       setError(errorText(reason, 'Unable to load employees.'));
@@ -2113,7 +2113,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
     void refresh();
   }, [selectedDate]);
 
-  const ownShift = shifts.find((shift) => shift.userId === session.user.userId && !shift.clockOut);
+  const ownShift = activeShifts.find((shift) => shift.userId === session.user.userId && !shift.clockOut);
 
   const handleOpenClockModal = () => {
     setError(null);
@@ -2237,7 +2237,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
             </thead>
             <tbody>
               {employees.map((employee) => {
-                const employeeShift = shifts.find((shift) => shift.userId === employee.userId && !shift.clockOut);
+                const employeeShift = activeShifts.find((shift) => shift.userId === employee.userId && !shift.clockOut);
                 const isSelf = employee.userId === session.user.userId;
                 return (
                   <tr className="border-t border-amber-100/60" key={employee.userId}>
@@ -2273,7 +2273,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="font-semibold">Shift calendar</h2>
-              <p className="text-sm text-amber-700">Clock-in and clock-out records for the selected day.</p>
+              <p className="text-sm text-amber-700">Clock-in and clock-out records for {selectedDate}.</p>
             </div>
             <input className="rounded-lg border border-amber-200/80 px-3 py-2" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
           </div>
@@ -2292,37 +2292,41 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
                 </tr>
               </thead>
               <tbody>
-                {shifts.map((shift) => {
-                  const shiftEmployee = employees.find((employee) => employee.userId === shift.userId);
-                  const openingFloatVal = (shift as any).openingFloat !== undefined && (shift as any).openingFloat !== null ? Number((shift as any).openingFloat) : 1500;
-                  const closingCountVal = (shift as any).closingCashCount !== undefined && (shift as any).closingCashCount !== null ? Number((shift as any).closingCashCount) : null;
-                  const expectedVal = (shift as any).expectedCash !== undefined && (shift as any).expectedCash !== null ? Number((shift as any).expectedCash) : null;
-                  const discrepancyVal = (shift as any).cashDiscrepancy !== undefined && (shift as any).cashDiscrepancy !== null ? Number((shift as any).cashDiscrepancy) : null;
+                {shifts.length === 0 ? (
+                  <tr><td colSpan={8} className="py-6 text-center text-amber-700">No shift records found for {selectedDate}.</td></tr>
+                ) : (
+                  shifts.map((shift) => {
+                    const shiftEmployee = employees.find((employee) => employee.userId === shift.userId);
+                    const openingFloatVal = (shift as any).openingFloat !== undefined && (shift as any).openingFloat !== null ? Number((shift as any).openingFloat) : 1500;
+                    const closingCountVal = (shift as any).closingCashCount !== undefined && (shift as any).closingCashCount !== null ? Number((shift as any).closingCashCount) : null;
+                    const expectedVal = (shift as any).expectedCash !== undefined && (shift as any).expectedCash !== null ? Number((shift as any).expectedCash) : null;
+                    const discrepancyVal = (shift as any).cashDiscrepancy !== undefined && (shift as any).cashDiscrepancy !== null ? Number((shift as any).cashDiscrepancy) : null;
 
-                  let auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{"\u{1F7E2}"} On Shift</span>;
-                  if (shift.clockOut) {
-                    if (discrepancyVal === 0 || discrepancyVal === null) {
-                      auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{"\u2705"} {"\u20B1"}0.00 Balanced</span>;
-                    } else if (discrepancyVal < 0) {
-                      auditBadge = <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">{"\u26A0\uFE0F"} -{"\u20B1"}{Math.abs(discrepancyVal).toFixed(2)} Short</span>;
-                    } else {
-                      auditBadge = <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">{"\u2139\uFE0F"} +{"\u20B1"}{discrepancyVal.toFixed(2)} Over</span>;
+                    let auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{"\u{1F7E2}"} On Shift</span>;
+                    if (shift.clockOut) {
+                      if (discrepancyVal === 0 || discrepancyVal === null) {
+                        auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{"\u2705"} {"\u20B1"}0.00 Balanced</span>;
+                      } else if (discrepancyVal < 0) {
+                        auditBadge = <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">{"\u26A0\uFE0F"} -{"\u20B1"}{Math.abs(discrepancyVal).toFixed(2)} Short</span>;
+                      } else {
+                        auditBadge = <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">{"\u2139\uFE0F"} +{"\u20B1"}{discrepancyVal.toFixed(2)} Over</span>;
+                      }
                     }
-                  }
 
-                  return (
-                    <tr className="border-t border-amber-100/60" key={shift.shiftId}>
-                      <td className="py-3 px-2 font-semibold text-amber-950">{shift.displayName}</td>
-                      <td className="py-3 px-2 capitalize">{shiftEmployee?.role ?? '\u2014'}</td>
-                      <td className="py-3 px-2">{new Date(shift.clockIn).toLocaleTimeString()}</td>
-                      <td className="py-3 px-2">{shift.clockOut ? new Date(shift.clockOut).toLocaleTimeString() : 'Still clocked in'}</td>
-                      <td className="py-3 px-2 text-right tabular-nums">{money.format(openingFloatVal)}</td>
-                      <td className="py-3 px-2 text-right tabular-nums">{closingCountVal !== null ? money.format(closingCountVal) : '\u2014'}</td>
-                      <td className="py-3 px-2 text-right tabular-nums">{expectedVal !== null ? money.format(expectedVal) : '\u2014'}</td>
-                      <td className="py-3 px-2 text-right">{auditBadge}</td>
-                    </tr>
-                  );
-                })}
+                    return (
+                      <tr className="border-t border-amber-100/60" key={shift.shiftId}>
+                        <td className="py-3 px-2 font-semibold text-amber-950">{shift.displayName}</td>
+                        <td className="py-3 px-2 capitalize">{shiftEmployee?.role ?? '\u2014'}</td>
+                        <td className="py-3 px-2">{new Date(shift.clockIn).toLocaleTimeString()}</td>
+                        <td className="py-3 px-2">{shift.clockOut ? new Date(shift.clockOut).toLocaleTimeString() : 'Still clocked in'}</td>
+                        <td className="py-3 px-2 text-right tabular-nums">{money.format(openingFloatVal)}</td>
+                        <td className="py-3 px-2 text-right tabular-nums">{closingCountVal !== null ? money.format(closingCountVal) : '\u2014'}</td>
+                        <td className="py-3 px-2 text-right tabular-nums">{expectedVal !== null ? money.format(expectedVal) : '\u2014'}</td>
+                        <td className="py-3 px-2 text-right">{auditBadge}</td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -2358,6 +2362,7 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
           </div>
         </div>
       )}
+
       {/* Clock-In Modal */}
       {clockInModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
@@ -2490,9 +2495,6 @@ function EmployeesView({ session }: { session: CloudSession }): JSX.Element {
   );
 }
 
-/* ==========================================================================
-   MAIN APPLICATION SHELL WITH ROLE-BASED SESSION TIMEOUT & TAB SECURITY
-   ========================================================================== */
 export function CloudApp(): JSX.Element {
   const [session, setSession] = useState<CloudSession | null>(() => {
     const token = localStorage.getItem('bakealley_cloud_token');
@@ -2519,8 +2521,9 @@ export function CloudApp(): JSX.Element {
 
   const [customers, setCustomers] = useState<CloudCustomer[]>([]);
   const [shifts, setShifts] = useState<CloudShift[]>([]);
+  const [shiftsLoaded, setShiftsLoaded] = useState(false);
 
-  // Shift & Cash Reconciliation Modals State
+  // Shift Modals State for Cashiers
   const [clockInModalOpen, setClockInModalOpen] = useState(false);
   const [openingFloat, setOpeningFloat] = useState('1500.00');
   const [clockInNotes, setClockInNotes] = useState('');
@@ -2531,12 +2534,10 @@ export function CloudApp(): JSX.Element {
   const [clockOutNotes, setClockOutNotes] = useState('');
   const [clockingOut, setClockingOut] = useState(false);
 
-  // Yesterday Unclosed Shift Resolution Modal State
+  // Next-Morning Handover Interceptor state
   const [pendingCashCount, setPendingCashCount] = useState('');
   const [pendingNotes, setPendingNotes] = useState('');
   const [resolvingPending, setResolvingPending] = useState(false);
-
-  const [error, setError] = useState<string | null>(null);
 
   const isAdmin = session?.user.role === 'admin';
 
@@ -2572,6 +2573,8 @@ export function CloudApp(): JSX.Element {
       setShifts(await api.shifts());
     } catch (error) {
       console.error('Failed to load shifts:', error);
+    } finally {
+      setShiftsLoaded(true);
     }
   };
 
@@ -2597,14 +2600,14 @@ export function CloudApp(): JSX.Element {
   // Check if non-admin cashier requires clock-in
   const cashierRequiresClockIn = !isAdmin && !ownShift && !pendingOvernightShift;
 
-  // Automatically prompt non-admin cashier to clock in if no open shift
+  // Automatically prompt non-admin cashier to clock in if no open shift (ONLY AFTER shifts are loaded)
   useEffect(() => {
-    if (session && !isAdmin && !ownShift && !pendingOvernightShift && !clockInModalOpen) {
+    if (session && !isAdmin && shiftsLoaded && !ownShift && !pendingOvernightShift && !clockInModalOpen) {
       setOpeningFloat('1500.00');
       setClockInNotes('');
       setClockInModalOpen(true);
     }
-  }, [session, isAdmin, ownShift, pendingOvernightShift]);
+  }, [session, isAdmin, shiftsLoaded, ownShift, pendingOvernightShift]);
 
   // Inactivity Monitor Effect - Auto-logout after 5 minutes of inactivity
   useEffect(() => {
@@ -2634,6 +2637,66 @@ export function CloudApp(): JSX.Element {
     };
   }, [session]);
 
+  const submitClockIn = async (): Promise<void> => {
+    setClockingIn(true);
+    try {
+      const floatVal = Number(openingFloat) || 1500.00;
+      await clockInWithFloat(floatVal, clockInNotes);
+      setClockInModalOpen(false);
+      await refreshShifts();
+    } catch (error) {
+      console.error('Clock in error:', error);
+    } finally {
+      setClockingIn(false);
+    }
+  };
+
+  const submitClockOut = async (): Promise<void> => {
+    if (!closingCashCount || Number(closingCashCount) < 0) return;
+    setClockingOut(true);
+    try {
+      const countVal = Number(closingCashCount);
+      await clockOutWithCount(countVal, clockOutNotes);
+      setClockOutModalOpen(false);
+      try { await api.logout(); } catch {}
+      clearSessionStorage();
+      setSession(null);
+    } catch (error) {
+      console.error('Clock out error:', error);
+    } finally {
+      setClockingOut(false);
+    }
+  };
+
+  const handleLogOutClick = async (): Promise<void> => {
+    if (isAdmin || !ownShift) {
+      try { await api.logout(); } catch {}
+      clearSessionStorage();
+      setSession(null);
+      return;
+    }
+    // Non-admin cashier with open shift -> intercept and open blind count modal
+    setClosingCashCount('');
+    setClockOutNotes('');
+    setClockOutModalOpen(true);
+  };
+
+  const submitResolvePending = async (): Promise<void> => {
+    if (!pendingCashCount || Number(pendingCashCount) < 0) return;
+    setResolvingPending(true);
+    try {
+      await clockOutWithCount(Number(pendingCashCount), pendingNotes || "Resolved yesterday's unclosed shift");
+      await refreshShifts();
+      setOpeningFloat('1500.00');
+      setClockInNotes('');
+      setClockInModalOpen(true);
+    } catch (error) {
+      console.error('Resolve pending error:', error);
+    } finally {
+      setResolvingPending(false);
+    }
+  };
+
   if (!session) {
     return (
       <LoginScreen
@@ -2648,80 +2711,6 @@ export function CloudApp(): JSX.Element {
       />
     );
   }
-
-  const submitClockIn = async (): Promise<void> => {
-    setClockingIn(true);
-    setError(null);
-    try {
-      const floatVal = Number(openingFloat) || 1500.00;
-      await clockInWithFloat(floatVal, clockInNotes);
-      setClockInModalOpen(false);
-      await refreshShifts();
-    } catch (reason) {
-      setError(errorText(reason, 'Unable to clock in.'));
-    } finally {
-      setClockingIn(false);
-    }
-  };
-
-  const submitClockOutAndLogout = async (): Promise<void> => {
-    if (!closingCashCount || Number(closingCashCount) < 0) {
-      setError('Please enter a valid physical cash count.');
-      return;
-    }
-    setClockingOut(true);
-    setError(null);
-    try {
-      const countVal = Number(closingCashCount);
-      await clockOutWithCount(countVal, clockOutNotes);
-      setClockOutModalOpen(false);
-      try { await api.logout(); } catch {}
-      clearSessionStorage();
-      setSession(null);
-    } catch (reason) {
-      setError(errorText(reason, 'Unable to clock out.'));
-    } finally {
-      setClockingOut(false);
-    }
-  };
-
-  const submitPendingShiftCount = async (): Promise<void> => {
-    if (!pendingCashCount || Number(pendingCashCount) < 0) {
-      setError('Please enter a valid physical cash count.');
-      return;
-    }
-    setResolvingPending(true);
-    setError(null);
-    try {
-      await clockOutWithCount(Number(pendingCashCount), pendingNotes || "Resolved yesterday's unclosed shift");
-      setPendingCashCount('');
-      setPendingNotes('');
-      await refreshShifts();
-      // Prompt for today's new shift
-      setOpeningFloat('1500.00');
-      setClockInModalOpen(true);
-    } catch (reason) {
-      setError(errorText(reason, "Unable to resolve yesterday's shift."));
-    } finally {
-      setResolvingPending(false);
-    }
-  };
-
-  const handleLogoutClick = async (): Promise<void> => {
-    // ADMIN EXEMPTION: Admin logs out immediately without shift intercept
-    if (isAdmin || !ownShift) {
-      try { await api.logout(); } catch {}
-      clearSessionStorage();
-      setSession(null);
-      return;
-    }
-
-    // Cashier with open shift: Intercept and prompt for blind cash count
-    setClosingCashCount('');
-    setClockOutNotes('');
-    setError(null);
-    setClockOutModalOpen(true);
-  };
 
   const dataSource = {
     searchProducts: (query: string): Promise<CheckoutProduct[]> => api.searchProducts(query) as Promise<CheckoutProduct[]>,
@@ -2759,7 +2748,7 @@ export function CloudApp(): JSX.Element {
           <button
             className="text-sm font-semibold text-amber-700 hover:text-amber-900"
             type="button"
-            onClick={() => void handleLogoutClick()}
+            onClick={() => void handleLogOutClick()}
           >
             Log out
           </button>
@@ -2780,36 +2769,72 @@ export function CloudApp(): JSX.Element {
         </nav>
       </header>
 
-      {/* Checkout Screen with Soft Shift Guard Banner for Cashiers */}
-      {tab === 'checkout' && (
-        <div className="relative">
-          {cashierRequiresClockIn && (
-            <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6">
-              <div className="flex items-center justify-between rounded-xl bg-amber-500/15 border border-amber-500/30 p-4 text-amber-950 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">{"\u{1F512}"}</span>
-                  <div>
-                    <h4 className="font-bold text-sm text-amber-950">Shift Not Started {"\u2014"} Clock In Required to Process Orders</h4>
-                    <p className="text-xs text-amber-800">Please initialize your starting cash float before taking customer payments.</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-lg bg-amber-800 px-4 py-2 text-xs font-bold text-white hover:bg-amber-900 shadow-sm"
-                  onClick={() => {
-                    setOpeningFloat('1500.00');
-                    setClockInModalOpen(true);
-                  }}
-                >
-                  {"\u{1F680}"} Clock In Now
-                </button>
+      {/* Cashier Shift Hard Guard Warning Banner */}
+      {cashierRequiresClockIn && tab === 'checkout' && (
+        <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6">
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{"\u{1F512}"}</span>
+              <div>
+                <h4 className="font-bold text-amber-950 text-sm">Shift Not Started</h4>
+                <p className="text-xs text-amber-800">You must clock in and set your starting cash float before processing sales.</p>
               </div>
             </div>
-          )}
-          <CheckoutScreen dataSource={dataSource} scaleEnabled={false} customers={customers as CheckoutCustomer[]} retailTierId={retailTierId} taxRate={0} />
+            <button
+              type="button"
+              className="rounded-lg bg-amber-700 px-4 py-2 text-xs font-bold text-white hover:bg-amber-800 shadow-sm"
+              onClick={() => setClockInModalOpen(true)}
+            >
+              {"\u{1F230}"} Clock In Now
+            </button>
+          </div>
         </div>
       )}
 
+      {/* Next-Morning Handover Interceptor Banner */}
+      {!isAdmin && pendingOvernightShift && (
+        <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6">
+          <div className="rounded-xl border border-red-300 bg-red-50 p-4 shadow-sm space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl text-red-600">{"\u26A0\uFE0F"}</span>
+              <div>
+                <h4 className="font-bold text-red-950 text-sm">Pending Yesterday's Cash Count Required</h4>
+                <p className="text-xs text-red-800">
+                  Yesterday's shift was automatically closed at midnight. Please enter the physical cash counted in the register drawer to reconcile yesterday's shift before starting today's shift.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-red-200/60">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Yesterday's Physical Cash (\u20B1)"
+                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-bold text-red-950 bg-white outline-none focus:ring-2 focus:ring-red-500/30"
+                value={pendingCashCount}
+                onChange={(e) => setPendingCashCount(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="Optional notes"
+                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-950 bg-white outline-none focus:ring-2 focus:ring-red-500/30 flex-1 min-w-[180px]"
+                value={pendingNotes}
+                onChange={(e) => setPendingNotes(e.target.value)}
+              />
+              <button
+                type="button"
+                className="rounded-lg bg-red-700 px-4 py-1.5 text-xs font-bold text-white hover:bg-red-800 disabled:opacity-50 shadow-sm"
+                onClick={() => void submitResolvePending()}
+                disabled={resolvingPending || !pendingCashCount}
+              >
+                {resolvingPending ? 'Submitting...' : 'Reconcile Yesterday & Start Today'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'checkout' && <CheckoutScreen dataSource={dataSource} scaleEnabled={false} customers={customers as CheckoutCustomer[]} retailTierId={retailTierId} taxRate={0} />}
       {tab !== 'checkout' && (
         <main className="mx-auto max-w-7xl p-4 sm:p-6">
           {tab === 'sales' && <SalesView isAdmin={isAdmin} />}
@@ -2821,61 +2846,7 @@ export function CloudApp(): JSX.Element {
         </main>
       )}
 
-      {/* Yesterday Unclosed Shift Reconciliation Modal for Cashiers */}
-      {pendingOvernightShift && (
-        <div className="fixed inset-0 flex items-center justify-center bg-amber-950/60 z-50 p-4" role="presentation">
-          <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
-            <div className="border-b border-amber-100 pb-3">
-              <h3 className="font-bakery text-lg font-bold text-red-900">{"\u26A0\uFE0F"} Yesterday's Shift Reconciliation Required</h3>
-              <p className="text-xs text-amber-800 mt-1">
-                Your shift from yesterday was automatically closed at midnight. Please enter the physical register cash counted to reconcile yesterday's shift before starting today's operations.
-              </p>
-            </div>
-
-            {error && <p className="rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                Yesterday's Physical Drawer Cash ({"\u20B1"})
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                className="w-full rounded-xl border border-amber-200/80 bg-amber-50/20 px-3.5 py-2.5 text-lg font-bold text-amber-950 outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/30"
-                value={pendingCashCount}
-                onChange={(e) => setPendingCashCount(e.target.value)}
-                autoFocus
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                Reconciliation Remarks (Optional)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Unclosed overnight; morning cash count"
-                className="w-full rounded-xl border border-amber-200/80 px-3.5 py-2 text-xs text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
-                value={pendingNotes}
-                onChange={(e) => setPendingNotes(e.target.value)}
-              />
-            </div>
-
-            <button
-              type="button"
-              className="w-full rounded-xl bg-amber-800 px-4 py-3 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 shadow-sm"
-              onClick={() => void submitPendingShiftCount()}
-              disabled={resolvingPending || !pendingCashCount}
-            >
-              {resolvingPending ? 'Saving Cash Count...' : '{"\u2705"} Reconcile Yesterday & Open Today'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Clock-In Modal for Cashiers */}
+      {/* Clock-In Modal */}
       {clockInModalOpen && !pendingOvernightShift && (
         <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
           <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
@@ -2886,8 +2857,6 @@ export function CloudApp(): JSX.Element {
               </div>
               <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockInModalOpen(false)}>{"\u00D7"}</button>
             </div>
-
-            {error && <p className="rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
@@ -2913,7 +2882,7 @@ export function CloudApp(): JSX.Element {
               </label>
               <input
                 type="text"
-                placeholder="e.g. Received 10x 100s, 10x 50s, 25x 20 coins"
+                placeholder="e.g. Received 10x 100 bills, 10x 50 bills, 25x 20 coins"
                 className="w-full rounded-xl border border-amber-200/80 px-3.5 py-2 text-xs text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
                 value={clockInNotes}
                 onChange={(e) => setClockInNotes(e.target.value)}
@@ -2930,7 +2899,7 @@ export function CloudApp(): JSX.Element {
               </button>
               <button
                 type="button"
-                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 shadow-sm"
+                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
                 onClick={() => void submitClockIn()}
                 disabled={clockingIn || !openingFloat}
               >
@@ -2941,7 +2910,7 @@ export function CloudApp(): JSX.Element {
         </div>
       )}
 
-      {/* Clock-Out Interceptor Modal for Cashiers */}
+      {/* Clock-Out Modal */}
       {clockOutModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
           <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
@@ -2952,8 +2921,6 @@ export function CloudApp(): JSX.Element {
               </div>
               <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockOutModalOpen(false)}>{"\u00D7"}</button>
             </div>
-
-            {error && <p className="rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-700">{error}</p>}
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
@@ -2970,7 +2937,7 @@ export function CloudApp(): JSX.Element {
                 autoFocus
               />
               <p className="mt-1 text-[11px] text-amber-700 leading-normal">
-                {"\u{1F512}"} Blind Audit Security: Enter exact physical cash counted in register drawer (including opening float).
+                {"\u{1F512}"} Blind Audit Security: Enter the exact physical cash counted in your register drawer (including your opening float).
               </p>
             </div>
 
@@ -2997,11 +2964,11 @@ export function CloudApp(): JSX.Element {
               </button>
               <button
                 type="button"
-                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 shadow-sm"
-                onClick={() => void submitClockOutAndLogout()}
+                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
+                onClick={() => void submitClockOut()}
                 disabled={clockingOut || !closingCashCount}
               >
-                {clockingOut ? 'Closing Shift & Signing Out...' : '{"\u{1F3C1}"} Confirm & Sign Out'}
+                {clockingOut ? 'Closing Shift...' : '{"\u{1F3C1}"} Confirm & Sign Out'}
               </button>
             </div>
           </div>

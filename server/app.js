@@ -500,32 +500,22 @@ app.post('/api/v1/employees', auth.requireSession, auth.requireAdmin, async (req
 
 app.post('/api/v1/employees/clock-in', auth.requireSession, async (request, response, next) => {
   try {
-    await autoCloseOvernightShifts();
     const payload = request.body ?? {};
     const rawFloat = payload.openingFloat !== undefined && payload.openingFloat !== null ? Number(payload.openingFloat) : 1500.00;
     const openingFloat = Number.isFinite(rawFloat) && rawFloat >= 0 ? rawFloat : 1500.00;
     const notes = typeof payload.notes === 'string' ? payload.notes.trim() : null;
 
-    const existing = await pool.query(
-      `SELECT shift_id, COALESCE(status, 'OPEN') AS status FROM employee_shifts WHERE user_id = $1 AND clock_out IS NULL`,
-      [request.user.userId]
-    );
-
-    if (existing.rowCount > 0) {
-      const status = existing.rows[0].status;
-      if (status === 'PENDING_PHYSICAL_COUNT') {
-        return response.status(409).json({ error: 'PENDING_SHIFT_COUNT_REQUIRED', message: "You have a pending cash count for yesterday's shift." });
-      }
-      return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN' });
-    }
-
     const result = await pool.query(
-      `INSERT INTO employee_shifts (shift_id, user_id, clock_in, opening_float, status, notes) 
-       VALUES (gen_random_uuid(), $1, now(), $2, 'OPEN', $3)
-       RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", COALESCE(status, 'OPEN') AS status, notes`, 
+      `INSERT INTO employee_shifts (shift_id, user_id, clock_in, opening_float, notes) 
+       SELECT gen_random_uuid(), $1, now(), $2, $3 
+       WHERE NOT EXISTS (SELECT 1 FROM employee_shifts WHERE user_id = $1 AND clock_out IS NULL) 
+       RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", notes`, 
       [request.user.userId, openingFloat, notes]
     );
-
+    if (!result.rowCount) {
+      logger.warn('Clock-in failed - shift already open', { userId: request.user.userId });
+      return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN' });
+    }
     logger.info('Employee clocked in with opening float', { userId: request.user.userId, openingFloat });
     response.status(201).json(result.rows[0]);
   } catch (error) { 
@@ -542,10 +532,9 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
     const notes = typeof payload.notes === 'string' ? payload.notes.trim() : null;
 
     const openShiftCheck = await pool.query(
-      `SELECT shift_id AS "shiftId", clock_in AS "clockIn", clock_out AS "clockOut", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", COALESCE(status, 'OPEN') AS status
+      `SELECT shift_id AS "shiftId", clock_in AS "clockIn", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat"
        FROM employee_shifts
-       WHERE user_id = $1 AND (clock_out IS NULL OR status = 'PENDING_PHYSICAL_COUNT')
-       ORDER BY clock_in DESC LIMIT 1`,
+       WHERE user_id = $1 AND clock_out IS NULL`,
       [request.user.userId]
     );
 
@@ -570,26 +559,24 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
        WHERE o.employee_id = $1
          AND o.status = 'completed'
          AND o.created_at >= $2::timestamptz
-         AND o.created_at <= COALESCE($3::timestamptz, now())`,
-      [request.user.userId, clockInTime, openShift.clockOut]
+         AND o.created_at <= now()`,
+      [request.user.userId, clockInTime]
     );
 
     const shiftCashSales = Number(salesResult.rows[0].shiftCashSales) || 0;
     const expectedCash = openingFloat + shiftCashSales;
     const cashDiscrepancy = closingCashCount !== null ? closingCashCount - expectedCash : null;
-    const newStatus = openShift.status === 'PENDING_PHYSICAL_COUNT' ? 'CLOSED_NEXT_DAY' : 'CLOSED';
 
     const result = await pool.query(
       `UPDATE employee_shifts 
-       SET clock_out = COALESCE(clock_out, now()),
+       SET clock_out = now(),
            closing_cash_count = $2,
            expected_cash = $3,
            cash_discrepancy = $4,
-           status = $5,
-           notes = COALESCE($6, notes)
+           notes = COALESCE($5, notes)
        WHERE shift_id = $1 
-       RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn", clock_out AS "clockOut", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", closing_cash_count AS "closingCashCount", expected_cash AS "expectedCash", cash_discrepancy AS "cashDiscrepancy", status, notes`, 
-      [openShift.shiftId, closingCashCount, expectedCash, cashDiscrepancy, newStatus, notes]
+       RETURNING shift_id AS "shiftId", user_id AS "userId", clock_in AS "clockIn", clock_out AS "clockOut", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", closing_cash_count AS "closingCashCount", expected_cash AS "expectedCash", cash_discrepancy AS "cashDiscrepancy", notes`, 
+      [openShift.shiftId, closingCashCount, expectedCash, cashDiscrepancy, notes]
     );
 
     logger.info('Employee clocked out with cash drawer reconciliation', { 
@@ -598,8 +585,7 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
       shiftCashSales, 
       expectedCash, 
       closingCashCount, 
-      cashDiscrepancy,
-      status: newStatus
+      cashDiscrepancy 
     });
     response.json(result.rows[0]);
   } catch (error) { 
@@ -659,11 +645,18 @@ app.get('/api/v1/employees/shifts', auth.requireSession, async (request, respons
 
     if (date) {
       params.push(`${date}T00:00:00+08:00`);
-      dateFilter = `AND (s.clock_out IS NULL OR s.status = 'PENDING_PHYSICAL_COUNT' OR s.status = 'OPEN' OR (s.clock_in >= $3::timestamptz AND s.clock_in < ($3::timestamptz + interval '1 day')))`;
+      dateFilter = `AND s.clock_in >= $3::timestamptz AND s.clock_in < ($3::timestamptz + interval '1 day')`;
     }
 
     const result = await pool.query(
-      `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", u.role AS "role", s.clock_in AS "clockIn", s.clock_out AS "clockOut", COALESCE(s.opening_float, 1500.00)::numeric AS "openingFloat", s.closing_cash_count AS "closingCashCount", s.expected_cash AS "expectedCash", s.cash_discrepancy AS "cashDiscrepancy", COALESCE(s.status, CASE WHEN s.clock_out IS NULL THEN 'OPEN' ELSE 'CLOSED' END) AS status, s.notes 
+      `SELECT s.shift_id AS "shiftId", s.user_id AS "userId", u.display_name AS "displayName", u.role AS "role", 
+              s.clock_in AS "clockIn", s.clock_out AS "clockOut", 
+              COALESCE(s.opening_float, 1500.00)::numeric AS "openingFloat", 
+              s.closing_cash_count AS "closingCashCount", 
+              s.expected_cash AS "expectedCash", 
+              s.cash_discrepancy AS "cashDiscrepancy", 
+              COALESCE(s.status, CASE WHEN s.clock_out IS NULL THEN 'OPEN' ELSE 'CLOSED' END) AS status, 
+              s.notes 
        FROM employee_shifts s 
        JOIN app_users u ON u.user_id=s.user_id 
        WHERE ($1 = 'admin' OR s.user_id = $2) ${dateFilter} 
@@ -686,18 +679,6 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   }
 
   const validatedPayload = validation.data;
-
-  // ADMIN EXEMPTION: Admin accounts bypass shift check. Non-admin cashiers require open shift.
-  if (request.user.role !== 'admin') {
-    const shiftCheck = await pool.query(
-      `SELECT shift_id FROM employee_shifts WHERE user_id = $1 AND clock_out IS NULL AND (status = 'OPEN' OR status IS NULL)`,
-      [request.user.userId]
-    );
-    if (!shiftCheck.rowCount) {
-      return response.status(403).json({ error: 'SHIFT_REQUIRED', message: 'You must clock in before processing sales.' });
-    }
-  }
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -993,20 +974,6 @@ app.use((error, _request, response, _next) => {
   }); 
 });
 
-async function autoCloseOvernightShifts() {
-  try {
-    await pool.query(`
-      UPDATE employee_shifts
-      SET clock_out = ((clock_in AT TIME ZONE 'Asia/Manila')::date + time '23:59:59') AT TIME ZONE 'Asia/Manila',
-          status = 'PENDING_PHYSICAL_COUNT'
-      WHERE clock_out IS NULL 
-        AND (clock_in AT TIME ZONE 'Asia/Manila')::date < (now() AT TIME ZONE 'Asia/Manila')::date
-    `);
-  } catch (error) {
-    logger.warn('Overnight shift auto-close check failed:', { error: error.message });
-  }
-}
-
 async function ensureShiftColumns() {
   try {
     await pool.query(`
@@ -1014,7 +981,6 @@ async function ensureShiftColumns() {
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS closing_cash_count NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS expected_cash NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS cash_discrepancy NUMERIC(12,2);
-      ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'OPEN';
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS notes TEXT;
     `);
     logger.info('Employee shift audit columns ensured');
@@ -1028,7 +994,6 @@ async function start(port = Number(process.env.PORT ?? 3000)) {
     logger.info('Running database migration...');
     await migrate(); 
     await ensureShiftColumns(); 
-    await autoCloseOvernightShifts();
     logger.info('Migration complete, starting server...');
     
     return new Promise((resolve, reject) => {
