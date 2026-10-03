@@ -1,0 +1,12 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^npm run build 2>&1 \\| head -80$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^which pnpm \\|\\| which yarn \\|\\| node --version$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
