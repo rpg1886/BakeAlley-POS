@@ -543,7 +543,7 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
     const openShiftCheck = await pool.query(
       `SELECT shift_id AS "shiftId", clock_in AS "clockIn", clock_out AS "clockOut", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", COALESCE(status, 'OPEN') AS status
        FROM employee_shifts
-       WHERE user_id = $1 AND (clock_out IS NULL OR status = 'PENDING_PHYSICAL_COUNT')
+       WHERE user_id = $1 AND clock_out IS NULL
        ORDER BY clock_in DESC LIMIT 1`,
       [request.user.userId]
     );
@@ -576,7 +576,7 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
     const shiftCashSales = Number(salesResult.rows[0].shiftCashSales) || 0;
     const expectedCash = openingFloat + shiftCashSales;
     const cashDiscrepancy = closingCashCount !== null ? closingCashCount - expectedCash : null;
-    const finalStatus = openShift.status === 'PENDING_PHYSICAL_COUNT' ? 'CLOSED_NEXT_DAY' : 'CLOSED';
+    const finalStatus = 'CLOSED';
 
     const result = await pool.query(
       `UPDATE employee_shifts 
@@ -999,7 +999,8 @@ async function autoCloseOvernightShifts() {
     await pool.query(`
       UPDATE employee_shifts
       SET clock_out = ((clock_in AT TIME ZONE 'Asia/Manila')::date + time '23:59:59') AT TIME ZONE 'Asia/Manila',
-          status = 'PENDING_PHYSICAL_COUNT'
+          status = 'AUTO_CLOSED',
+          notes = COALESCE(notes, 'Auto-closed at midnight; pending manager audit')
       WHERE clock_out IS NULL 
         AND (clock_in AT TIME ZONE 'Asia/Manila')::date < (now() AT TIME ZONE 'Asia/Manila')::date
     `);

@@ -2320,7 +2320,9 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
 
                   let auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">🟢 On Shift</span>;
                   if (shift.clockOut) {
-                    if (discrepancyVal === 0 || discrepancyVal === null) {
+                    if ((shift as any).status === 'AUTO_CLOSED') {
+                      auditBadge = <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">ℹ️ Auto-Closed (Pending Audit)</span>;
+                    } else if (discrepancyVal === 0 || discrepancyVal === null) {
                       auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">✅ ₱0.00 Balanced</span>;
                     } else if (discrepancyVal < 0) {
                       auditBadge = <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">⚠️ -₱{Math.abs(discrepancyVal).toFixed(2)} Short</span>;
