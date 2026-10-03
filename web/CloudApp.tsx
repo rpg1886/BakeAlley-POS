@@ -2064,7 +2064,7 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
   );
 }
 
-function EmployeesView({ session, onShiftChange }: { session: CloudSession; onShiftChange?: () => void }): JSX.Element {
+function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: CloudSession; onShiftChange?: () => void; onSelfClockOut?: () => void }): JSX.Element {
   const [clockInModalOpen, setClockInModalOpen] = useState(false);
   const [openingFloat, setOpeningFloat] = useState('1500.00');
   const [clockInNotes, setClockInNotes] = useState('');
@@ -2160,8 +2160,20 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
     try {
       const countVal = Number(closingCashCount);
       await clockOutWithCount(countVal, clockOutNotes);
-      setMessage('Clocked out successfully with cash drawer count.');
       setClockOutModalOpen(false);
+      if (!isAdmin) {
+        try {
+          await api.logout();
+        } catch (logoutErr) {
+          console.error('Logout error on clock out:', logoutErr);
+        }
+        clearSessionStorage();
+        if (onSelfClockOut) {
+          onSelfClockOut();
+        }
+        return;
+      }
+      setMessage('Clocked out successfully with cash drawer count.');
       await refresh();
       if (onShiftChange) onShiftChange();
     } catch (reason) {
@@ -2718,7 +2730,7 @@ export function CloudApp(): JSX.Element {
               </button>
             </div>
           )}
-          <CheckoutScreen dataSource={dataSource} scaleEnabled={false} customers={customers as CheckoutCustomer[]} retailTierId={retailTierId} taxRate={0} />
+          <CheckoutScreen dataSource={dataSource} scaleEnabled={false} customers={customers as CheckoutCustomer[]} retailTierId={retailTierId} taxRate={0} isClockedIn={isAdmin || Boolean(ownShift)} />
         </div>
       )}
 
@@ -2729,7 +2741,7 @@ export function CloudApp(): JSX.Element {
           {tab === 'bi' && isAdmin && <BiView />}
           {tab === 'inventory' && <InventoryView isAdmin={isAdmin} />}
           {tab === 'crm' && <CrmView session={session} customers={customers} refresh={refreshCustomers} />}
-          {tab === 'employees' && <EmployeesView session={session} onShiftChange={refreshShifts} />}
+          {tab === 'employees' && <EmployeesView session={session} onShiftChange={refreshShifts} onSelfClockOut={() => setSession(null)} />}
         </main>
       )}
 

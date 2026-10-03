@@ -73,6 +73,7 @@ export interface CheckoutScreenProps {
   taxRate?: number;
   employeeToken?: string;
   recordEmployeeSale?: (token: string, orderId: string) => Promise<void>;
+    isClockedIn?: boolean;
 }
 
 interface CartLine {
@@ -139,6 +140,7 @@ export function CheckoutScreen({
   taxRate = 0,
   employeeToken,
   recordEmployeeSale,
+    isClockedIn = true,
 }: CheckoutScreenProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CheckoutProduct[]>([]);
@@ -667,7 +669,7 @@ export function CheckoutScreen({
               <div className="flex justify-between text-sm text-amber-800"><span>Subtotal</span><span className="font-semibold tabular-nums">{money.format(subtotal)}</span></div>
               <div className="mt-2 flex justify-between text-sm text-amber-800"><span>Tax</span><span className="font-semibold tabular-nums">{money.format(taxAmount)}</span></div>
               <div className="mt-4 flex justify-between border-t border-amber-200/80 pt-4 text-xl font-bold"><span>Total</span><span className="tabular-nums">{money.format(totalAmount)}</span></div>
-              <button className="mt-5 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={cart.length === 0 || busy} type="button" onClick={() => setPaymentOpen(true)}>Take payment</button>
+              <button className="mt-5 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={cart.length === 0 || busy || isClockedIn === false} type="button" onClick={() => setPaymentOpen(true)}>{isClockedIn === false ? 'Clock-in Required to Take Payment' : 'Take payment'}</button>
             </div>
           </aside>
         </section>

@@ -684,6 +684,19 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   }
 
   const validatedPayload = validation.data;
+
+  if (request.user.role !== 'admin') {
+    const openShiftCheck = await pool.query(
+      `SELECT shift_id FROM employee_shifts WHERE user_id = $1 AND clock_out IS NULL AND (status = 'OPEN' OR status IS NULL)`,
+      [request.user.userId]
+    );
+    if (!openShiftCheck.rowCount) {
+      return response.status(403).json({
+        error: 'SHIFT_REQUIRED',
+        message: 'You must clock in and set your opening float before processing sales.'
+      });
+    }
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
