@@ -1,5 +1,4 @@
-
-import { useState, type FormEvent, type JSX } from 'react';
+import { useState, type FormEvent } from 'react';
 import logoUrl from '../../Images/bakeAlley-Logo.jpg';
 
 export interface LoginUser {

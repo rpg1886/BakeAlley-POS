@@ -1,6 +1,4 @@
-web/CloudApp.tsx ===
-
-import { Fragment, useEffect, useMemo, useState, type JSX, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CheckoutScreen, type CheckoutCustomer, type CheckoutOrderPayload, type CheckoutProduct } from '../src/components/CheckoutScreen';
 import { LoginScreen } from '../src/renderer/LoginScreen';
 import { CloudPosApi, type CloudSession } from './cloudApi';

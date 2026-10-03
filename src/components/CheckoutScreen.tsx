@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import type { JSX } from 'react';
 import logoUrl from '../../Images/bakeAlley-Logo.jpg';
 
 export interface CheckoutProductPrice {
