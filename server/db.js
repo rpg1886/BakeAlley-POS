@@ -7,11 +7,16 @@ if (!process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL is required for the cloud API');
 }
 
+const isProduction = process.env.NODE_ENV === 'production' || 
+  process.env.DATABASE_URL.includes('neon.tech') || 
+  process.env.DATABASE_URL.includes('railway');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 15000,
+  ...(isProduction ? { ssl: { rejectUnauthorized: false } } : {}),
 });
 
 pool.on('error', (err) => {
