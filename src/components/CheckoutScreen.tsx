@@ -426,10 +426,10 @@ export function CheckoutScreen({
             >
               <span className="truncate font-medium text-amber-950">
                 {!selectedCustomer
-                  ? "{\u{1F464}} Retail Walk-in (New Client)"
+                  ? "\u{1F464} Retail Walk-in (New Client)"
                   : isWholesaleCustomer
-                  ? "{\u{1F3E2}} " + selectedCustomer.displayName + " (Wholesale)"
-                  : "{\u{1F501}} " + selectedCustomer.displayName + " (Return Client)"}
+                  ? "\u{1F3E2} " + selectedCustomer.displayName + " (Wholesale)"
+                  : "\u{1F501} " + selectedCustomer.displayName + " (Return Client)"}
               </span>
               <span className="ml-2 text-xs text-amber-600 font-bold">
                 {customerDropdownOpen ? '\u25B2' : '\u25BC'}
@@ -461,7 +461,7 @@ export function CheckoutScreen({
                         : 'hover:bg-amber-50 text-amber-900'
                     }`}
                   >
-                    {"{\u{1F464}}"} Retail Walk-in (New Client)
+                    {"\u{1F464}"} Retail Walk-in (New Client)
                   </button>
 
                   {filteredCustomers.length === 0 ? (
@@ -488,7 +488,7 @@ export function CheckoutScreen({
                           }`}
                         >
                           <span className="truncate">
-                            {isWholesale ? "{\u{1F3E2}}" : "{\u{1F501}}"} {customer.displayName}
+                            {isWholesale ? "\u{1F3E2}" : "\u{1F501}"} {customer.displayName}
                           </span>
                           <span
                             className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold ${

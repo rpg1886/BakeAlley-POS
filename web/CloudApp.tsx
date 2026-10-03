@@ -2301,14 +2301,14 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
                   const expectedVal = (shift as any).expectedCash !== undefined && (shift as any).expectedCash !== null ? Number((shift as any).expectedCash) : null;
                   const discrepancyVal = (shift as any).cashDiscrepancy !== undefined && (shift as any).cashDiscrepancy !== null ? Number((shift as any).cashDiscrepancy) : null;
 
-                  let auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{\u{1F7E2}} On Shift</span>;
+                  let auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{"\u{1F7E2}"} On Shift</span>;
                   if (shift.clockOut) {
                     if (discrepancyVal === 0 || discrepancyVal === null) {
-                      auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{\u2705} {\u20B1}0.00 Balanced</span>;
+                      auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">{"\u2705"} {"\u20B1"}0.00 Balanced</span>;
                     } else if (discrepancyVal < 0) {
-                      auditBadge = <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">{\u26A0\uFE0F} -{\u20B1}{Math.abs(discrepancyVal).toFixed(2)} Short</span>;
+                      auditBadge = <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">{"\u26A0\uFE0F"} -{"\u20B1"}{Math.abs(discrepancyVal).toFixed(2)} Short</span>;
                     } else {
-                      auditBadge = <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">{\u2139\uFE0F} +{\u20B1}{discrepancyVal.toFixed(2)} Over</span>;
+                      auditBadge = <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">{"\u2139\uFE0F"} +{"\u20B1"}{discrepancyVal.toFixed(2)} Over</span>;
                     }
                   }
 
@@ -2367,15 +2367,15 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
           <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
             <div className="flex items-start justify-between border-b border-amber-100 pb-3">
               <div>
-                <h3 className="font-bakery text-lg font-bold text-amber-950">{\u{1F230}} Start Shift & Cash Drawer Float</h3>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">{"\u{1F230}"} Start Shift & Cash Drawer Float</h3>
                 <p className="text-xs text-amber-700 mt-0.5">Welcome back, {session.user.displayName}! Please initialize your cash drawer.</p>
               </div>
-              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockInModalOpen(false)}>{\u00D7}</button>
+              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockInModalOpen(false)}>{"\u00D7"}</button>
             </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                Opening Cash Float ({\u20B1})
+                Opening Cash Float ({"\u20B1"})
               </label>
               <input
                 type="number"
@@ -2387,7 +2387,7 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
                 autoFocus
               />
               <p className="mt-1 text-[11px] text-amber-700 leading-normal">
-                {\u{1F4A1}} Enter the physical starting cash provided in your drawer for giving change (default: {\u20B1}1,500.00).
+                {"\u{1F4A1}"} Enter the physical starting cash provided in your drawer for giving change (default: {"\u20B1"}1,500.00).
               </p>
             </div>
 
@@ -2418,7 +2418,7 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
                 onClick={() => void submitClockIn()}
                 disabled={clockingIn || !openingFloat}
               >
-                {clockingIn ? 'Opening Shift...' : '{\u{1F680}} Confirm & Open Shift'}
+                {clockingIn ? 'Opening Shift...' : '{"\u{1F680}"} Confirm & Open Shift'}
               </button>
             </div>
           </div>
@@ -2431,15 +2431,15 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
           <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
             <div className="flex items-start justify-between border-b border-amber-100 pb-3">
               <div>
-                <h3 className="font-bakery text-lg font-bold text-amber-950">{\u{1F512}} End Shift & Cash Drawer Blind Count</h3>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">{"\u{1F512}"} End Shift & Cash Drawer Blind Count</h3>
                 <p className="text-xs text-amber-700 mt-0.5">Cashier: {session.user.displayName}</p>
               </div>
-              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockOutModalOpen(false)}>{\u00D7}</button>
+              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockOutModalOpen(false)}>{"\u00D7"}</button>
             </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                Physical Cash Count in Drawer ({\u20B1})
+                Physical Cash Count in Drawer ({"\u20B1"})
               </label>
               <input
                 type="number"
@@ -2452,7 +2452,7 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
                 autoFocus
               />
               <p className="mt-1 text-[11px] text-amber-700 leading-normal">
-                {\u{1F512}} Blind Audit Security: Enter the exact physical cash counted in your register drawer (including your opening float).
+                {"\u{1F512}"} Blind Audit Security: Enter the exact physical cash counted in your register drawer (including your opening float).
               </p>
             </div>
 
@@ -2483,7 +2483,7 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
                 onClick={() => void submitClockOut()}
                 disabled={clockingOut || !closingCashCount}
               >
-                {clockingOut ? 'Closing Shift...' : '{\u{1F3C1}} Confirm & Close Shift'}
+                {clockingOut ? 'Closing Shift...' : '{"\u{1F3C1}"} Confirm & Close Shift'}
               </button>
             </div>
           </div>
@@ -2758,7 +2758,7 @@ export function CloudApp(): JSX.Element {
         <div className="relative">
           {cashierRequiresClockIn && (
             <div className="bg-amber-800 text-white text-center py-2.5 px-4 text-xs font-bold flex items-center justify-center gap-2 shadow-inner">
-              <span>{\u{1F512}} Shift Not Started \u2014 Please Clock In & Set Starting Cash Float to Process Orders</span>
+              <span>{"\u{1F512}"} Shift Not Started \u2014 Please Clock In & Set Starting Cash Float to Process Orders</span>
               <button
                 type="button"
                 className="ml-2 bg-white text-amber-950 px-3 py-1 rounded-lg text-xs font-extrabold hover:bg-amber-100 shadow-sm"
@@ -2793,15 +2793,15 @@ export function CloudApp(): JSX.Element {
           <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
             <div className="flex items-start justify-between border-b border-amber-100 pb-3">
               <div>
-                <h3 className="font-bakery text-lg font-bold text-amber-950">{\u{1F230}} Start Shift & Cash Drawer Float</h3>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">{"\u{1F230}"} Start Shift & Cash Drawer Float</h3>
                 <p className="text-xs text-amber-700 mt-0.5">Welcome back, {session.user.displayName}! Initialize your shift float.</p>
               </div>
-              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockInModalOpen(false)}>{\u00D7}</button>
+              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockInModalOpen(false)}>{"\u00D7"}</button>
             </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                Opening Cash Float ({\u20B1})
+                Opening Cash Float ({"\u20B1"})
               </label>
               <input
                 type="number"
@@ -2813,7 +2813,7 @@ export function CloudApp(): JSX.Element {
                 autoFocus
               />
               <p className="mt-1 text-[11px] text-amber-700 leading-normal">
-                {\u{1F4A1}} Physical starting cash in drawer for giving change (default: {\u20B1}1,500.00).
+                {"\u{1F4A1}"} Physical starting cash in drawer for giving change (default: {"\u20B1"}1,500.00).
               </p>
             </div>
 
@@ -2844,7 +2844,7 @@ export function CloudApp(): JSX.Element {
                 onClick={() => void submitClockIn()}
                 disabled={clockingIn || !openingFloat}
               >
-                {clockingIn ? 'Opening Shift...' : '{\u{1F680}} Confirm & Open Shift'}
+                {clockingIn ? 'Opening Shift...' : '{"\u{1F680}"} Confirm & Open Shift'}
               </button>
             </div>
           </div>
@@ -2857,15 +2857,15 @@ export function CloudApp(): JSX.Element {
           <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
             <div className="flex items-start justify-between border-b border-amber-100 pb-3">
               <div>
-                <h3 className="font-bakery text-lg font-bold text-amber-950">{\u{1F512}} End Shift & Cash Drawer Blind Count</h3>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">{"\u{1F512}"} End Shift & Cash Drawer Blind Count</h3>
                 <p className="text-xs text-amber-700 mt-0.5">Cashier: {session.user.displayName}</p>
               </div>
-              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockOutModalOpen(false)}>{\u00D7}</button>
+              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockOutModalOpen(false)}>{"\u00D7"}</button>
             </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                Physical Cash Count in Drawer ({\u20B1})
+                Physical Cash Count in Drawer ({"\u20B1"})
               </label>
               <input
                 type="number"
@@ -2878,7 +2878,7 @@ export function CloudApp(): JSX.Element {
                 autoFocus
               />
               <p className="mt-1 text-[11px] text-amber-700 leading-normal">
-                {\u{1F512}} Blind Audit Security: Enter exact physical cash in register drawer before signing out.
+                {"\u{1F512}"} Blind Audit Security: Enter exact physical cash in register drawer before signing out.
               </p>
             </div>
 
@@ -2909,7 +2909,7 @@ export function CloudApp(): JSX.Element {
                 onClick={() => void submitClockOut()}
                 disabled={clockingOut || !closingCashCount}
               >
-                {clockingOut ? 'Closing Shift & Signing Out...' : '{\u{1F3C1}} Confirm & Sign Out'}
+                {clockingOut ? 'Closing Shift & Signing Out...' : '{"\u{1F3C1}"} Confirm & Sign Out'}
               </button>
             </div>
           </div>
