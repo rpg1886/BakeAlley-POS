@@ -99,7 +99,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps): JSX.Element {
                 {/* Button Container (Matching px-3 inset) */}
                 <div className="px-3 mt-6">
                     <button 
-                        className="w-full rounded-lg border border-amber-800 bg-amber-700 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:border-amber-300 disabled:bg-amber-300 disabled:text-amber-50" 
+                        className="w-full rounded-lg border border-amber-800 bg-amber-700 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-amber-800 disabled:cursor-not-allowed disabled:border-amber-300/80 disabled:bg-amber-200 disabled:text-amber-900/60" 
                         disabled={busy || !username || !password} 
                         type="submit"
                     >
