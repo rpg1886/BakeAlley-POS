@@ -2059,42 +2059,6 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
   );
 }
 
-const clockInWithFloat = async (openingFloat: number, notes?: string): Promise<CloudShift> => {
-  const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
-  const baseUrl = import.meta.env.VITE_API_URL ?? '';
-  const response = await fetch(`${baseUrl}/api/v1/employees/clock-in`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ openingFloat, notes }),
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.error ?? 'Clock-in failed');
-  }
-  return response.json();
-};
-
-const clockOutWithCount = async (closingCashCount: number, notes?: string): Promise<CloudShift> => {
-  const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
-  const baseUrl = import.meta.env.VITE_API_URL ?? '';
-  const response = await fetch(`${baseUrl}/api/v1/employees/clock-out`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ closingCashCount, notes }),
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.error ?? 'Clock-out failed');
-  }
-  return response.json();
-};
-
 function EmployeesView({ session, onShiftChange }: { session: CloudSession; onShiftChange?: () => void }): JSX.Element {
   const [clockInModalOpen, setClockInModalOpen] = useState(false);
   const [openingFloat, setOpeningFloat] = useState('1500.00');
