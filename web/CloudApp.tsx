@@ -81,6 +81,7 @@ function clearSessionStorage(): void {
   localStorage.removeItem('bakealley_cloud_token');
   localStorage.removeItem('bakealley_cloud_user');
   localStorage.removeItem('bakealley_cloud_last_active');
+  localStorage.removeItem('bakealley_cloud_tab');
   localStorage.removeItem('bakealley_pos_cart');
   localStorage.removeItem('bakealley_pos_customer_id');
   localStorage.removeItem('bakealley_pos_crm_form');
@@ -310,7 +311,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     if (!report) return;
     const items = report.items || [];
     const csvData = [
-      ['Bake Alley Cloud POS \u2014 End of Day Financial Audit Statement'],
+      ['Bake Alley Cloud POS — End of Day Financial Audit Statement'],
       ['Audit Date', selectedDate],
       ['Generated Date/Time', new Date().toLocaleString()],
       [''],
@@ -359,7 +360,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const exportMonthlyCsv = (): void => {
     if (!monthlyReport) return;
     const csvData = [
-      [`Bake Alley Cloud POS \u2014 12-Month Financial Performance (${selectedYear})`],
+      [`Bake Alley Cloud POS — 12-Month Financial Performance (${selectedYear})`],
       ['Generated Date/Time', new Date().toLocaleString()],
       [''],
       ['Month', 'Gross Sales (PHP)', 'Actual COGS (PHP)', 'Gross Profit (PHP)', 'Margin %', 'Orders', 'AOV (PHP)', 'Cash (PHP)', 'GCash (PHP)', 'Card (PHP)', 'Account (PHP)', 'Est. Card Fees (PHP)'],
@@ -415,7 +416,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           </style>
         </head>
         <body>
-          <h1>Bake Alley Cloud POS \u2014 End of Day Financial Audit</h1>
+          <h1>Bake Alley Cloud POS — End of Day Financial Audit</h1>
           <div class="header-info">
             <div><strong>Audit Date:</strong> ${selectedDate}</div>
             <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
@@ -560,7 +561,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
             <div className="space-y-8">
               <section>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit {"\u2014"} {selectedDate}</h2>
+                  <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit {"—"} {selectedDate}</h2>
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Verified EOD Statement</span>
                 </div>
 
@@ -679,7 +680,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 <section>
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h2 className="font-bakery text-lg font-bold text-amber-950">Option B {"\u2014"} 12-Month Performance Matrix ({selectedYear})</h2>
+                      <h2 className="font-bakery text-lg font-bold text-amber-950">Option B {"—"} 12-Month Performance Matrix ({selectedYear})</h2>
                       <p className="text-xs text-amber-700">Click any month column to inspect its full interactive statement below.</p>
                     </div>
                     <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
@@ -800,7 +801,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <div>
                       <h2 className="font-bakery text-lg font-bold text-amber-950">
-                        Option A {"\u2014"} Monthly Audit Statement ({FULL_MONTH_NAMES[selectedMonthNum - 1]} {selectedYear})
+                        Option A {"—"} Monthly Audit Statement ({FULL_MONTH_NAMES[selectedMonthNum - 1]} {selectedYear})
                       </h2>
                       <p className="text-xs text-amber-700">Detailed month-specific audit using actual inventory product costs.</p>
                     </div>
@@ -1336,7 +1337,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                               toggleExpand(tx.orderId);
                             }}
                           >
-                            {isExpanded ? '\u25B2 Hide' : '\u25BC View Items'}
+                            {isExpanded ? '▲ Hide' : '▼ View Items'}
                           </button>
                         </td>
                       </tr>
@@ -1348,7 +1349,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                               <div className="flex flex-wrap items-center justify-between border-b border-amber-100 pb-2 mb-3">
                                 <div>
                                   <h4 className="font-bold text-amber-950 text-sm">
-                                    Transaction Receipt {"\u2014"} {new Date(tx.soldAt).toLocaleTimeString()}
+                                    Transaction Receipt {"—"} {new Date(tx.soldAt).toLocaleTimeString()}
                                   </h4>
                                   <p className="text-xs text-amber-800">
                                     Cashier: <strong className="text-amber-950">{tx.cashierName}</strong>
@@ -1656,7 +1657,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               filterStatus === 'out' ? 'bg-red-700 text-white shadow-sm ring-2 ring-red-400' : 'bg-red-100 text-red-800 hover:bg-red-200'
             }`}
           >
-            {outOfStockCount} Out of Stock {filterStatus === 'out' && '\u2713'}
+            {outOfStockCount} Out of Stock {filterStatus === 'out' && '✓'}
           </button>
           <button
             type="button"
@@ -1665,7 +1666,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               filterStatus === 'low' ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-400' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
             }`}
           >
-            {lowStockCount} Low Stock Alert {filterStatus === 'low' && '\u2713'}
+            {lowStockCount} Low Stock Alert {filterStatus === 'low' && '✓'}
           </button>
         </div>
         <div className="flex gap-2">
@@ -2043,8 +2044,8 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
                 <tr className="border-b last:border-0" key={customer.customerId}>
                   <td className="py-3 font-semibold text-amber-950">{parts.at(-1)}</td>
                   <td>{parts.length > 1 ? parts : 'Walk-in'}</td>
-                  <td>{customer.email || '\u2014'}</td>
-                  <td>{customer.phone || '\u2014'}</td>
+                  <td>{customer.email || '—'}</td>
+                  <td>{customer.phone || '—'}</td>
                   <td>{customer.tierId === retailTierId ? 'Retail' : 'Wholesale'}</td>
                   <td className="text-right font-bold text-amber-950 tabular-nums">{money.format(lifetimeAmount)}</td>
                   <td className="text-right">
@@ -2334,12 +2335,12 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
                   return (
                     <tr className="border-t border-amber-100/60" key={shift.shiftId}>
                       <td className="py-3 px-2 font-semibold text-amber-950">{shift.displayName}</td>
-                      <td className="py-3 px-2 capitalize">{shiftEmployee?.role ?? '\u2014'}</td>
+                      <td className="py-3 px-2 capitalize">{shiftEmployee?.role ?? '—'}</td>
                       <td className="py-3 px-2">{new Date(shift.clockIn).toLocaleTimeString()}</td>
                       <td className="py-3 px-2">{shift.clockOut ? new Date(shift.clockOut).toLocaleTimeString() : 'Still clocked in'}</td>
                       <td className="py-3 px-2 text-right tabular-nums">{money.format(openingFloatVal)}</td>
-                      <td className="py-3 px-2 text-right tabular-nums">{closingCountVal !== null ? money.format(closingCountVal) : '\u2014'}</td>
-                      <td className="py-3 px-2 text-right tabular-nums">{expectedVal !== null ? money.format(expectedVal) : '\u2014'}</td>
+                      <td className="py-3 px-2 text-right tabular-nums">{closingCountVal !== null ? money.format(closingCountVal) : '—'}</td>
+                      <td className="py-3 px-2 text-right tabular-nums">{expectedVal !== null ? money.format(expectedVal) : '—'}</td>
                       <td className="py-3 px-2 text-right">{auditBadge}</td>
                     </tr>
                   );
@@ -2641,6 +2642,11 @@ export function CloudApp(): JSX.Element {
           localStorage.setItem('bakealley_cloud_token', loggedIn.token);
           localStorage.setItem('bakealley_cloud_user', JSON.stringify(loggedIn.user));
           localStorage.setItem('bakealley_cloud_last_active', String(now));
+
+          const initialTab: Tab = loggedIn.user.role === 'admin' ? 'employees' : 'checkout';
+          setTab(initialTab);
+          localStorage.setItem('bakealley_cloud_tab', initialTab);
+
           setSession(loggedIn);
         }}
       />
@@ -2677,7 +2683,7 @@ export function CloudApp(): JSX.Element {
             <img alt="Bake Alley logo" className="h-9 w-9 rounded-full border border-amber-200/80 object-cover shadow-sm" src={logoUrl} />
             <strong className="font-bakery text-lg text-amber-950">Bake Alley Cloud POS</strong>
             <span className="ml-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
-              {session.user.displayName} {"\u00B7"} {session.user.role}
+              {session.user.displayName} {"·"} {session.user.role}
             </span>
           </div>
           <button
