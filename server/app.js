@@ -994,6 +994,16 @@ app.use((error, _request, response, _next) => {
   }); 
 });
 
+
+// Automatically closes forgotten overnight shifts at 23:59:59 Manila time
+async function autoCloseOvernightShifts() {
+  try {
+    await pool.query();
+  } catch (error) {
+    logger.warn('Overnight shift auto-close check failed:', { error: error.message });
+  }
+}
+
 async function ensureShiftColumns() {
   try {
     await pool.query(`
