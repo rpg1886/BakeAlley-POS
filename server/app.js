@@ -507,15 +507,15 @@ app.post('/api/v1/employees/clock-in', auth.requireSession, async (request, resp
     const notes = typeof payload.notes === 'string' ? payload.notes.trim() : null;
 
     const openShiftCheck = await pool.query(
-      `SELECT shift_id, COALESCE(status, 'OPEN') AS status 
+      `SELECT shift_id AS "shiftId", clock_in AS "clockIn", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", COALESCE(status, 'OPEN') AS status 
        FROM employee_shifts 
-       WHERE user_id = $1 AND (clock_out IS NULL OR status = 'PENDING_PHYSICAL_COUNT')
+       WHERE user_id = $1 AND clock_out IS NULL
        ORDER BY clock_in DESC LIMIT 1`,
       [request.user.userId]
     );
 
     if (openShiftCheck.rowCount > 0) {
-      return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN' });
+      return response.json(openShiftCheck.rows[0]);
     }
 
     const result = await pool.query(
@@ -983,7 +983,13 @@ app.use((error, _request, response, _next) => {
 // Automatically closes forgotten overnight shifts at 23:59:59 Manila time
 async function autoCloseOvernightShifts() {
   try {
-    await pool.query();
+    await pool.query(`
+      UPDATE employee_shifts
+      SET clock_out = ((clock_in AT TIME ZONE 'Asia/Manila')::date + time '23:59:59') AT TIME ZONE 'Asia/Manila',
+          status = 'PENDING_PHYSICAL_COUNT'
+      WHERE clock_out IS NULL 
+        AND (clock_in AT TIME ZONE 'Asia/Manila')::date < (now() AT TIME ZONE 'Asia/Manila')::date
+    `);
   } catch (error) {
     logger.warn('Overnight shift auto-close check failed:', { error: error.message });
   }
@@ -996,6 +1002,7 @@ async function ensureShiftColumns() {
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS closing_cash_count NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS expected_cash NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS cash_discrepancy NUMERIC(12,2);
+      ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'OPEN';
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS notes TEXT;
     `);
     logger.info('Employee shift audit columns ensured');

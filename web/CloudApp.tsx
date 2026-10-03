@@ -63,6 +63,11 @@ async function clockOutWithCount(closingCashCount: number | null, notes?: string
 }
 
 
+
+
+
+
+
 function getInactivityTimeout(): number {
   return INACTIVITY_TIMEOUT_MS;  // 5 minutes for all users
 }
@@ -2524,7 +2529,12 @@ export function CloudApp(): JSX.Element {
   const [shifts, setShifts] = useState<CloudShift[]>([]);
   const [shiftsLoaded, setShiftsLoaded] = useState(false);
 
-
+  // Top-level shift modal state
+  const [clockInModalOpen, setClockInModalOpen] = useState(false);
+  const [openingFloat, setOpeningFloat] = useState('1500.00');
+  const [clockInNotes, setClockInNotes] = useState('');
+  const [clockingIn, setClockingIn] = useState(false);
+  const [clockInError, setClockInError] = useState<string | null>(null);
 
   const isAdmin = session?.user.role === 'admin';
 
@@ -2573,6 +2583,40 @@ export function CloudApp(): JSX.Element {
     }
   }, [session]);
 
+  // Active open shift for non-admin cashiers
+  const ownShift = useMemo(() => {
+    if (!session || isAdmin) return null;
+    return shifts.find((shift) => shift.userId === session.user.userId && !shift.clockOut) || null;
+  }, [shifts, session, isAdmin]);
+
+  // Check if non-admin cashier requires clock-in
+  const cashierRequiresClockIn = !isAdmin && shiftsLoaded && !ownShift;
+
+  // Prompt non-admin cashier to clock in ONLY after shifts have loaded from server
+  useEffect(() => {
+    if (session && cashierRequiresClockIn && !clockInModalOpen) {
+      setOpeningFloat('1500.00');
+      setClockInNotes('');
+      setClockInError(null);
+      setClockInModalOpen(true);
+    }
+  }, [session, cashierRequiresClockIn]);
+
+  const submitClockIn = async (): Promise<void> => {
+    setClockingIn(true);
+    setClockInError(null);
+    try {
+      const floatVal = Number(openingFloat) || 1500.00;
+      await clockInWithFloat(floatVal, clockInNotes);
+      setClockInModalOpen(false);
+      await refreshShifts();
+    } catch (reason) {
+      console.error('Clock-in error:', reason);
+      setClockInError(errorText(reason, 'Unable to clock in. Please try again.'));
+    } finally {
+      setClockingIn(false);
+    }
+  };
 
   if (!session) {
     return (
@@ -2654,7 +2698,29 @@ export function CloudApp(): JSX.Element {
         </nav>
       </header>
 
-      {tab === 'checkout' && <CheckoutScreen dataSource={dataSource} scaleEnabled={false} customers={customers as CheckoutCustomer[]} retailTierId={retailTierId} taxRate={0} />}
+      {/* Checkout Screen with Quick Clock-In Banner for Cashiers */}
+      {tab === 'checkout' && (
+        <div className="relative">
+          {cashierRequiresClockIn && (
+            <div className="bg-amber-800 text-white text-center py-2.5 px-4 text-xs font-bold flex items-center justify-center gap-2 shadow-inner">
+              <span>🔒 Shift Not Started — Please Clock In & Set Starting Cash Float to Process Orders</span>
+              <button
+                type="button"
+                className="ml-2 bg-white text-amber-950 px-3 py-1 rounded-lg text-xs font-extrabold hover:bg-amber-100 shadow-sm transition"
+                onClick={() => {
+                  setOpeningFloat('1500.00');
+                  setClockInNotes('');
+                  setClockInError(null);
+                  setClockInModalOpen(true);
+                }}
+              >
+                Clock In Now
+              </button>
+            </div>
+          )}
+          <CheckoutScreen dataSource={dataSource} scaleEnabled={false} customers={customers as CheckoutCustomer[]} retailTierId={retailTierId} taxRate={0} />
+        </div>
+      )}
 
       {tab !== 'checkout' && (
         <main className="mx-auto max-w-7xl p-4 sm:p-6">
@@ -2667,6 +2733,82 @@ export function CloudApp(): JSX.Element {
         </main>
       )}
 
+      {/* Top-Level Quick Clock-In Modal */}
+      {clockInModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
+          <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
+            <div className="flex items-start justify-between border-b border-amber-100 pb-3">
+              <div>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">🈺 Start Shift & Cash Drawer Float</h3>
+                <p className="text-xs text-amber-700 mt-0.5">Welcome back, {session.user.displayName}! Initialize your shift float.</p>
+              </div>
+              <button
+                aria-label="Close dialog"
+                className="text-xl text-amber-600 hover:text-amber-900"
+                type="button"
+                onClick={() => setClockInModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            {clockInError && (
+              <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700 border border-red-200" role="alert">
+                {clockInError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Opening Cash Float (₱)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full rounded-xl border border-amber-200/80 bg-amber-50/20 px-3.5 py-2.5 text-lg font-bold text-amber-950 outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/30"
+                value={openingFloat}
+                onChange={(e) => setOpeningFloat(e.target.value)}
+                autoFocus
+              />
+              <p className="mt-1 text-[11px] text-amber-700 leading-normal">
+                💡 Physical starting cash in drawer for giving change (default: ₱1,500.00).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Shift Notes (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Received 10x 100 bills, 10x 50 bills"
+                className="w-full rounded-xl border border-amber-200/80 px-3.5 py-2 text-xs text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+                value={clockInNotes}
+                onChange={(e) => setClockInNotes(e.target.value)}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-amber-100">
+              <button
+                type="button"
+                className="flex-1 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                onClick={() => setClockInModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
+                onClick={() => void submitClockIn()}
+                disabled={clockingIn || !openingFloat}
+              >
+                {clockingIn ? 'Opening Shift...' : '🚀 Confirm & Open Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
