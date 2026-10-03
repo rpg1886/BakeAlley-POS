@@ -1,3 +1,5 @@
+web/CloudApp.tsx ===
+
 import { Fragment, useEffect, useMemo, useState, type JSX, type ReactNode } from 'react';
 import { CheckoutScreen, type CheckoutCustomer, type CheckoutOrderPayload, type CheckoutProduct } from '../src/components/CheckoutScreen';
 import { LoginScreen } from '../src/renderer/LoginScreen';
@@ -2064,15 +2066,12 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
   const [openingFloat, setOpeningFloat] = useState('1500.00');
   const [clockInNotes, setClockInNotes] = useState('');
   const [clockingIn, setClockingIn] = useState(false);
+  const [clockInError, setClockInError] = useState<string | null>(null);
 
   const [clockOutModalOpen, setClockOutModalOpen] = useState(false);
   const [closingCashCount, setClosingCashCount] = useState('');
   const [clockOutNotes, setClockOutNotes] = useState('');
   const [clockingOut, setClockingOut] = useState(false);
-  const [pendingModalOpen, setPendingModalOpen] = useState(false);
-  const [pendingCashCount, setPendingCashCount] = useState('');
-  const [pendingNotes, setPendingNotes] = useState('');
-  const [resolvingPending, setResolvingPending] = useState(false);
   const [employees, setEmployees] = useState<CloudEmployee[]>([]);
   const [shifts, setShifts] = useState<CloudShift[]>([]);
 
@@ -2132,41 +2131,23 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
     }
   };
 
-  const submitPendingResolution = async (): Promise<void> => {
-    if (!pendingCashCount || Number(pendingCashCount) < 0) return;
-    setResolvingPending(true);
-    try {
-      await clockOutWithCount(Number(pendingCashCount), pendingNotes || "Resolved yesterday's unclosed shift");
-      setPendingModalOpen(false);
-      await refreshShifts();
-      setOpeningFloat('1500.00');
-      setClockInNotes('');
-      setClockInModalOpen(true);
-    } catch (reason) {
-      console.error('Pending shift resolution error:', reason);
-    } finally {
-      setResolvingPending(false);
-    }
-  };
-
   const submitClockIn = async (): Promise<void> => {
     setClockingIn(true);
-    setError(null);
+    setClockInError(null);
     try {
       const floatVal = Number(openingFloat) || 1500.00;
       await clockInWithFloat(floatVal, clockInNotes);
-      setMessage('Clocked in successfully with opening float.');
       setClockInModalOpen(false);
-      await refresh();
-      if (onShiftChange) onShiftChange();
+      await refreshShifts();
     } catch (reason) {
-      setError(errorText(reason, 'Unable to clock in.'));
+      console.error('Clock-in error:', reason);
+      setClockInError(errorText(reason, 'Unable to clock in. Please try again.'));
     } finally {
       setClockingIn(false);
     }
   };
 
-  const submitClockOut = async (): Promise<void> => {
+const submitClockOut = async (): Promise<void> => {
     if (!closingCashCount || Number(closingCashCount) < 0) {
       setError('Please enter a valid physical cash count.');
       return;
@@ -2555,10 +2536,6 @@ export function CloudApp(): JSX.Element {
   const [closingCashCount, setClosingCashCount] = useState('');
   const [clockOutNotes, setClockOutNotes] = useState('');
   const [clockingOut, setClockingOut] = useState(false);
-  const [pendingModalOpen, setPendingModalOpen] = useState(false);
-  const [pendingCashCount, setPendingCashCount] = useState('');
-  const [pendingNotes, setPendingNotes] = useState('');
-  const [resolvingPending, setResolvingPending] = useState(false);
 
   const isAdmin = session?.user.role === 'admin';
 
@@ -2619,22 +2596,16 @@ export function CloudApp(): JSX.Element {
   }, [shifts, session, isAdmin]);
 
   // Check if non-admin cashier requires clock-in
-  const cashierRequiresClockIn = !isAdmin && !ownShift;
+  const cashierRequiresClockIn = !isAdmin && !ownShift && !pendingOvernightShift;
 
-  // Auto-prompt cashier to resolve pending shift OR open new shift upon login
+  // Prompt non-admin cashier to clock in ONLY after shifts have loaded from server
   useEffect(() => {
-    if (session && !isAdmin && shiftsLoaded) {
-      if (pendingOvernightShift && !pendingModalOpen && !ownShift) {
-        setPendingCashCount('');
-        setPendingNotes('');
-        setPendingModalOpen(true);
-      } else if (!ownShift && !pendingOvernightShift && !clockInModalOpen && !pendingModalOpen) {
-        setOpeningFloat('1500.00');
-        setClockInNotes('');
-        setClockInModalOpen(true);
-      }
+    if (session && !isAdmin && shiftsLoaded && !ownShift && !pendingOvernightShift && !clockInModalOpen) {
+      setOpeningFloat('1500.00');
+      setClockInNotes('');
+      setClockInModalOpen(true);
     }
-  }, [session, isAdmin, shiftsLoaded, ownShift, pendingOvernightShift, pendingModalOpen, clockInModalOpen]);
+  }, [session, isAdmin, shiftsLoaded, ownShift, pendingOvernightShift]);
 
   // Inactivity Monitor Effect - Auto-logout after 5 minutes of inactivity
   useEffect(() => {
@@ -2664,24 +2635,7 @@ export function CloudApp(): JSX.Element {
     };
   }, [session]);
 
-  const submitPendingResolution = async (): Promise<void> => {
-    if (!pendingCashCount || Number(pendingCashCount) < 0) return;
-    setResolvingPending(true);
-    try {
-      await clockOutWithCount(Number(pendingCashCount), pendingNotes || "Resolved yesterday's unclosed shift");
-      setPendingModalOpen(false);
-      await refreshShifts();
-      setOpeningFloat('1500.00');
-      setClockInNotes('');
-      setClockInModalOpen(true);
-    } catch (reason) {
-      console.error('Pending shift resolution error:', reason);
-    } finally {
-      setResolvingPending(false);
-    }
-  };
-
-  const submitClockIn = async (): Promise<void> => {
+  const submitTopLevelClockIn = async (): Promise<void> => {
     setClockingIn(true);
     try {
       const floatVal = Number(openingFloat) || 1500.00;
@@ -2695,7 +2649,7 @@ export function CloudApp(): JSX.Element {
     }
   };
 
-  const submitClockOut = async (): Promise<void> => {
+  const submitTopLevelClockOut = async (): Promise<void> => {
     if (!closingCashCount || Number(closingCashCount) < 0) return;
     setClockingOut(true);
     try {
@@ -2835,60 +2789,6 @@ export function CloudApp(): JSX.Element {
         </main>
       )}
 
-      {/* Pending Overnight Shift Reconciliation Modal */}
-      {pendingModalOpen && pendingOvernightShift && (
-        <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
-          <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
-            <div className="flex items-start justify-between border-b border-amber-100 pb-3">
-              <div>
-                <h3 className="font-bakery text-lg font-bold text-amber-950">⚠️ Resolve Yesterday's Unclosed Shift</h3>
-                <p className="text-xs text-amber-700 mt-0.5">Cashier: {session.user.displayName}</p>
-              </div>
-            </div>
-            <p className="text-xs text-amber-900 leading-relaxed bg-amber-50 p-3 rounded-xl border border-amber-200/80">
-              Your shift from yesterday was automatically closed at midnight. Please enter yesterday's physical register drawer cash count to reconcile yesterday's audit before starting today's shift.
-            </p>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                Yesterday's Physical Cash Count (₱)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                className="w-full rounded-xl border border-amber-200/80 bg-amber-50/20 px-3.5 py-2.5 text-lg font-bold text-amber-950 outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/30"
-                value={pendingCashCount}
-                onChange={(e) => setPendingCashCount(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                Notes / Remarks (Optional)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Forgot to clock out before leaving"
-                className="w-full rounded-xl border border-amber-200/80 px-3.5 py-2 text-xs text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
-                value={pendingNotes}
-                onChange={(e) => setPendingNotes(e.target.value)}
-              />
-            </div>
-            <div className="pt-2 border-t border-amber-100">
-              <button
-                type="button"
-                className="w-full rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
-                onClick={() => void submitPendingResolution()}
-                disabled={resolvingPending || !pendingCashCount}
-              >
-                {resolvingPending ? 'Reconciling Shift...' : '✅ Save Count & Proceed to Clock In'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Top-Level Clock-In Modal */}
       {clockInModalOpen && !pendingOvernightShift && (
         <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
@@ -2898,8 +2798,14 @@ export function CloudApp(): JSX.Element {
                 <h3 className="font-bakery text-lg font-bold text-amber-950">🈺 Start Shift & Cash Drawer Float</h3>
                 <p className="text-xs text-amber-700 mt-0.5">Welcome back, {session.user.displayName}! Initialize your shift float.</p>
               </div>
-              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setClockInModalOpen(false)}>×</button>
+              <button aria-label="Close dialog" className="text-xl text-amber-600 hover:text-amber-900" type="button" onClick={() => { clearSessionStorage(); setSession(null); setClockInModalOpen(false); }}>×</button>
             </div>
+
+            {clockInError && (
+              <p className="rounded-lg bg-red-50 p-3 text-xs font-semibold text-red-700 border border-red-200" role="alert">
+                {clockInError}
+              </p>
+            )}
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
@@ -2936,14 +2842,14 @@ export function CloudApp(): JSX.Element {
               <button
                 type="button"
                 className="flex-1 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
-                onClick={() => setClockInModalOpen(false)}
+                onClick={() => { clearSessionStorage(); setSession(null); setClockInModalOpen(false); }}
               >
-                Cancel
+                Cancel & Log Out
               </button>
               <button
                 type="button"
-                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
-                onClick={() => void submitClockIn()}
+                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 shadow-sm"
+                onClick={() => void submitTopLevelClockIn()}
                 disabled={clockingIn || !openingFloat}
               >
                 {clockingIn ? 'Opening Shift...' : '🚀 Confirm & Open Shift'}
@@ -2953,7 +2859,7 @@ export function CloudApp(): JSX.Element {
         </div>
       )}
 
-      {/* Top-Level Clock-Out Header Logout Modal */}
+{/* Top-Level Clock-Out Header Logout Modal */}
       {clockOutModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
           <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
@@ -3008,7 +2914,7 @@ export function CloudApp(): JSX.Element {
               <button
                 type="button"
                 className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
-                onClick={() => void submitClockOut()}
+                onClick={() => void submitTopLevelClockOut()}
                 disabled={clockingOut || !closingCashCount}
               >
                 {clockingOut ? 'Closing Shift & Signing Out...' : '🏁 Confirm & Sign Out'}
