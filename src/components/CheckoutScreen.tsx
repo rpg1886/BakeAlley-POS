@@ -700,7 +700,7 @@ export function CheckoutScreen({
                     }}
                     className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
                       paymentMethod === opt.id
-                        ? `\${opt.color} ring-2 ring-amber-500/50 shadow-sm font-bold`
+                        ? `${opt.color} ring-2 ring-amber-500/50 shadow-sm font-bold`
                         : 'border-amber-200/80 text-amber-900 hover:bg-amber-50/50 font-semibold'
                     }`}
                   >
