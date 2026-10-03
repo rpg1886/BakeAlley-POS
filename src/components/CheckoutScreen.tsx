@@ -399,10 +399,10 @@ export function CheckoutScreen({
 
   // Payment Options Config with Logos / Visual Badges
   const paymentOptions = [
-    { id: 'cash', label: 'Cash', icon: '{"\u{1F4B5}"}', color: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
-    { id: 'card', label: 'Card / POS', icon: '{"\u{1F4B3}"}', color: 'border-blue-500 bg-blue-50 text-blue-800' },
-    { id: 'gcash', label: 'GCash', icon: '{"\u{1F4F2}"}', color: 'border-sky-500 bg-sky-50 text-sky-800' },
-    { id: 'account', label: 'Account', icon: '{"\u{1F4CB}"}', color: 'border-amber-500 bg-amber-50 text-amber-800' },
+    { id: 'cash', label: 'Cash', icon: '💵', color: 'border-emerald-500 bg-emerald-50 text-emerald-800' },
+    { id: 'card', label: 'Card / POS', icon: '💳', color: 'border-blue-500 bg-blue-50 text-blue-800' },
+    { id: 'gcash', label: 'GCash', icon: '📱', color: 'border-sky-500 bg-sky-50 text-sky-800' },
+    { id: 'account', label: 'Account', icon: '📋', color: 'border-amber-500 bg-amber-50 text-amber-800' },
   ] as const;
 
   return (
@@ -426,13 +426,13 @@ export function CheckoutScreen({
             >
               <span className="truncate font-medium text-amber-950">
                 {!selectedCustomer
-                  ? "\u{1F464} Retail Walk-in (New Client)"
+                  ? "👤 Retail Walk-in (New Client)"
                   : isWholesaleCustomer
-                  ? "\u{1F3E2} " + selectedCustomer.displayName + " (Wholesale)"
-                  : "\u{1F501} " + selectedCustomer.displayName + " (Return Client)"}
+                  ? "🏢 " + selectedCustomer.displayName + " (Wholesale)"
+                  : "🔁 " + selectedCustomer.displayName + " (Return Client)"}
               </span>
               <span className="ml-2 text-xs text-amber-600 font-bold">
-                {customerDropdownOpen ? '\u25B2' : '\u25BC'}
+                {customerDropdownOpen ? '▲' : '▼'}
               </span>
             </div>
 
@@ -461,7 +461,7 @@ export function CheckoutScreen({
                         : 'hover:bg-amber-50 text-amber-900'
                     }`}
                   >
-                    {"\u{1F464}"} Retail Walk-in (New Client)
+                    {"👤"} Retail Walk-in (New Client)
                   </button>
 
                   {filteredCustomers.length === 0 ? (
@@ -488,7 +488,7 @@ export function CheckoutScreen({
                           }`}
                         >
                           <span className="truncate">
-                            {isWholesale ? "\u{1F3E2}" : "\u{1F501}"} {customer.displayName}
+                            {isWholesale ? "🏢" : "🔁"} {customer.displayName}
                           </span>
                           <span
                             className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold ${
@@ -564,7 +564,7 @@ export function CheckoutScreen({
                 }}
                 className="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-200"
               >
-                \u2190 All Categories
+                ← All Categories
               </button>
             )}
           </div>
@@ -646,7 +646,7 @@ export function CheckoutScreen({
                         <td className="px-3 py-4"><input aria-label={`Quantity for ${line.product.name}`} className="w-24 rounded border border-amber-200/80 px-2 py-1" min="0.0001" step="0.0001" type="number" value={line.quantity} onChange={(event) => updateQuantity(line.lineId, Number(event.target.value))} /></td>
                         <td className="px-3 py-4 tabular-nums">{money.format(line.unitPrice)} / {line.product.unit}</td>
                         <td className="px-5 py-4 text-right font-semibold tabular-nums">{money.format(line.quantity * line.unitPrice)}</td>
-                        <td className="pr-4"><button className="text-amber-600 hover:text-red-600" title="Remove item" type="button" onClick={() => setCart((currentCart) => currentCart.filter((item) => item.lineId !== line.lineId))}>\u00D7</button></td>
+                        <td className="pr-4"><button className="text-amber-600 hover:text-red-600" title="Remove item" type="button" onClick={() => setCart((currentCart) => currentCart.filter((item) => item.lineId !== line.lineId))}>×</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -684,7 +684,7 @@ export function CheckoutScreen({
                 <p className="text-sm font-semibold uppercase tracking-wide text-amber-600">Payment</p>
                 <h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(totalAmount)}</h2>
               </div>
-              <button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setPaymentOpen(false)}>\u00D7</button>
+              <button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setPaymentOpen(false)}>×</button>
             </div>
 
             <fieldset className="mt-6">
@@ -734,7 +734,7 @@ export function CheckoutScreen({
 
             {paymentMethod === 'gcash' && (
               <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3.5 text-xs text-sky-900">
-                <p className="font-bold flex items-center gap-1.5">{"\u{1F4F2}"} GCash Payment Scan</p>
+                <p className="font-bold flex items-center gap-1.5">📱 GCash Payment Scan</p>
                 <p className="mt-1">Confirm client transaction reference on the store GCash QR terminal before clicking payment.</p>
               </div>
             )}
@@ -750,7 +750,7 @@ export function CheckoutScreen({
                   setPaymentOpen(false);
                 }}
               >
-                {\u21A9\uFE0F} Back to Cart
+                ↩️ Back to Cart
               </button>
               <button
                 className="flex-1 rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50 shadow-sm transition"
