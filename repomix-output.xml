@@ -364,6 +364,114 @@ Added admin new-SKU creation with initial lot, price, and cost, plus a final bro
 Completed another Electron/cloud parity pass: reordered Employees sections, added explicit shift status and date calendar presentation, replaced visible inventory lot numbers with expiration dates, and disabled weighing only in cloud checkout through an opt-in prop. Full Electron typecheck and cloud validation pass.
 </file>
 
+<file path=".github/agents/bake-alley-cloud-pos-architect.agent.md">
+name: Bake Alley Cloud POS Architect
+description: "Use when migrating or building Bake Alley POS features with Electron, React, TypeScript, Express, PostgreSQL, IndexedDB, or Tailwind CSS. Enforces strict Haiku-level budget model guardrails for decimal precision, strict typing, FEFO inventory, tier fallbacks, and payment consolidation."
+tools: [read, search, edit, execute]
+reasoning-effort: high
+argument-hint: "Describe the cloud POS feature, API route, React component, FEFO logic, or schema change to implement."
+user-invocable: true
+agents: []
+---
+
+# Identity & Mission
+You are the **Lead Cloud POS Architect and Full-Stack Engineer** for Bake Alley, a baking-supply retail system. Your mission is to generate production-grade, highly reliable TypeScript, SQL, Express, and React code for a multi-device Cloud POS (desktop browsers, tablets, phones) while maintaining compatibility with the local Electron app and serial hardware peripherals.
+
+---
+
+# HARD GUARDRAILS FOR BUDGET AI MODELS (e.g., Claude 3.5 Haiku)
+
+When generating or editing code, you MUST follow these non-negotiable rules without exception:
+
+### 1. Zero Placeholders & Complete Implementations
+- **NEVER** use placeholder comments such as `// TODO: implement later`, `// ... rest of code`, or truncated functions.
+- Always output fully functional, copy-pasteable TypeScript, React, or SQL code.
+- Enforce strict TypeScript typing (`noImplicitAny: true`). **NEVER** use the `any` type—define explicit interfaces for every request payload, database row, and state object.
+
+### 2. Strict Currency & Weight Precision Math
+- **NEVER** perform raw JavaScript floating-point arithmetic on prices or weights without explicit rounding helpers or tolerance checks.
+- **Database Rules**: PostgreSQL and SQLite schemas MUST use `NUMERIC(12, 2)` for prices/money and `NUMERIC(12, 4)` for quantities, weights, and rates.
+- **Cart & Order Validation**: When validating cart unit prices on the server, use a ₱0.01 decimal tolerance check to prevent floating-point rounding errors:
+  ```typescript
+  if (!price.rowCount || Math.abs(Number(price.rows.price_per_unit) - Number(item.unitPrice)) > 0.01) {
+    throw Object.assign(new Error('Price changed; review the cart'), { statusCode: 409, code: 'PRICE_CHANGED' });
+  }
+Display Formatting: Always display monetary values in Philippine Pesos (PHP / ₱) formatted to exactly 2 decimal places using Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).
+3. Primary Keys & UUID Strings
+ALL primary keys across SQLite, IndexedDB, and PostgreSQL MUST be UUID v4 strings (e.g., crypto.randomUUID() or gen_random_uuid()).
+NEVER introduce auto-incrementing integer IDs for domain entities (orders, customers, products, order items, inventory lots).
+4. Price Tier Resolution & Fallback Pattern
+When looking up prices for products or category grids, ALWAYS implement a fallback to prevent returning 0 or ₱0.00:
+First, search for an exact match on tierId and minQuantity <= quantity.
+If no row is returned or price is 0, fall back to any active positive price row for that product variant.
+function resolvePrice(product: CheckoutProduct, tierId: string, quantity: number): number {
+  if (!product.prices || product.prices.length === 0) return 0;
+  const matching = product.prices
+    .filter((p) => p.tierId === tierId && p.minQuantity <= quantity)
+    .sort((a, b) => b.minQuantity - a.minQuantity);
+  if (matching.length > 0 && Number(matching.pricePerUnit) > 0) return Number(matching.pricePerUnit);
+  const fallback = product.prices.find((p) => Number(p.pricePerUnit) > 0);
+  return fallback ? Number(fallback.pricePerUnit) : 0;
+}
+5. Food Safety & FEFO Lot Allocation Rules
+Items marked requires_lot_tracking = true MUST track inventory_lots with expiration_date.
+Order deductions MUST follow First-Expired, First-Out (FEFO) order (ORDER BY expiration_date ASC NULLS LAST).
+In inventory allocation loops, ALWAYS decrement the remaining quantity counter correctly:
+let remaining = Number(item.quantity);
+for (const lot of lots.rows) {
+  if (remaining <= 0) break;
+  const allocated = Math.min(remaining, Number(lot.quantity_on_hand));
+  allocations.push({ lotId: lot.lot_id, quantity: allocated });
+  remaining -= allocated; // MUST decrement counter
+}
+if (remaining > 0) throw Object.assign(new Error('Insufficient stock'), { statusCode: 409, code: 'INSUFFICIENT_INVENTORY' });
+6. Payment Method & Digital Tender Normalization
+All payment contracts MUST support four explicit payment options: 'cash' | 'card' | 'gcash' | 'account'.
+When aggregating or consolidating sales reports in the Financials tab, ALWAYS use case-insensitive string matching to prevent missing payments:
+const rawMethod = String(item.paymentMethod || 'cash').toLowerCase().trim();
+if (rawMethod.includes('gcash')) paymentBreakdown.gcash += amount;
+else if (rawMethod.includes('card')) paymentBreakdown.card += amount;
+else if (rawMethod.includes('account')) paymentBreakdown.account += amount;
+else paymentBreakdown.cash += amount;
+Architecture & Tech Stack Rules
+Cloud Frontend: React PWA + TypeScript + Tailwind CSS + Vite (hosted on GitHub Pages).
+Cloud Backend API: Node.js + Express REST API (hosted on Render).
+Cloud Database: Managed PostgreSQL (hosted on Neon.tech).
+Desktop Companion: Electron + better-sqlite3 (WAL mode) + node-serialport (RS-232 scale streams).
+Offline Sync: Local-First Transactional Outbox Pattern with IndexedDB / SQLite sync queue, batch size 50, and exponential backoff retry.
+Canonical Database Relationships
+Ensure all generated SQL migrations and TypeScript models strictly match these tables:
+units_of_measure (uom_id, name, symbol)
+categories (category_id, name)
+products (product_id, category_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, initial_cost)
+product_variants (variant_id, product_id, sku, barcode, variant_name)
+price_tiers (tier_id, tier_name)
+product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity)
+customers (customer_id, company_name, contact_name, email, phone, tier_id, credit_limit, current_balance)
+inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand)
+orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, created_at)
+order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price)
+app_users (user_id, username, display_name, role, password_salt, password_hash, active)
+employee_shifts (shift_id, user_id, clock_in, clock_out)
+Required Working Workflow
+Inspect before editing: Always check existing types (apiClient.ts), components (CheckoutScreen.tsx), and routes (app.js) before modifying code.
+Server Authoritative: Never rely on client-side math for payments or stock deductions—the Express API must validate money, prices, and FEFO inventory.
+Preserve Electron: Never modify or regress the Electron desktop codebase or SQLite data files when building browser/cloud features.
+Update Documentation: Update docs/Function-Design-POS.md whenever API contracts, database schemas, or payment workflows are updated.
+
+
+## Response Format
+
+Report:
+
+1. What changed and why
+2. Files changed
+3. Compatibility impact on Electron
+4. Validation performed
+5. Remaining environment or deployment dependencies
+6. Next smallest migration step
+</file>
+
 <file path=".github/agents/bake-alley-pos-architect.agent.md">
 ---
 name: Bake Alley POS Architect
@@ -5564,10 +5672,6 @@ FONDANT MOLDERS ,,,,,
 "SPRINKLE-12","Rainbow Sprinkles 12 oz","100.0000","undefined","2.75"
 "VANILLA-118","Vanilla Extract 118 ml","98.0000","undefined","6.00"
 "BOX-CAKE-10","White Cake Box, 10 pack","100.0000","undefined","8.00"
-</file>
-
-<file path="README.md">
-testing for repomix need for this run conitnuously
 </file>
 
 <file path="repomix-output.txt">
@@ -12303,114 +12407,6 @@ Lead Cloud POS Architect and Full-Stack Engineer for Bake Alley.
 - `.github/agents/prompts/2026-09-30-163410-fix-gcash-type-incompatibility.md`
 </file>
 
-<file path=".github/agents/bake-alley-cloud-pos-architect.agent.md">
-name: Bake Alley Cloud POS Architect
-description: "Use when migrating or building Bake Alley POS features with Electron, React, TypeScript, Express, PostgreSQL, IndexedDB, or Tailwind CSS. Enforces strict Haiku-level budget model guardrails for decimal precision, strict typing, FEFO inventory, tier fallbacks, and payment consolidation."
-tools: [read, search, edit, execute]
-reasoning-effort: high
-argument-hint: "Describe the cloud POS feature, API route, React component, FEFO logic, or schema change to implement."
-user-invocable: true
-agents: []
----
-
-# Identity & Mission
-You are the **Lead Cloud POS Architect and Full-Stack Engineer** for Bake Alley, a baking-supply retail system. Your mission is to generate production-grade, highly reliable TypeScript, SQL, Express, and React code for a multi-device Cloud POS (desktop browsers, tablets, phones) while maintaining compatibility with the local Electron app and serial hardware peripherals.
-
----
-
-# HARD GUARDRAILS FOR BUDGET AI MODELS (e.g., Claude 3.5 Haiku)
-
-When generating or editing code, you MUST follow these non-negotiable rules without exception:
-
-### 1. Zero Placeholders & Complete Implementations
-- **NEVER** use placeholder comments such as `// TODO: implement later`, `// ... rest of code`, or truncated functions.
-- Always output fully functional, copy-pasteable TypeScript, React, or SQL code.
-- Enforce strict TypeScript typing (`noImplicitAny: true`). **NEVER** use the `any` type—define explicit interfaces for every request payload, database row, and state object.
-
-### 2. Strict Currency & Weight Precision Math
-- **NEVER** perform raw JavaScript floating-point arithmetic on prices or weights without explicit rounding helpers or tolerance checks.
-- **Database Rules**: PostgreSQL and SQLite schemas MUST use `NUMERIC(12, 2)` for prices/money and `NUMERIC(12, 4)` for quantities, weights, and rates.
-- **Cart & Order Validation**: When validating cart unit prices on the server, use a ₱0.01 decimal tolerance check to prevent floating-point rounding errors:
-  ```typescript
-  if (!price.rowCount || Math.abs(Number(price.rows.price_per_unit) - Number(item.unitPrice)) > 0.01) {
-    throw Object.assign(new Error('Price changed; review the cart'), { statusCode: 409, code: 'PRICE_CHANGED' });
-  }
-Display Formatting: Always display monetary values in Philippine Pesos (PHP / ₱) formatted to exactly 2 decimal places using Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).
-3. Primary Keys & UUID Strings
-ALL primary keys across SQLite, IndexedDB, and PostgreSQL MUST be UUID v4 strings (e.g., crypto.randomUUID() or gen_random_uuid()).
-NEVER introduce auto-incrementing integer IDs for domain entities (orders, customers, products, order items, inventory lots).
-4. Price Tier Resolution & Fallback Pattern
-When looking up prices for products or category grids, ALWAYS implement a fallback to prevent returning 0 or ₱0.00:
-First, search for an exact match on tierId and minQuantity <= quantity.
-If no row is returned or price is 0, fall back to any active positive price row for that product variant.
-function resolvePrice(product: CheckoutProduct, tierId: string, quantity: number): number {
-  if (!product.prices || product.prices.length === 0) return 0;
-  const matching = product.prices
-    .filter((p) => p.tierId === tierId && p.minQuantity <= quantity)
-    .sort((a, b) => b.minQuantity - a.minQuantity);
-  if (matching.length > 0 && Number(matching.pricePerUnit) > 0) return Number(matching.pricePerUnit);
-  const fallback = product.prices.find((p) => Number(p.pricePerUnit) > 0);
-  return fallback ? Number(fallback.pricePerUnit) : 0;
-}
-5. Food Safety & FEFO Lot Allocation Rules
-Items marked requires_lot_tracking = true MUST track inventory_lots with expiration_date.
-Order deductions MUST follow First-Expired, First-Out (FEFO) order (ORDER BY expiration_date ASC NULLS LAST).
-In inventory allocation loops, ALWAYS decrement the remaining quantity counter correctly:
-let remaining = Number(item.quantity);
-for (const lot of lots.rows) {
-  if (remaining <= 0) break;
-  const allocated = Math.min(remaining, Number(lot.quantity_on_hand));
-  allocations.push({ lotId: lot.lot_id, quantity: allocated });
-  remaining -= allocated; // MUST decrement counter
-}
-if (remaining > 0) throw Object.assign(new Error('Insufficient stock'), { statusCode: 409, code: 'INSUFFICIENT_INVENTORY' });
-6. Payment Method & Digital Tender Normalization
-All payment contracts MUST support four explicit payment options: 'cash' | 'card' | 'gcash' | 'account'.
-When aggregating or consolidating sales reports in the Financials tab, ALWAYS use case-insensitive string matching to prevent missing payments:
-const rawMethod = String(item.paymentMethod || 'cash').toLowerCase().trim();
-if (rawMethod.includes('gcash')) paymentBreakdown.gcash += amount;
-else if (rawMethod.includes('card')) paymentBreakdown.card += amount;
-else if (rawMethod.includes('account')) paymentBreakdown.account += amount;
-else paymentBreakdown.cash += amount;
-Architecture & Tech Stack Rules
-Cloud Frontend: React PWA + TypeScript + Tailwind CSS + Vite (hosted on GitHub Pages).
-Cloud Backend API: Node.js + Express REST API (hosted on Render).
-Cloud Database: Managed PostgreSQL (hosted on Neon.tech).
-Desktop Companion: Electron + better-sqlite3 (WAL mode) + node-serialport (RS-232 scale streams).
-Offline Sync: Local-First Transactional Outbox Pattern with IndexedDB / SQLite sync queue, batch size 50, and exponential backoff retry.
-Canonical Database Relationships
-Ensure all generated SQL migrations and TypeScript models strictly match these tables:
-units_of_measure (uom_id, name, symbol)
-categories (category_id, name)
-products (product_id, category_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, initial_cost)
-product_variants (variant_id, product_id, sku, barcode, variant_name)
-price_tiers (tier_id, tier_name)
-product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity)
-customers (customer_id, company_name, contact_name, email, phone, tier_id, credit_limit, current_balance)
-inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand)
-orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, created_at)
-order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price)
-app_users (user_id, username, display_name, role, password_salt, password_hash, active)
-employee_shifts (shift_id, user_id, clock_in, clock_out)
-Required Working Workflow
-Inspect before editing: Always check existing types (apiClient.ts), components (CheckoutScreen.tsx), and routes (app.js) before modifying code.
-Server Authoritative: Never rely on client-side math for payments or stock deductions—the Express API must validate money, prices, and FEFO inventory.
-Preserve Electron: Never modify or regress the Electron desktop codebase or SQLite data files when building browser/cloud features.
-Update Documentation: Update docs/Function-Design-POS.md whenever API contracts, database schemas, or payment workflows are updated.
-
-
-## Response Format
-
-Report:
-
-1. What changed and why
-2. Files changed
-3. Compatibility impact on Electron
-4. Validation performed
-5. Remaining environment or deployment dependencies
-6. Next smallest migration step
-</file>
-
 <file path="docs/CODEBASE-ANALYSIS-2026-10-01.md">
 # Bake Alley Cloud POS - Comprehensive Codebase Analysis
 **Date:** 2026-10-01  
@@ -13406,6 +13402,159 @@ All **10 critical and high-priority fixes** have been successfully implemented w
 *Production Hardening Phase 2 - Complete*
 </file>
 
+<file path="server/migrations/001_cloud_pos.sql">
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS units_of_measure (
+  uom_id UUID PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  symbol TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS categories (
+  category_id UUID PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS products (
+  product_id UUID PRIMARY KEY,
+  category_id UUID REFERENCES categories(category_id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  base_uom_id UUID NOT NULL REFERENCES units_of_measure(uom_id),
+  is_sold_by_weight BOOLEAN NOT NULL DEFAULT FALSE,
+  requires_lot_tracking BOOLEAN NOT NULL DEFAULT FALSE,
+  initial_cost NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (initial_cost >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS product_variants (
+  variant_id UUID PRIMARY KEY,
+  product_id UUID NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
+  sku TEXT NOT NULL UNIQUE,
+  barcode TEXT UNIQUE,
+  variant_name TEXT NOT NULL,
+  attributes JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS price_tiers (
+  tier_id UUID PRIMARY KEY,
+  tier_name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS product_prices (
+  product_price_id UUID PRIMARY KEY,
+  variant_id UUID NOT NULL REFERENCES product_variants(variant_id) ON DELETE CASCADE,
+  tier_id UUID NOT NULL REFERENCES price_tiers(tier_id) ON DELETE CASCADE,
+  price_per_unit NUMERIC(12, 2) NOT NULL CHECK (price_per_unit >= 0),
+  min_quantity NUMERIC(12, 4) NOT NULL DEFAULT 0 CHECK (min_quantity >= 0),
+  UNIQUE (variant_id, tier_id, min_quantity)
+);
+
+CREATE TABLE IF NOT EXISTS customers (
+  customer_id UUID PRIMARY KEY,
+  company_name TEXT,
+  contact_name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  tier_id UUID NOT NULL REFERENCES price_tiers(tier_id),
+  credit_limit NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (credit_limit >= 0),
+  current_balance NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (current_balance >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS inventory_lots (
+  lot_id UUID PRIMARY KEY,
+  variant_id UUID NOT NULL REFERENCES product_variants(variant_id),
+  lot_number TEXT NOT NULL,
+  expiration_date DATE,
+  quantity_on_hand NUMERIC(12, 4) NOT NULL DEFAULT 0 CHECK (quantity_on_hand >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (variant_id, lot_number)
+);
+
+CREATE TABLE IF NOT EXISTS app_users (
+  user_id UUID PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'cashier')),
+  password_salt TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS employee_shifts (
+  shift_id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
+  clock_in TIMESTAMPTZ NOT NULL,
+  clock_out TIMESTAMPTZ,
+  notes TEXT
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+  order_id UUID PRIMARY KEY,
+  customer_id UUID REFERENCES customers(customer_id) ON DELETE SET NULL,
+  pricing_tier_id UUID NOT NULL REFERENCES price_tiers(tier_id),
+  employee_id UUID REFERENCES app_users(user_id) ON DELETE SET NULL,
+  order_type TEXT NOT NULL CHECK (order_type IN ('retail', 'commercial')),
+  status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('open', 'completed', 'voided')),
+  subtotal NUMERIC(12, 2) NOT NULL CHECK (subtotal >= 0),
+  tax_amount NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
+  total_amount NUMERIC(12, 2) NOT NULL CHECK (total_amount >= 0),
+  payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'gcash', 'account')),
+  cash_received NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (cash_received >= 0),
+  change_due NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (change_due >= 0),
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS order_items (
+  order_item_id UUID PRIMARY KEY,
+  order_id UUID NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+  variant_id UUID NOT NULL REFERENCES product_variants(variant_id),
+  lot_id UUID REFERENCES inventory_lots(lot_id),
+  quantity NUMERIC(12, 4) NOT NULL CHECK (quantity > 0),
+  unit_price NUMERIC(12, 2) NOT NULL CHECK (unit_price >= 0),
+  total_price NUMERIC(12, 2) NOT NULL CHECK (total_price >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS sync_events (
+  event_id UUID PRIMARY KEY,
+  entity_type TEXT NOT NULL,
+  entity_id UUID NOT NULL,
+  operation TEXT NOT NULL CHECK (operation IN ('create', 'update', 'delete')),
+  payload JSONB NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_variants_search ON product_variants(sku, barcode, variant_name);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  session_id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_employee_id ON orders(employee_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_lots_expiration ON inventory_lots(expiration_date NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_product_prices_variant_tier ON product_prices(variant_id, tier_id, min_quantity);
+CREATE INDEX IF NOT EXISTS idx_employees_active ON app_users(active) WHERE active = TRUE;
+</file>
+
 <file path="server/routes/sync.js">
 const express = require('express');
 
@@ -14014,68 +14163,6 @@ function createAuthRouter(express, pool) {
 }
 
 module.exports = { createAuthRouter };
-</file>
-
-<file path="server/db.js">
-const fs = require('node:fs');
-const path = require('node:path');
-const { Pool } = require('pg');
-const logger = require('./logger');
-
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL is required for the cloud API');
-}
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-});
-
-pool.on('error', (err) => {
-  logger.error('Unexpected error on idle client', { error: err.message });
-  process.exit(-1);
-});
-
-pool.on('connect', () => {
-  logger.debug('New database connection established');
-});
-
-async function migrate() {
-  const sql = fs.readFileSync(path.join(__dirname, 'migrations', '001_cloud_pos.sql'), 'utf8');
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(sql);
-    await client.query('COMMIT');
-    logger.info('Database migration completed successfully');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    logger.error('Database migration failed', { error: error.message });
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-// Clean up expired sessions every hour
-async function cleanupExpiredSessions() {
-  try {
-    const result = await pool.query('DELETE FROM sessions WHERE expires_at < NOW()');
-    if (result.rowCount > 0) {
-      logger.info('Expired sessions cleaned up', { count: result.rowCount });
-    }
-  } catch (error) {
-    logger.error('Failed to cleanup expired sessions', { error: error.message });
-  }
-}
-
-// Start cleanup job on initialization
-setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
-cleanupExpiredSessions(); // Run once on startup
-
-module.exports = { pool, migrate, cleanupExpiredSessions };
 </file>
 
 <file path="src/db/schema.ts">
@@ -16041,157 +16128,348 @@ The beforeunload handler ensures that:
 4. Verify no 23503 or 404 errors appear in the console
 </file>
 
-<file path="server/migrations/001_cloud_pos.sql">
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+<file path="README.md">
+testing for repomix need for this run conitnuously
+</file>
 
-CREATE TABLE IF NOT EXISTS units_of_measure (
-  uom_id UUID PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  symbol TEXT NOT NULL UNIQUE
+<file path="server/scripts/import-main-inventory.js">
+// server/scripts/import-main-inventory.js
+// Imports Inventory_Main.csv directly into the cloud PostgreSQL catalog [1].
+// Usage: node server/scripts/import-main-inventory.js [path-to-csv] [defaultMarkupPercent]
+
+const path = require('node:path');
+const crypto = require('node:crypto');
+const XLSX = require('xlsx');
+const { pool, migrate } = require('../db');
+
+const STOCK_TAKE_LOT_NUMBER = 'STOCKTAKE-MAIN';
+const UNCATEGORIZED_CATEGORY = 'UNCATEGORIZED';
+const CANONICAL_RETAIL_TIER_ID = '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
+
+function slug(value) {
+  return (
+    value
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/^-+|-+\$/g, '')
+      .slice(0, 24) || 'ITEM'
+  );
+}
+
+function parseNonNegativeNumber(value) {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : Number(String(value ?? '0').replace(/,/g, ''));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function roundMoney(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function roundQuantity(value) {
+  return Math.round(value * 10000) / 10000;
+}
+
+function mergeRows(sourceRows) {
+  const merged = new Map();
+  let skippedRows = 0;
+  for (const row of sourceRows) {
+    const name = typeof row.Name === 'string' ? row.Name.trim() : '';
+    if (!name) {
+      skippedRows += 1;
+      continue;
+    }
+    const category =
+      typeof row.Category === 'string' && row.Category.trim() !== ''
+        ? row.Category.trim().toUpperCase()
+        : UNCATEGORIZED_CATEGORY;
+    const warehouseRaw = typeof row.Warehouse === 'string' ? row.Warehouse.trim() : '';
+    const warehouse = warehouseRaw === '' ? null : warehouseRaw;
+    const quantity = roundQuantity(parseNonNegativeNumber(row['Stock Qty']));
+    const cost = roundMoney(parseNonNegativeNumber(row.Cost));
+    const key = `${category}::${name.toLowerCase()}`;
+    const existing = merged.get(key);
+    if (existing) {
+      const totalQuantity = existing.quantity + quantity;
+      existing.cost =
+        totalQuantity > 0
+          ? roundMoney((existing.cost * existing.quantity + cost * quantity) / totalQuantity)
+          : roundMoney((existing.cost + cost) / 2);
+      existing.quantity = totalQuantity;
+      existing.warehouse = existing.warehouse ?? warehouse;
+    } else {
+      merged.set(key, { name, category, warehouse, quantity, cost });
+    }
+  }
+  return { rows: merged, skippedRows };
+}
+
+async function ensurePieceUom(client) {
+  const existing = await client.query(
+    "SELECT uom_id AS \"uomId\" FROM units_of_measure WHERE name = 'Piece'"
+  );
+  if (existing.rowCount) {
+    return existing.rows[0].uomId;
+  }
+  const inserted = await client.query(
+    "INSERT INTO units_of_measure (uom_id, name, symbol) VALUES (gen_random_uuid(), 'Piece', 'pc') RETURNING uom_id AS \"uomId\""
+  );
+  return inserted.rows[0].uomId;
+}
+
+async function importMainInventory(csvPath, defaultMarkupPercent) {
+  console.log('Starting import process...');
+  console.log(`CSV Path: ${csvPath}`);
+  console.log(`Default Markup: ${defaultMarkupPercent}%\n`);
+
+  console.log('Step 1: Running database migration...');
+  await migrate();
+  console.log('Step 1: ✓ Migration complete\n');
+
+  console.log('Step 2: Reading CSV file...');
+  const workbook = XLSX.readFile(csvPath, { cellDates: false });
+  const sheet = workbook.Sheets[workbook.SheetNames];
+  if (!sheet) throw new Error(`No worksheet found in ${csvPath}`);
+  const sourceRows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
+  if (sourceRows.length === 0) throw new Error(`${csvPath} contains no rows`);
+  console.log(`Step 2: ✓ Read ${sourceRows.length} rows from CSV\n`);
+
+  console.log('Step 3: Merging duplicate rows...');
+  const { rows: merged, skippedRows } = mergeRows(sourceRows);
+  if (merged.size === 0) throw new Error(`${csvPath} contains no usable rows`);
+  console.log(`Step 3: ✓ Merged to ${merged.size} unique products (${skippedRows} skipped)\n`);
+
+  const client = await pool.connect();
+  const usedSkus = new Set();
+  let createdCategories = 0;
+  let createdProducts = 0;
+  let updatedProducts = 0;
+  let createdLots = 0;
+  let updatedLots = 0;
+  let processedRows = 0;
+
+  try {
+    console.log('Step 4: Starting database transaction...');
+    await client.query('BEGIN');
+    console.log('Step 4: ✓ Transaction started\n');
+
+    console.log('Step 5: Ensuring Piece UOM exists...');
+    const uomId = await ensurePieceUom(client);
+    console.log(`Step 5: ✓ Using UOM ID: ${uomId}\n`);
+
+    console.log('Step 6: Ensuring Retail Tier exists...');
+    await client.query(
+      `
+      INSERT INTO price_tiers (tier_id, tier_name)
+      VALUES ($1, 'Retail')
+      ON CONFLICT (tier_id) DO UPDATE SET tier_name = 'Retail';
+    `,
+      [CANONICAL_RETAIL_TIER_ID]
+    );
+    console.log('Step 6: ✓ Retail tier ready\n');
+
+    const retailTierId = CANONICAL_RETAIL_TIER_ID;
+
+    console.log('Step 7: Loading existing SKUs...');
+    const existingSkus = await client.query('SELECT sku FROM product_variants');
+    for (const row of existingSkus.rows) usedSkus.add(row.sku);
+    console.log(`Step 7: ✓ Found ${usedSkus.size} existing SKUs\n`);
+
+    console.log('Step 8: Processing inventory rows...');
+    for (const row of merged.values()) {
+      processedRows += 1;
+      if (processedRows % 10 === 0) {
+        console.log(`  Processing row ${processedRows}/${merged.size}...`);
+      }
+
+      let categoryId;
+      const existingCategory = await client.query(
+        'SELECT category_id AS "categoryId" FROM categories WHERE lower(name) = lower(\$1)',
+        [row.category]
+      );
+      if (existingCategory.rowCount) {
+        categoryId = existingCategory.rows[0].categoryId;
+      } else {
+        const inserted = await client.query(
+          'INSERT INTO categories (category_id, name) VALUES (gen_random_uuid(), \$1) RETURNING category_id AS "categoryId"',
+          [row.category]
+        );
+        categoryId = inserted.rows[0].categoryId;
+        createdCategories += 1;
+      }
+
+      const attributes = row.warehouse ? { warehouse: row.warehouse } : {};
+      const existingProduct = await client.query(
+        `SELECT p.product_id AS "productId", v.variant_id AS "variantId"
+         FROM products p JOIN product_variants v ON v.product_id = p.product_id
+         WHERE lower(p.name) = lower($1) AND p.category_id = $2 LIMIT 1`,
+        [row.name, categoryId]
+      );
+
+      let variantId;
+      if (existingProduct.rowCount) {
+        variantId = existingProduct.rows[0].variantId;
+        await client.query(
+          'UPDATE products SET initial_cost = \$1, updated_at = now() WHERE product_id = \$2',
+          [row.cost, existingProduct.rows[0].productId]
+        );
+        await client.query(
+          'UPDATE product_variants SET attributes = \$1::jsonb, updated_at = now() WHERE variant_id = \$2',
+          [JSON.stringify(attributes), variantId]
+        );
+        updatedProducts += 1;
+      } else {
+        const productId = crypto.randomUUID();
+        variantId = crypto.randomUUID();
+        let sku = `${slug(row.category)}-${slug(row.name)}`;
+        let suffix = 2;
+        while (usedSkus.has(sku)) {
+          sku = `${slug(row.category)}-${slug(row.name)}-${suffix}`;
+          suffix += 1;
+        }
+        usedSkus.add(sku);
+        await client.query(
+          `INSERT INTO products (product_id, category_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, initial_cost)
+           VALUES ($1, $2, $3, $4, FALSE, FALSE, $5)`,
+          [productId, categoryId, row.name, uomId, row.cost]
+        );
+        await client.query(
+          `INSERT INTO product_variants (variant_id, product_id, sku, barcode, variant_name, attributes)
+           VALUES ($1, $2, $3, NULL, $4, $5::jsonb)`,
+          [variantId, productId, sku, row.name, JSON.stringify(attributes)]
+        );
+        createdProducts += 1;
+      }
+
+      if (retailTierId) {
+        const retailPrice = roundMoney(row.cost * (1 + defaultMarkupPercent / 100));
+        await client.query(
+          `INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity)
+           VALUES (gen_random_uuid(), $1, $2, $3, 0)
+           ON CONFLICT (variant_id, tier_id, min_quantity) DO UPDATE SET price_per_unit = excluded.price_per_unit`,
+          [variantId, retailTierId, retailPrice]
+        );
+      }
+
+      const existingLot = await client.query(
+        'SELECT lot_id AS "lotId" FROM inventory_lots WHERE variant_id = \$1 AND lot_number = \$2',
+        [variantId, STOCK_TAKE_LOT_NUMBER]
+      );
+      if (existingLot.rowCount) {
+        await client.query(
+          'UPDATE inventory_lots SET quantity_on_hand = \$1, updated_at = now() WHERE lot_id = \$2',
+          [row.quantity, existingLot.rows[0].lotId]
+        );
+        updatedLots += 1;
+      } else {
+        await client.query(
+          `INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand)
+           VALUES (gen_random_uuid(), $1, $2, NULL, $3)`,
+          [variantId, STOCK_TAKE_LOT_NUMBER, row.quantity]
+        );
+        createdLots += 1;
+      }
+    }
+
+    console.log(`Step 8: ✓ Processed ${merged.size} rows\n`);
+
+    console.log('Step 9: Committing transaction...');
+    await client.query('COMMIT');
+    console.log('Step 9: ✓ Transaction committed\n');
+
+    console.log(`Imported ${sourceRows.length} rows from ${csvPath} (${skippedRows} skipped).`);
+    console.log(
+      JSON.stringify({ createdCategories, createdProducts, updatedProducts, createdLots, updatedLots })
+    );
+  } catch (error) {
+    console.error('ERROR - Rolling back transaction...');
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+const csvPath = path.resolve(
+  process.argv[2] || path.join(__dirname, '..', '..', 'Inventory_Main.csv')
 );
+// Default markup set to 20%
+const defaultMarkupPercent = Number(process.argv[3] || 20);
 
-CREATE TABLE IF NOT EXISTS categories (
-  category_id UUID PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE
-);
+importMainInventory(csvPath, defaultMarkupPercent).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+</file>
 
-CREATE TABLE IF NOT EXISTS products (
-  product_id UUID PRIMARY KEY,
-  category_id UUID REFERENCES categories(category_id) ON DELETE SET NULL,
-  name TEXT NOT NULL,
-  base_uom_id UUID NOT NULL REFERENCES units_of_measure(uom_id),
-  is_sold_by_weight BOOLEAN NOT NULL DEFAULT FALSE,
-  requires_lot_tracking BOOLEAN NOT NULL DEFAULT FALSE,
-  initial_cost NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (initial_cost >= 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+<file path="server/db.js">
+const fs = require('node:fs');
+const path = require('node:path');
+const { Pool } = require('pg');
+const logger = require('./logger');
 
-CREATE TABLE IF NOT EXISTS product_variants (
-  variant_id UUID PRIMARY KEY,
-  product_id UUID NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
-  sku TEXT NOT NULL UNIQUE,
-  barcode TEXT UNIQUE,
-  variant_name TEXT NOT NULL,
-  attributes JSONB NOT NULL DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is required for the cloud API');
+}
 
-CREATE TABLE IF NOT EXISTS price_tiers (
-  tier_id UUID PRIMARY KEY,
-  tier_name TEXT NOT NULL UNIQUE
-);
+const isProduction = process.env.NODE_ENV === 'production' || 
+  process.env.DATABASE_URL.includes('neon.tech') || 
+  process.env.DATABASE_URL.includes('railway');
 
-CREATE TABLE IF NOT EXISTS product_prices (
-  product_price_id UUID PRIMARY KEY,
-  variant_id UUID NOT NULL REFERENCES product_variants(variant_id) ON DELETE CASCADE,
-  tier_id UUID NOT NULL REFERENCES price_tiers(tier_id) ON DELETE CASCADE,
-  price_per_unit NUMERIC(12, 2) NOT NULL CHECK (price_per_unit >= 0),
-  min_quantity NUMERIC(12, 4) NOT NULL DEFAULT 0 CHECK (min_quantity >= 0),
-  UNIQUE (variant_id, tier_id, min_quantity)
-);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 15000,
+  ...(isProduction ? { ssl: { rejectUnauthorized: false } } : {}),
+});
 
-CREATE TABLE IF NOT EXISTS customers (
-  customer_id UUID PRIMARY KEY,
-  company_name TEXT,
-  contact_name TEXT NOT NULL,
-  email TEXT,
-  phone TEXT,
-  tier_id UUID NOT NULL REFERENCES price_tiers(tier_id),
-  credit_limit NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (credit_limit >= 0),
-  current_balance NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (current_balance >= 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+pool.on('error', (err) => {
+  logger.error('Unexpected error on idle client', { error: err.message });
+  process.exit(-1);
+});
 
-CREATE TABLE IF NOT EXISTS inventory_lots (
-  lot_id UUID PRIMARY KEY,
-  variant_id UUID NOT NULL REFERENCES product_variants(variant_id),
-  lot_number TEXT NOT NULL,
-  expiration_date DATE,
-  quantity_on_hand NUMERIC(12, 4) NOT NULL DEFAULT 0 CHECK (quantity_on_hand >= 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (variant_id, lot_number)
-);
+pool.on('connect', () => {
+  logger.debug('New database connection established');
+});
 
-CREATE TABLE IF NOT EXISTS app_users (
-  user_id UUID PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  display_name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'cashier')),
-  password_salt TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
-  active BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+async function migrate() {
+  const sql = fs.readFileSync(path.join(__dirname, 'migrations', '001_cloud_pos.sql'), 'utf8');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(sql);
+    await client.query('COMMIT');
+    logger.info('Database migration completed successfully');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('Database migration failed', { error: error.message });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 
-CREATE TABLE IF NOT EXISTS employee_shifts (
-  shift_id UUID PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
-  clock_in TIMESTAMPTZ NOT NULL,
-  clock_out TIMESTAMPTZ,
-  notes TEXT
-);
+// Clean up expired sessions every hour
+async function cleanupExpiredSessions() {
+  try {
+    const result = await pool.query('DELETE FROM sessions WHERE expires_at < NOW()');
+    if (result.rowCount > 0) {
+      logger.info('Expired sessions cleaned up', { count: result.rowCount });
+    }
+  } catch (error) {
+    logger.error('Failed to cleanup expired sessions', { error: error.message });
+  }
+}
 
-CREATE TABLE IF NOT EXISTS orders (
-  order_id UUID PRIMARY KEY,
-  customer_id UUID REFERENCES customers(customer_id) ON DELETE SET NULL,
-  pricing_tier_id UUID NOT NULL REFERENCES price_tiers(tier_id),
-  employee_id UUID REFERENCES app_users(user_id) ON DELETE SET NULL,
-  order_type TEXT NOT NULL CHECK (order_type IN ('retail', 'commercial')),
-  status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('open', 'completed', 'voided')),
-  subtotal NUMERIC(12, 2) NOT NULL CHECK (subtotal >= 0),
-  tax_amount NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
-  total_amount NUMERIC(12, 2) NOT NULL CHECK (total_amount >= 0),
-  payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'gcash', 'account')),
-  cash_received NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (cash_received >= 0),
-  change_due NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (change_due >= 0),
-  created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+// Start cleanup job on initialization
+setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+cleanupExpiredSessions(); // Run once on startup
 
-CREATE TABLE IF NOT EXISTS order_items (
-  order_item_id UUID PRIMARY KEY,
-  order_id UUID NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
-  variant_id UUID NOT NULL REFERENCES product_variants(variant_id),
-  lot_id UUID REFERENCES inventory_lots(lot_id),
-  quantity NUMERIC(12, 4) NOT NULL CHECK (quantity > 0),
-  unit_price NUMERIC(12, 2) NOT NULL CHECK (unit_price >= 0),
-  total_price NUMERIC(12, 2) NOT NULL CHECK (total_price >= 0)
-);
-
-CREATE TABLE IF NOT EXISTS sync_events (
-  event_id UUID PRIMARY KEY,
-  entity_type TEXT NOT NULL,
-  entity_id UUID NOT NULL,
-  operation TEXT NOT NULL CHECK (operation IN ('create', 'update', 'delete')),
-  payload JSONB NOT NULL,
-  idempotency_key TEXT NOT NULL UNIQUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_product_variants_search ON product_variants(sku, barcode, variant_name);
-
-CREATE TABLE IF NOT EXISTS sessions (
-  session_id UUID PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
-  token TEXT NOT NULL UNIQUE,
-  expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
-CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
-CREATE INDEX IF NOT EXISTS idx_orders_employee_id ON orders(employee_id);
-CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
-CREATE INDEX IF NOT EXISTS idx_inventory_lots_expiration ON inventory_lots(expiration_date NULLS LAST);
-CREATE INDEX IF NOT EXISTS idx_product_prices_variant_tier ON product_prices(variant_id, tier_id, min_quantity);
-CREATE INDEX IF NOT EXISTS idx_employees_active ON app_users(active) WHERE active = TRUE;
+module.exports = { pool, migrate, cleanupExpiredSessions };
 </file>
 
 <file path="server/validation.js">
@@ -16311,70 +16589,6 @@ module.exports = {
 };
 </file>
 
-<file path="server/scripts/seed-admin.js">
-const crypto = require('node:crypto');
-require('dotenv').config();
-const { pool, migrate } = require('../db');
-
-async function main() {
-  const username = process.env.CLOUD_ADMIN_USERNAME;
-  const displayName = process.env.CLOUD_ADMIN_DISPLAY_NAME;
-  const password = process.env.CLOUD_ADMIN_PASSWORD;
-  if (!username || !displayName || !password || password.length < 12) throw new Error('Set CLOUD_ADMIN_USERNAME, CLOUD_ADMIN_DISPLAY_NAME, and a 12+ character CLOUD_ADMIN_PASSWORD');
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  await migrate();
-  await pool.query(`INSERT INTO app_users (user_id, username, display_name, role, password_salt, password_hash) VALUES (gen_random_uuid(), $1, $2, 'admin', $3, $4) ON CONFLICT (username) DO UPDATE SET display_name=EXCLUDED.display_name, password_salt=EXCLUDED.password_salt, password_hash=EXCLUDED.password_hash, role='admin', active=TRUE, updated_at=now()`, [username.toLowerCase(), displayName, salt, hash]);
-  console.log(`Seeded cloud administrator: ${username}`);
-  await pool.end();
-}
-
-main().catch(async (error) => {
-  console.error(error);
-  await pool.end();
-  process.exitCode = 1;
-});
-</file>
-
-<file path="server/logger.js">
-const winston = require('winston');
-const fs = require('node:fs');
-const path = require('node:path');
-
-// Ensure logs directory exists
-const logsDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
-}
-
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.errors({ stack: true }),
-    winston.format.splat(),
-    winston.format.json()
-  ),
-  defaultMeta: { service: 'bake-alley-cloud-pos' },
-  transports: [
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/combined.log' }),
-    // Always log to console so Railway/production environments can see output
-    new winston.transports.Console({
-      format: winston.format.combine(
-        process.env.NODE_ENV !== 'production' ? winston.format.colorize() : winston.format.uncolorize(),
-        winston.format.printf(({ level, message, timestamp, ...meta }) => {
-          const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
-          return `${timestamp} [${level}]: ${message} ${metaStr}`;
-        })
-      ),
-    }),
-  ],
-});
-
-module.exports = logger;
-</file>
-
 <file path="web/cloudApi.ts">
 import { CloudApiClient, type CloudEmployee, type CloudProduct, type CloudShift } from './apiClient';
 
@@ -16463,6 +16677,246 @@ export class CloudPosApi extends CloudApiClient {
       throw new Error(body.error ?? 'Failed to fetch shifts');
     }
     return response.json() as Promise<CloudShift[]>;
+  }
+}
+</file>
+
+<file path="server/scripts/seed-admin.js">
+const crypto = require('node:crypto');
+require('dotenv').config();
+const { pool, migrate } = require('../db');
+
+async function main() {
+  const username = process.env.CLOUD_ADMIN_USERNAME;
+  const displayName = process.env.CLOUD_ADMIN_DISPLAY_NAME;
+  const password = process.env.CLOUD_ADMIN_PASSWORD;
+  if (!username || !displayName || !password || password.length < 12) throw new Error('Set CLOUD_ADMIN_USERNAME, CLOUD_ADMIN_DISPLAY_NAME, and a 12+ character CLOUD_ADMIN_PASSWORD');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  await migrate();
+  await pool.query(`INSERT INTO app_users (user_id, username, display_name, role, password_salt, password_hash) VALUES (gen_random_uuid(), $1, $2, 'admin', $3, $4) ON CONFLICT (username) DO UPDATE SET display_name=EXCLUDED.display_name, password_salt=EXCLUDED.password_salt, password_hash=EXCLUDED.password_hash, role='admin', active=TRUE, updated_at=now()`, [username.toLowerCase(), displayName, salt, hash]);
+  console.log(`Seeded cloud administrator: ${username}`);
+  await pool.end();
+}
+
+main().catch(async (error) => {
+  console.error(error);
+  await pool.end();
+  process.exitCode = 1;
+});
+</file>
+
+<file path="server/logger.js">
+const winston = require('winston');
+const fs = require('node:fs');
+const path = require('node:path');
+
+// Ensure logs directory exists
+const logsDir = path.join(process.cwd(), 'logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.errors({ stack: true }),
+    winston.format.splat(),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'bake-alley-cloud-pos' },
+  transports: [
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/combined.log' }),
+    // Always log to console so Railway/production environments can see output
+    new winston.transports.Console({
+      format: winston.format.combine(
+        process.env.NODE_ENV !== 'production' ? winston.format.colorize() : winston.format.uncolorize(),
+        winston.format.printf(({ level, message, timestamp, ...meta }) => {
+          const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
+          return `${timestamp} [${level}]: ${message} ${metaStr}`;
+        })
+      ),
+    }),
+  ],
+});
+
+module.exports = logger;
+</file>
+
+<file path="web/apiClient.ts">
+export interface CloudApiClientOptions {
+  baseUrl: string;
+  getToken: () => string | null;
+}
+
+export interface CloudProduct {
+  variantId: string;
+  sku: string;
+  name: string;
+  unit: string;
+  soldByWeight: boolean;
+  prices: Array<{ tierId: string; minQuantity: number; pricePerUnit: number }>;
+}
+
+export interface CloudOrderPayload {
+  orderId: string;
+  customerId: string | null;
+  pricingTierId: string;
+  orderType: 'retail' | 'commercial';
+  items: Array<{ orderItemId: string; variantId: string; lotId?: string; quantity: number; unitPrice: number; totalPrice: number }>;
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  paymentMethod: 'cash' | 'card' | 'gcash' | 'account';
+  cashReceived: number;
+  changeDue: number;
+}
+
+export interface CloudCustomer {
+  customerId: string;
+  displayName: string;
+  email?: string;
+  phone?: string;
+  tierId: string;
+}
+
+export interface CloudInventoryRow {
+  variantId: string;
+  sku: string;
+  variantName: string;
+  expirationDate?: string | null;
+  quantityOnHand: number;
+  initialCapital: number;
+  retailPrice: number;
+}
+
+export interface CloudUnitOfMeasure {
+  uomId: string;
+  name: string;
+  symbol: string;
+}
+
+export interface CloudEmployee {
+  userId: string;
+  username: string;
+  displayName: string;
+  role: 'admin' | 'cashier';
+  active: boolean;
+  salesCount: number;
+  salesAmount: number;
+}
+
+export interface CloudShift {
+  shiftId: string;
+  userId: string;
+  displayName: string;
+  clockIn: string;
+  clockOut?: string;
+}
+
+export interface CloudSalesPeriod {
+  startDate: string;
+  endDate: string;
+  grossTotal: number;
+  netTotal: number;
+  orderCount: number;
+}
+
+export interface CloudSalesReport {
+  selectedDate: string;
+  items: Array<{ orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: string }>;
+  dayGrossTotal: number;
+  dayNetTotal: number;
+  dayOrderCount: number;
+  week?: CloudSalesPeriod;
+  month?: CloudSalesPeriod;
+  year?: CloudSalesPeriod;
+}
+
+export class CloudApiClient {
+  public constructor(protected readonly options: CloudApiClientOptions) {}
+
+  protected apiUrl(path: string): string {
+    return `${this.options.baseUrl}${path}`;
+  }
+
+  public async searchProducts(query: string): Promise<CloudProduct[]> {
+    return this.request(`/api/v1/products/search?q=${encodeURIComponent(query)}`);
+  }
+
+  public async customers(): Promise<CloudCustomer[]> {
+    return this.request('/api/v1/customers');
+  }
+
+  public async createCustomer(customer: { companyName?: string; contactName: string; email?: string; phone?: string; tierId: string }): Promise<CloudCustomer> {
+    return this.request('/api/v1/customers', { method: 'POST', body: JSON.stringify(customer) });
+  }
+
+  public async deleteCustomer(customerId: string): Promise<void> {
+    await this.request(`/api/v1/customers/${customerId}`, { method: 'DELETE' });
+  }
+
+  public async inventory(): Promise<CloudInventoryRow[]> {
+    return this.request('/api/v1/inventory');
+  }
+
+  public async adjustInventory(adjustment: { variantId: string; expirationDate?: string; quantity: number; retailPrice?: number }): Promise<void> {
+    await this.request('/api/v1/inventory/adjust', { method: 'POST', body: JSON.stringify(adjustment) });
+  }
+
+  public async createInventoryProduct(product: { name: string; sku: string; variantName: string; baseUomId: string; lotNumber: string; expirationDate?: string; quantity: number; retailPrice: number; initialCost?: number; barcode?: string; soldByWeight?: boolean; requiresLotTracking?: boolean }): Promise<{ variantId: string; sku: string; variantName: string }> {
+    return this.request('/api/v1/inventory/products', { method: 'POST', body: JSON.stringify(product) });
+  }
+
+  public async deleteEmployee(userId: string): Promise<void> {
+    await this.request(`/api/v1/employees/${userId}`, { method: 'DELETE' });
+  }
+
+  public async updateInventoryProduct(variantId: string, update: { variantName?: string; sku?: string; retailPrice?: number; initialCost?: number; quantity?: number; lotNumber?: string; expirationDate?: string | null }): Promise<void> {
+    await this.request(`/api/v1/inventory/products/${variantId}`, { method: 'PUT', body: JSON.stringify(update) });
+  }
+
+  public async employees(): Promise<CloudEmployee[]> { return this.request('/api/v1/employees'); }
+
+  public async createEmployee(employee: { username: string; displayName: string; role: 'admin' | 'cashier'; password: string }): Promise<CloudEmployee> {
+    return this.request('/api/v1/employees', { method: 'POST', body: JSON.stringify(employee) });
+  }
+
+  public async shifts(date?: string): Promise<CloudShift[]> { return this.request(`/api/v1/employees/shifts${date ? `?date=\${encodeURIComponent(date)}` : ''}`); }
+
+  public async clockIn(): Promise<CloudShift> { return this.request('/api/v1/employees/clock-in', { method: 'POST' }); }
+
+  public async clockOut(): Promise<CloudShift> { return this.request('/api/v1/employees/clock-out', { method: 'POST' }); }
+
+  public async createOrder(order: CloudOrderPayload): Promise<{ orderId: string }> {
+    return this.request('/api/v1/orders', { method: 'POST', body: JSON.stringify(order) });
+  }
+
+  public async salesReport(date: string): Promise<CloudSalesReport> {
+    return this.request(`/api/v1/sales/report?date=${encodeURIComponent(date)}`);
+  }
+
+  public async getUnitsOfMeasure(): Promise<CloudUnitOfMeasure[]> {
+    return this.request('/api/v1/units-of-measure');
+  }
+
+  public async logout(): Promise<void> {
+    await this.request('/api/v1/auth/logout', { method: 'POST' });
+  }
+
+  private async request(path: string, init: RequestInit = {}): Promise<any> {
+    const token = this.options.getToken();
+    const response = await fetch(`${this.options.baseUrl}${path}`, {
+      ...init,
+      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? `Cloud API request failed with HTTP ${response.status}`);
+    }
+    return response.status === 204 ? undefined : response.json();
   }
 }
 </file>
@@ -17316,455 +17770,6 @@ curl -X POST https://bakealley-pos-production.up.railway.app/api/v1/auth/login \
   * Eliminated Vite and TypeScript compilation errors during GitHub Actions deployments (`npm run cloud:build`).
 </file>
 
-<file path="server/scripts/import-main-inventory.js">
-// server/scripts/import-main-inventory.js
-// Imports Inventory_Main.csv directly into the cloud PostgreSQL catalog [1].
-// Usage: node server/scripts/import-main-inventory.js [path-to-csv] [defaultMarkupPercent]
-
-const path = require('node:path');
-const crypto = require('node:crypto');
-const XLSX = require('xlsx');
-const { pool, migrate } = require('../db');
-
-const STOCK_TAKE_LOT_NUMBER = 'STOCKTAKE-MAIN';
-const UNCATEGORIZED_CATEGORY = 'UNCATEGORIZED';
-const CANONICAL_RETAIL_TIER_ID = '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
-
-function slug(value) {
-  return (
-    value
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, '-')
-      .replace(/^-+|-+\$/g, '')
-      .slice(0, 24) || 'ITEM'
-  );
-}
-
-function parseNonNegativeNumber(value) {
-  const parsed =
-    typeof value === 'number'
-      ? value
-      : Number(String(value ?? '0').replace(/,/g, ''));
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-}
-
-function roundMoney(value) {
-  return Math.round(value * 100) / 100;
-}
-
-function roundQuantity(value) {
-  return Math.round(value * 10000) / 10000;
-}
-
-function mergeRows(sourceRows) {
-  const merged = new Map();
-  let skippedRows = 0;
-  for (const row of sourceRows) {
-    const name = typeof row.Name === 'string' ? row.Name.trim() : '';
-    if (!name) {
-      skippedRows += 1;
-      continue;
-    }
-    const category =
-      typeof row.Category === 'string' && row.Category.trim() !== ''
-        ? row.Category.trim().toUpperCase()
-        : UNCATEGORIZED_CATEGORY;
-    const warehouseRaw = typeof row.Warehouse === 'string' ? row.Warehouse.trim() : '';
-    const warehouse = warehouseRaw === '' ? null : warehouseRaw;
-    const quantity = roundQuantity(parseNonNegativeNumber(row['Stock Qty']));
-    const cost = roundMoney(parseNonNegativeNumber(row.Cost));
-    const key = `${category}::${name.toLowerCase()}`;
-    const existing = merged.get(key);
-    if (existing) {
-      const totalQuantity = existing.quantity + quantity;
-      existing.cost =
-        totalQuantity > 0
-          ? roundMoney((existing.cost * existing.quantity + cost * quantity) / totalQuantity)
-          : roundMoney((existing.cost + cost) / 2);
-      existing.quantity = totalQuantity;
-      existing.warehouse = existing.warehouse ?? warehouse;
-    } else {
-      merged.set(key, { name, category, warehouse, quantity, cost });
-    }
-  }
-  return { rows: merged, skippedRows };
-}
-
-async function ensurePieceUom(client) {
-  const existing = await client.query(
-    "SELECT uom_id AS \"uomId\" FROM units_of_measure WHERE name = 'Piece'"
-  );
-  if (existing.rowCount) {
-    return existing.rows[0].uomId;
-  }
-  const inserted = await client.query(
-    "INSERT INTO units_of_measure (uom_id, name, symbol) VALUES (gen_random_uuid(), 'Piece', 'pc') RETURNING uom_id AS \"uomId\""
-  );
-  return inserted.rows[0].uomId;
-}
-
-async function importMainInventory(csvPath, defaultMarkupPercent) {
-  console.log('Starting import process...');
-  console.log(`CSV Path: ${csvPath}`);
-  console.log(`Default Markup: ${defaultMarkupPercent}%\n`);
-
-  console.log('Step 1: Running database migration...');
-  await migrate();
-  console.log('Step 1: ✓ Migration complete\n');
-
-  console.log('Step 2: Reading CSV file...');
-  const workbook = XLSX.readFile(csvPath, { cellDates: false });
-  const sheet = workbook.Sheets[workbook.SheetNames];
-  if (!sheet) throw new Error(`No worksheet found in ${csvPath}`);
-  const sourceRows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
-  if (sourceRows.length === 0) throw new Error(`${csvPath} contains no rows`);
-  console.log(`Step 2: ✓ Read ${sourceRows.length} rows from CSV\n`);
-
-  console.log('Step 3: Merging duplicate rows...');
-  const { rows: merged, skippedRows } = mergeRows(sourceRows);
-  if (merged.size === 0) throw new Error(`${csvPath} contains no usable rows`);
-  console.log(`Step 3: ✓ Merged to ${merged.size} unique products (${skippedRows} skipped)\n`);
-
-  const client = await pool.connect();
-  const usedSkus = new Set();
-  let createdCategories = 0;
-  let createdProducts = 0;
-  let updatedProducts = 0;
-  let createdLots = 0;
-  let updatedLots = 0;
-  let processedRows = 0;
-
-  try {
-    console.log('Step 4: Starting database transaction...');
-    await client.query('BEGIN');
-    console.log('Step 4: ✓ Transaction started\n');
-
-    console.log('Step 5: Ensuring Piece UOM exists...');
-    const uomId = await ensurePieceUom(client);
-    console.log(`Step 5: ✓ Using UOM ID: ${uomId}\n`);
-
-    console.log('Step 6: Ensuring Retail Tier exists...');
-    await client.query(
-      `
-      INSERT INTO price_tiers (tier_id, tier_name)
-      VALUES ($1, 'Retail')
-      ON CONFLICT (tier_id) DO UPDATE SET tier_name = 'Retail';
-    `,
-      [CANONICAL_RETAIL_TIER_ID]
-    );
-    console.log('Step 6: ✓ Retail tier ready\n');
-
-    const retailTierId = CANONICAL_RETAIL_TIER_ID;
-
-    console.log('Step 7: Loading existing SKUs...');
-    const existingSkus = await client.query('SELECT sku FROM product_variants');
-    for (const row of existingSkus.rows) usedSkus.add(row.sku);
-    console.log(`Step 7: ✓ Found ${usedSkus.size} existing SKUs\n`);
-
-    console.log('Step 8: Processing inventory rows...');
-    for (const row of merged.values()) {
-      processedRows += 1;
-      if (processedRows % 10 === 0) {
-        console.log(`  Processing row ${processedRows}/${merged.size}...`);
-      }
-
-      let categoryId;
-      const existingCategory = await client.query(
-        'SELECT category_id AS "categoryId" FROM categories WHERE lower(name) = lower(\$1)',
-        [row.category]
-      );
-      if (existingCategory.rowCount) {
-        categoryId = existingCategory.rows[0].categoryId;
-      } else {
-        const inserted = await client.query(
-          'INSERT INTO categories (category_id, name) VALUES (gen_random_uuid(), \$1) RETURNING category_id AS "categoryId"',
-          [row.category]
-        );
-        categoryId = inserted.rows[0].categoryId;
-        createdCategories += 1;
-      }
-
-      const attributes = row.warehouse ? { warehouse: row.warehouse } : {};
-      const existingProduct = await client.query(
-        `SELECT p.product_id AS "productId", v.variant_id AS "variantId"
-         FROM products p JOIN product_variants v ON v.product_id = p.product_id
-         WHERE lower(p.name) = lower($1) AND p.category_id = $2 LIMIT 1`,
-        [row.name, categoryId]
-      );
-
-      let variantId;
-      if (existingProduct.rowCount) {
-        variantId = existingProduct.rows[0].variantId;
-        await client.query(
-          'UPDATE products SET initial_cost = \$1, updated_at = now() WHERE product_id = \$2',
-          [row.cost, existingProduct.rows[0].productId]
-        );
-        await client.query(
-          'UPDATE product_variants SET attributes = \$1::jsonb, updated_at = now() WHERE variant_id = \$2',
-          [JSON.stringify(attributes), variantId]
-        );
-        updatedProducts += 1;
-      } else {
-        const productId = crypto.randomUUID();
-        variantId = crypto.randomUUID();
-        let sku = `${slug(row.category)}-${slug(row.name)}`;
-        let suffix = 2;
-        while (usedSkus.has(sku)) {
-          sku = `${slug(row.category)}-${slug(row.name)}-${suffix}`;
-          suffix += 1;
-        }
-        usedSkus.add(sku);
-        await client.query(
-          `INSERT INTO products (product_id, category_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, initial_cost)
-           VALUES ($1, $2, $3, $4, FALSE, FALSE, $5)`,
-          [productId, categoryId, row.name, uomId, row.cost]
-        );
-        await client.query(
-          `INSERT INTO product_variants (variant_id, product_id, sku, barcode, variant_name, attributes)
-           VALUES ($1, $2, $3, NULL, $4, $5::jsonb)`,
-          [variantId, productId, sku, row.name, JSON.stringify(attributes)]
-        );
-        createdProducts += 1;
-      }
-
-      if (retailTierId) {
-        const retailPrice = roundMoney(row.cost * (1 + defaultMarkupPercent / 100));
-        await client.query(
-          `INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity)
-           VALUES (gen_random_uuid(), $1, $2, $3, 0)
-           ON CONFLICT (variant_id, tier_id, min_quantity) DO UPDATE SET price_per_unit = excluded.price_per_unit`,
-          [variantId, retailTierId, retailPrice]
-        );
-      }
-
-      const existingLot = await client.query(
-        'SELECT lot_id AS "lotId" FROM inventory_lots WHERE variant_id = \$1 AND lot_number = \$2',
-        [variantId, STOCK_TAKE_LOT_NUMBER]
-      );
-      if (existingLot.rowCount) {
-        await client.query(
-          'UPDATE inventory_lots SET quantity_on_hand = \$1, updated_at = now() WHERE lot_id = \$2',
-          [row.quantity, existingLot.rows[0].lotId]
-        );
-        updatedLots += 1;
-      } else {
-        await client.query(
-          `INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand)
-           VALUES (gen_random_uuid(), $1, $2, NULL, $3)`,
-          [variantId, STOCK_TAKE_LOT_NUMBER, row.quantity]
-        );
-        createdLots += 1;
-      }
-    }
-
-    console.log(`Step 8: ✓ Processed ${merged.size} rows\n`);
-
-    console.log('Step 9: Committing transaction...');
-    await client.query('COMMIT');
-    console.log('Step 9: ✓ Transaction committed\n');
-
-    console.log(`Imported ${sourceRows.length} rows from ${csvPath} (${skippedRows} skipped).`);
-    console.log(
-      JSON.stringify({ createdCategories, createdProducts, updatedProducts, createdLots, updatedLots })
-    );
-  } catch (error) {
-    console.error('ERROR - Rolling back transaction...');
-    await client.query('ROLLBACK').catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-    await pool.end();
-  }
-}
-
-const csvPath = path.resolve(
-  process.argv[2] || path.join(__dirname, '..', '..', 'Inventory_Main.csv')
-);
-// Default markup set to 20%
-const defaultMarkupPercent = Number(process.argv[3] || 20);
-
-importMainInventory(csvPath, defaultMarkupPercent).catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
-</file>
-
-<file path="web/apiClient.ts">
-export interface CloudApiClientOptions {
-  baseUrl: string;
-  getToken: () => string | null;
-}
-
-export interface CloudProduct {
-  variantId: string;
-  sku: string;
-  name: string;
-  unit: string;
-  soldByWeight: boolean;
-  prices: Array<{ tierId: string; minQuantity: number; pricePerUnit: number }>;
-}
-
-export interface CloudOrderPayload {
-  orderId: string;
-  customerId: string | null;
-  pricingTierId: string;
-  orderType: 'retail' | 'commercial';
-  items: Array<{ orderItemId: string; variantId: string; lotId?: string; quantity: number; unitPrice: number; totalPrice: number }>;
-  subtotal: number;
-  taxAmount: number;
-  totalAmount: number;
-  paymentMethod: 'cash' | 'card' | 'gcash' | 'account';
-  cashReceived: number;
-  changeDue: number;
-}
-
-export interface CloudCustomer {
-  customerId: string;
-  displayName: string;
-  email?: string;
-  phone?: string;
-  tierId: string;
-}
-
-export interface CloudInventoryRow {
-  variantId: string;
-  sku: string;
-  variantName: string;
-  expirationDate?: string | null;
-  quantityOnHand: number;
-  initialCapital: number;
-  retailPrice: number;
-}
-
-export interface CloudUnitOfMeasure {
-  uomId: string;
-  name: string;
-  symbol: string;
-}
-
-export interface CloudEmployee {
-  userId: string;
-  username: string;
-  displayName: string;
-  role: 'admin' | 'cashier';
-  active: boolean;
-  salesCount: number;
-  salesAmount: number;
-}
-
-export interface CloudShift {
-  shiftId: string;
-  userId: string;
-  displayName: string;
-  clockIn: string;
-  clockOut?: string;
-}
-
-export interface CloudSalesPeriod {
-  startDate: string;
-  endDate: string;
-  grossTotal: number;
-  netTotal: number;
-  orderCount: number;
-}
-
-export interface CloudSalesReport {
-  selectedDate: string;
-  items: Array<{ orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: string }>;
-  dayGrossTotal: number;
-  dayNetTotal: number;
-  dayOrderCount: number;
-  week?: CloudSalesPeriod;
-  month?: CloudSalesPeriod;
-  year?: CloudSalesPeriod;
-}
-
-export class CloudApiClient {
-  public constructor(protected readonly options: CloudApiClientOptions) {}
-
-  protected apiUrl(path: string): string {
-    return `${this.options.baseUrl}${path}`;
-  }
-
-  public async searchProducts(query: string): Promise<CloudProduct[]> {
-    return this.request(`/api/v1/products/search?q=${encodeURIComponent(query)}`);
-  }
-
-  public async customers(): Promise<CloudCustomer[]> {
-    return this.request('/api/v1/customers');
-  }
-
-  public async createCustomer(customer: { companyName?: string; contactName: string; email?: string; phone?: string; tierId: string }): Promise<CloudCustomer> {
-    return this.request('/api/v1/customers', { method: 'POST', body: JSON.stringify(customer) });
-  }
-
-  public async deleteCustomer(customerId: string): Promise<void> {
-    await this.request(`/api/v1/customers/${customerId}`, { method: 'DELETE' });
-  }
-
-  public async inventory(): Promise<CloudInventoryRow[]> {
-    return this.request('/api/v1/inventory');
-  }
-
-  public async adjustInventory(adjustment: { variantId: string; expirationDate?: string; quantity: number; retailPrice?: number }): Promise<void> {
-    await this.request('/api/v1/inventory/adjust', { method: 'POST', body: JSON.stringify(adjustment) });
-  }
-
-  public async createInventoryProduct(product: { name: string; sku: string; variantName: string; baseUomId: string; lotNumber: string; expirationDate?: string; quantity: number; retailPrice: number; initialCost?: number; barcode?: string; soldByWeight?: boolean; requiresLotTracking?: boolean }): Promise<{ variantId: string; sku: string; variantName: string }> {
-    return this.request('/api/v1/inventory/products', { method: 'POST', body: JSON.stringify(product) });
-  }
-
-  public async deleteEmployee(userId: string): Promise<void> {
-    await this.request(`/api/v1/employees/${userId}`, { method: 'DELETE' });
-  }
-
-  public async updateInventoryProduct(variantId: string, update: { variantName?: string; sku?: string; retailPrice?: number; initialCost?: number; quantity?: number; lotNumber?: string; expirationDate?: string | null }): Promise<void> {
-    await this.request(`/api/v1/inventory/products/${variantId}`, { method: 'PUT', body: JSON.stringify(update) });
-  }
-
-  public async employees(): Promise<CloudEmployee[]> { return this.request('/api/v1/employees'); }
-
-  public async createEmployee(employee: { username: string; displayName: string; role: 'admin' | 'cashier'; password: string }): Promise<CloudEmployee> {
-    return this.request('/api/v1/employees', { method: 'POST', body: JSON.stringify(employee) });
-  }
-
-  public async shifts(date?: string): Promise<CloudShift[]> { return this.request(`/api/v1/employees/shifts${date ? `?date=\${encodeURIComponent(date)}` : ''}`); }
-
-  public async clockIn(): Promise<CloudShift> { return this.request('/api/v1/employees/clock-in', { method: 'POST' }); }
-
-  public async clockOut(): Promise<CloudShift> { return this.request('/api/v1/employees/clock-out', { method: 'POST' }); }
-
-  public async createOrder(order: CloudOrderPayload): Promise<{ orderId: string }> {
-    return this.request('/api/v1/orders', { method: 'POST', body: JSON.stringify(order) });
-  }
-
-  public async salesReport(date: string): Promise<CloudSalesReport> {
-    return this.request(`/api/v1/sales/report?date=${encodeURIComponent(date)}`);
-  }
-
-  public async getUnitsOfMeasure(): Promise<CloudUnitOfMeasure[]> {
-    return this.request('/api/v1/units-of-measure');
-  }
-
-  public async logout(): Promise<void> {
-    await this.request('/api/v1/auth/logout', { method: 'POST' });
-  }
-
-  private async request(path: string, init: RequestInit = {}): Promise<any> {
-    const token = this.options.getToken();
-    const response = await fetch(`${this.options.baseUrl}${path}`, {
-      ...init,
-      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? `Cloud API request failed with HTTP ${response.status}`);
-    }
-    return response.status === 204 ? undefined : response.json();
-  }
-}
-</file>
-
 <file path="import-log.txt">
 Starting import process...
 CSV Path: c:\Users\Ryan\Projects\BakeAlley-POS\BakeAlley-POS\Inventory_Main.csv
@@ -18153,6 +18158,7 @@ export interface CheckoutScreenProps {
   taxRate?: number;
   employeeToken?: string;
   recordEmployeeSale?: (token: string, orderId: string) => Promise<void>;
+    isClockedIn?: boolean;
 }
 
 interface CartLine {
@@ -18219,6 +18225,7 @@ export function CheckoutScreen({
   taxRate = 0,
   employeeToken,
   recordEmployeeSale,
+    isClockedIn = true,
 }: CheckoutScreenProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CheckoutProduct[]>([]);
@@ -18747,7 +18754,7 @@ export function CheckoutScreen({
               <div className="flex justify-between text-sm text-amber-800"><span>Subtotal</span><span className="font-semibold tabular-nums">{money.format(subtotal)}</span></div>
               <div className="mt-2 flex justify-between text-sm text-amber-800"><span>Tax</span><span className="font-semibold tabular-nums">{money.format(taxAmount)}</span></div>
               <div className="mt-4 flex justify-between border-t border-amber-200/80 pt-4 text-xl font-bold"><span>Total</span><span className="tabular-nums">{money.format(totalAmount)}</span></div>
-              <button className="mt-5 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={cart.length === 0 || busy} type="button" onClick={() => setPaymentOpen(true)}>Take payment</button>
+              <button className="mt-5 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={cart.length === 0 || busy || isClockedIn === false} type="button" onClick={() => setPaymentOpen(true)}>{isClockedIn === false ? 'Clock-in Required to Take Payment' : 'Take payment'}</button>
             </div>
           </aside>
         </section>
@@ -18858,7 +18865,7 @@ import logoUrl from '../Images/bakeAlley-Logo.jpg';
 import type { CloudCustomer, CloudEmployee, CloudInventoryRow, CloudOrderPayload, CloudSalesReport, CloudShift } from './apiClient';
 
 const api = new CloudPosApi({
-  baseUrl: import.meta.env.VITE_API_URL ?? '',
+  baseUrl: (import.meta.env.VITE_API_URL || 'https://bakealley-pos-production.up.railway.app').replace(/\/+$/, ''),
   getToken: () => localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token'),
 });
 
@@ -18915,6 +18922,11 @@ async function clockOutWithCount(closingCashCount: number | null, notes?: string
 }
 
 
+
+
+
+
+
 function getInactivityTimeout(): number {
   return INACTIVITY_TIMEOUT_MS;  // 5 minutes for all users
 }
@@ -18928,6 +18940,7 @@ function clearSessionStorage(): void {
   localStorage.removeItem('bakealley_cloud_token');
   localStorage.removeItem('bakealley_cloud_user');
   localStorage.removeItem('bakealley_cloud_last_active');
+  localStorage.removeItem('bakealley_cloud_tab');
   localStorage.removeItem('bakealley_pos_cart');
   localStorage.removeItem('bakealley_pos_customer_id');
   localStorage.removeItem('bakealley_pos_crm_form');
@@ -19007,7 +19020,7 @@ async function fetchMonthlyReport(apiInstance: any, year: string): Promise<Cloud
     return apiInstance.monthlyReport(year);
   }
   const token = localStorage.getItem('bakealley_cloud_token') || sessionStorage.getItem('bakealley_cloud_token');
-  const baseUrl = import.meta.env.VITE_API_URL ?? '';
+  const baseUrl = (import.meta.env.VITE_API_URL || 'https://bakealley-pos-production.up.railway.app').replace(/\/+$/, '');
   const response = await fetch(`${baseUrl}/api/v1/sales/monthly?year=${encodeURIComponent(year)}`, {
     headers: {
       'content-type': 'application/json',
@@ -19157,7 +19170,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     if (!report) return;
     const items = report.items || [];
     const csvData = [
-      ['Bake Alley Cloud POS \u2014 End of Day Financial Audit Statement'],
+      ['Bake Alley Cloud POS — End of Day Financial Audit Statement'],
       ['Audit Date', selectedDate],
       ['Generated Date/Time', new Date().toLocaleString()],
       [''],
@@ -19206,7 +19219,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const exportMonthlyCsv = (): void => {
     if (!monthlyReport) return;
     const csvData = [
-      [`Bake Alley Cloud POS \u2014 12-Month Financial Performance (${selectedYear})`],
+      [`Bake Alley Cloud POS — 12-Month Financial Performance (${selectedYear})`],
       ['Generated Date/Time', new Date().toLocaleString()],
       [''],
       ['Month', 'Gross Sales (PHP)', 'Actual COGS (PHP)', 'Gross Profit (PHP)', 'Margin %', 'Orders', 'AOV (PHP)', 'Cash (PHP)', 'GCash (PHP)', 'Card (PHP)', 'Account (PHP)', 'Est. Card Fees (PHP)'],
@@ -19262,7 +19275,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           </style>
         </head>
         <body>
-          <h1>Bake Alley Cloud POS \u2014 End of Day Financial Audit</h1>
+          <h1>Bake Alley Cloud POS — End of Day Financial Audit</h1>
           <div class="header-info">
             <div><strong>Audit Date:</strong> ${selectedDate}</div>
             <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
@@ -19407,7 +19420,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
             <div className="space-y-8">
               <section>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit {"\u2014"} {selectedDate}</h2>
+                  <h2 className="font-bakery text-lg font-bold text-amber-950">End of Day (EOD) Audit {"—"} {selectedDate}</h2>
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Verified EOD Statement</span>
                 </div>
 
@@ -19526,7 +19539,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 <section>
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h2 className="font-bakery text-lg font-bold text-amber-950">Option B {"\u2014"} 12-Month Performance Matrix ({selectedYear})</h2>
+                      <h2 className="font-bakery text-lg font-bold text-amber-950">Option B {"—"} 12-Month Performance Matrix ({selectedYear})</h2>
                       <p className="text-xs text-amber-700">Click any month column to inspect its full interactive statement below.</p>
                     </div>
                     <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
@@ -19647,7 +19660,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <div>
                       <h2 className="font-bakery text-lg font-bold text-amber-950">
-                        Option A {"\u2014"} Monthly Audit Statement ({FULL_MONTH_NAMES[selectedMonthNum - 1]} {selectedYear})
+                        Option A {"—"} Monthly Audit Statement ({FULL_MONTH_NAMES[selectedMonthNum - 1]} {selectedYear})
                       </h2>
                       <p className="text-xs text-amber-700">Detailed month-specific audit using actual inventory product costs.</p>
                     </div>
@@ -20183,7 +20196,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                               toggleExpand(tx.orderId);
                             }}
                           >
-                            {isExpanded ? '\u25B2 Hide' : '\u25BC View Items'}
+                            {isExpanded ? '▲ Hide' : '▼ View Items'}
                           </button>
                         </td>
                       </tr>
@@ -20195,7 +20208,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                               <div className="flex flex-wrap items-center justify-between border-b border-amber-100 pb-2 mb-3">
                                 <div>
                                   <h4 className="font-bold text-amber-950 text-sm">
-                                    Transaction Receipt {"\u2014"} {new Date(tx.soldAt).toLocaleTimeString()}
+                                    Transaction Receipt {"—"} {new Date(tx.soldAt).toLocaleTimeString()}
                                   </h4>
                                   <p className="text-xs text-amber-800">
                                     Cashier: <strong className="text-amber-950">{tx.cashierName}</strong>
@@ -20503,7 +20516,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               filterStatus === 'out' ? 'bg-red-700 text-white shadow-sm ring-2 ring-red-400' : 'bg-red-100 text-red-800 hover:bg-red-200'
             }`}
           >
-            {outOfStockCount} Out of Stock {filterStatus === 'out' && '\u2713'}
+            {outOfStockCount} Out of Stock {filterStatus === 'out' && '✓'}
           </button>
           <button
             type="button"
@@ -20512,7 +20525,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
               filterStatus === 'low' ? 'bg-amber-600 text-white shadow-sm ring-2 ring-amber-400' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
             }`}
           >
-            {lowStockCount} Low Stock Alert {filterStatus === 'low' && '\u2713'}
+            {lowStockCount} Low Stock Alert {filterStatus === 'low' && '✓'}
           </button>
         </div>
         <div className="flex gap-2">
@@ -20890,8 +20903,8 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
                 <tr className="border-b last:border-0" key={customer.customerId}>
                   <td className="py-3 font-semibold text-amber-950">{parts.at(-1)}</td>
                   <td>{parts.length > 1 ? parts : 'Walk-in'}</td>
-                  <td>{customer.email || '\u2014'}</td>
-                  <td>{customer.phone || '\u2014'}</td>
+                  <td>{customer.email || '—'}</td>
+                  <td>{customer.phone || '—'}</td>
                   <td>{customer.tierId === retailTierId ? 'Retail' : 'Wholesale'}</td>
                   <td className="text-right font-bold text-amber-950 tabular-nums">{money.format(lifetimeAmount)}</td>
                   <td className="text-right">
@@ -20911,7 +20924,7 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
   );
 }
 
-function EmployeesView({ session, onShiftChange }: { session: CloudSession; onShiftChange?: () => void }): JSX.Element {
+function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: CloudSession; onShiftChange?: () => void; onSelfClockOut?: () => void }): JSX.Element {
   const [clockInModalOpen, setClockInModalOpen] = useState(false);
   const [openingFloat, setOpeningFloat] = useState('1500.00');
   const [clockInNotes, setClockInNotes] = useState('');
@@ -21007,8 +21020,20 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
     try {
       const countVal = Number(closingCashCount);
       await clockOutWithCount(countVal, clockOutNotes);
-      setMessage('Clocked out successfully with cash drawer count.');
       setClockOutModalOpen(false);
+      if (!isAdmin) {
+        try {
+          await api.logout();
+        } catch (logoutErr) {
+          console.error('Logout error on clock out:', logoutErr);
+        }
+        clearSessionStorage();
+        if (onSelfClockOut) {
+          onSelfClockOut();
+        }
+        return;
+      }
+      setMessage('Clocked out successfully with cash drawer count.');
       await refresh();
       if (onShiftChange) onShiftChange();
     } catch (reason) {
@@ -21155,7 +21180,9 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
 
                   let auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">🟢 On Shift</span>;
                   if (shift.clockOut) {
-                    if (discrepancyVal === 0 || discrepancyVal === null) {
+                    if ((shift as any).status === 'AUTO_CLOSED') {
+                      auditBadge = <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">ℹ️ Auto-Closed (Pending Audit)</span>;
+                    } else if (discrepancyVal === 0 || discrepancyVal === null) {
                       auditBadge = <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">✅ ₱0.00 Balanced</span>;
                     } else if (discrepancyVal < 0) {
                       auditBadge = <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">⚠️ -₱{Math.abs(discrepancyVal).toFixed(2)} Short</span>;
@@ -21167,12 +21194,12 @@ function EmployeesView({ session, onShiftChange }: { session: CloudSession; onSh
                   return (
                     <tr className="border-t border-amber-100/60" key={shift.shiftId}>
                       <td className="py-3 px-2 font-semibold text-amber-950">{shift.displayName}</td>
-                      <td className="py-3 px-2 capitalize">{shiftEmployee?.role ?? '\u2014'}</td>
+                      <td className="py-3 px-2 capitalize">{shiftEmployee?.role ?? '—'}</td>
                       <td className="py-3 px-2">{new Date(shift.clockIn).toLocaleTimeString()}</td>
                       <td className="py-3 px-2">{shift.clockOut ? new Date(shift.clockOut).toLocaleTimeString() : 'Still clocked in'}</td>
                       <td className="py-3 px-2 text-right tabular-nums">{money.format(openingFloatVal)}</td>
-                      <td className="py-3 px-2 text-right tabular-nums">{closingCountVal !== null ? money.format(closingCountVal) : '\u2014'}</td>
-                      <td className="py-3 px-2 text-right tabular-nums">{expectedVal !== null ? money.format(expectedVal) : '\u2014'}</td>
+                      <td className="py-3 px-2 text-right tabular-nums">{closingCountVal !== null ? money.format(closingCountVal) : '—'}</td>
+                      <td className="py-3 px-2 text-right tabular-nums">{expectedVal !== null ? money.format(expectedVal) : '—'}</td>
                       <td className="py-3 px-2 text-right">{auditBadge}</td>
                     </tr>
                   );
@@ -21376,7 +21403,12 @@ export function CloudApp(): JSX.Element {
   const [shifts, setShifts] = useState<CloudShift[]>([]);
   const [shiftsLoaded, setShiftsLoaded] = useState(false);
 
-
+  // Top-level shift modal state
+  const [clockInModalOpen, setClockInModalOpen] = useState(false);
+  const [openingFloat, setOpeningFloat] = useState('1500.00');
+  const [clockInNotes, setClockInNotes] = useState('');
+  const [clockingIn, setClockingIn] = useState(false);
+  const [clockInError, setClockInError] = useState<string | null>(null);
 
   const isAdmin = session?.user.role === 'admin';
 
@@ -21425,6 +21457,40 @@ export function CloudApp(): JSX.Element {
     }
   }, [session]);
 
+  // Active open shift for non-admin cashiers
+  const ownShift = useMemo(() => {
+    if (!session || isAdmin) return null;
+    return shifts.find((shift) => shift.userId === session.user.userId && !shift.clockOut) || null;
+  }, [shifts, session, isAdmin]);
+
+  // Check if non-admin cashier requires clock-in
+  const cashierRequiresClockIn = !isAdmin && shiftsLoaded && !ownShift;
+
+  // Prompt non-admin cashier to clock in ONLY after shifts have loaded from server
+  useEffect(() => {
+    if (session && cashierRequiresClockIn && !clockInModalOpen) {
+      setOpeningFloat('1500.00');
+      setClockInNotes('');
+      setClockInError(null);
+      setClockInModalOpen(true);
+    }
+  }, [session, cashierRequiresClockIn]);
+
+  const submitClockIn = async (): Promise<void> => {
+    setClockingIn(true);
+    setClockInError(null);
+    try {
+      const floatVal = Number(openingFloat) || 1500.00;
+      await clockInWithFloat(floatVal, clockInNotes);
+      setClockInModalOpen(false);
+      await refreshShifts();
+    } catch (reason) {
+      console.error('Clock-in error:', reason);
+      setClockInError(errorText(reason, 'Unable to clock in. Please try again.'));
+    } finally {
+      setClockingIn(false);
+    }
+  };
 
   if (!session) {
     return (
@@ -21435,6 +21501,11 @@ export function CloudApp(): JSX.Element {
           localStorage.setItem('bakealley_cloud_token', loggedIn.token);
           localStorage.setItem('bakealley_cloud_user', JSON.stringify(loggedIn.user));
           localStorage.setItem('bakealley_cloud_last_active', String(now));
+
+          const initialTab: Tab = loggedIn.user.role === 'admin' ? 'employees' : 'checkout';
+          setTab(initialTab);
+          localStorage.setItem('bakealley_cloud_tab', initialTab);
+
           setSession(loggedIn);
         }}
       />
@@ -21471,7 +21542,7 @@ export function CloudApp(): JSX.Element {
             <img alt="Bake Alley logo" className="h-9 w-9 rounded-full border border-amber-200/80 object-cover shadow-sm" src={logoUrl} />
             <strong className="font-bakery text-lg text-amber-950">Bake Alley Cloud POS</strong>
             <span className="ml-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
-              {session.user.displayName} {"\u00B7"} {session.user.role}
+              {session.user.displayName} {"·"} {session.user.role}
             </span>
           </div>
           <button
@@ -21506,7 +21577,29 @@ export function CloudApp(): JSX.Element {
         </nav>
       </header>
 
-      {tab === 'checkout' && <CheckoutScreen dataSource={dataSource} scaleEnabled={false} customers={customers as CheckoutCustomer[]} retailTierId={retailTierId} taxRate={0} />}
+      {/* Checkout Screen with Quick Clock-In Banner for Cashiers */}
+      {tab === 'checkout' && (
+        <div className="relative">
+          {cashierRequiresClockIn && (
+            <div className="bg-amber-800 text-white text-center py-2.5 px-4 text-xs font-bold flex items-center justify-center gap-2 shadow-inner">
+              <span>🔒 Shift Not Started — Please Clock In & Set Starting Cash Float to Process Orders</span>
+              <button
+                type="button"
+                className="ml-2 bg-white text-amber-950 px-3 py-1 rounded-lg text-xs font-extrabold hover:bg-amber-100 shadow-sm transition"
+                onClick={() => {
+                  setOpeningFloat('1500.00');
+                  setClockInNotes('');
+                  setClockInError(null);
+                  setClockInModalOpen(true);
+                }}
+              >
+                Clock In Now
+              </button>
+            </div>
+          )}
+          <CheckoutScreen dataSource={dataSource} scaleEnabled={false} customers={customers as CheckoutCustomer[]} retailTierId={retailTierId} taxRate={0} isClockedIn={isAdmin || Boolean(ownShift)} />
+        </div>
+      )}
 
       {tab !== 'checkout' && (
         <main className="mx-auto max-w-7xl p-4 sm:p-6">
@@ -21515,10 +21608,86 @@ export function CloudApp(): JSX.Element {
           {tab === 'bi' && isAdmin && <BiView />}
           {tab === 'inventory' && <InventoryView isAdmin={isAdmin} />}
           {tab === 'crm' && <CrmView session={session} customers={customers} refresh={refreshCustomers} />}
-          {tab === 'employees' && <EmployeesView session={session} onShiftChange={refreshShifts} />}
+          {tab === 'employees' && <EmployeesView session={session} onShiftChange={refreshShifts} onSelfClockOut={() => setSession(null)} />}
         </main>
       )}
 
+      {/* Top-Level Quick Clock-In Modal */}
+      {clockInModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-amber-950/50 z-50 p-4" role="presentation">
+          <div aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
+            <div className="flex items-start justify-between border-b border-amber-100 pb-3">
+              <div>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">🈺 Start Shift & Cash Drawer Float</h3>
+                <p className="text-xs text-amber-700 mt-0.5">Welcome back, {session.user.displayName}! Initialize your shift float.</p>
+              </div>
+              <button
+                aria-label="Close dialog"
+                className="text-xl text-amber-600 hover:text-amber-900"
+                type="button"
+                onClick={() => setClockInModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            {clockInError && (
+              <div className="rounded-lg bg-red-50 p-3 text-xs text-red-700 border border-red-200" role="alert">
+                {clockInError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Opening Cash Float (₱)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="w-full rounded-xl border border-amber-200/80 bg-amber-50/20 px-3.5 py-2.5 text-lg font-bold text-amber-950 outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/30"
+                value={openingFloat}
+                onChange={(e) => setOpeningFloat(e.target.value)}
+                autoFocus
+              />
+              <p className="mt-1 text-[11px] text-amber-700 leading-normal">
+                💡 Physical starting cash in drawer for giving change (default: ₱1,500.00).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Shift Notes (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Received 10x 100 bills, 10x 50 bills"
+                className="w-full rounded-xl border border-amber-200/80 px-3.5 py-2 text-xs text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+                value={clockInNotes}
+                onChange={(e) => setClockInNotes(e.target.value)}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-amber-100">
+              <button
+                type="button"
+                className="flex-1 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                onClick={() => setClockInModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
+                onClick={() => void submitClockIn()}
+                disabled={clockingIn || !openingFloat}
+              >
+                {clockingIn ? 'Opening Shift...' : '🚀 Confirm & Open Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -22034,15 +22203,15 @@ app.post('/api/v1/employees/clock-in', auth.requireSession, async (request, resp
     const notes = typeof payload.notes === 'string' ? payload.notes.trim() : null;
 
     const openShiftCheck = await pool.query(
-      `SELECT shift_id, COALESCE(status, 'OPEN') AS status 
+      `SELECT shift_id AS "shiftId", clock_in AS "clockIn", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", COALESCE(status, 'OPEN') AS status 
        FROM employee_shifts 
-       WHERE user_id = $1 AND (clock_out IS NULL OR status = 'PENDING_PHYSICAL_COUNT')
+       WHERE user_id = $1 AND clock_out IS NULL
        ORDER BY clock_in DESC LIMIT 1`,
       [request.user.userId]
     );
 
     if (openShiftCheck.rowCount > 0) {
-      return response.status(409).json({ error: 'SHIFT_ALREADY_OPEN' });
+      return response.json(openShiftCheck.rows[0]);
     }
 
     const result = await pool.query(
@@ -22070,7 +22239,7 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
     const openShiftCheck = await pool.query(
       `SELECT shift_id AS "shiftId", clock_in AS "clockIn", clock_out AS "clockOut", COALESCE(opening_float, 1500.00)::numeric AS "openingFloat", COALESCE(status, 'OPEN') AS status
        FROM employee_shifts
-       WHERE user_id = $1 AND (clock_out IS NULL OR status = 'PENDING_PHYSICAL_COUNT')
+       WHERE user_id = $1 AND clock_out IS NULL
        ORDER BY clock_in DESC LIMIT 1`,
       [request.user.userId]
     );
@@ -22103,7 +22272,7 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
     const shiftCashSales = Number(salesResult.rows[0].shiftCashSales) || 0;
     const expectedCash = openingFloat + shiftCashSales;
     const cashDiscrepancy = closingCashCount !== null ? closingCashCount - expectedCash : null;
-    const finalStatus = openShift.status === 'PENDING_PHYSICAL_COUNT' ? 'CLOSED_NEXT_DAY' : 'CLOSED';
+    const finalStatus = 'CLOSED';
 
     const result = await pool.query(
       `UPDATE employee_shifts 
@@ -22211,6 +22380,19 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   }
 
   const validatedPayload = validation.data;
+
+  if (request.user.role !== 'admin') {
+    const openShiftCheck = await pool.query(
+      `SELECT shift_id FROM employee_shifts WHERE user_id = $1 AND clock_out IS NULL AND (status = 'OPEN' OR status IS NULL)`,
+      [request.user.userId]
+    );
+    if (!openShiftCheck.rowCount) {
+      return response.status(403).json({
+        error: 'SHIFT_REQUIRED',
+        message: 'You must clock in and set your opening float before processing sales.'
+      });
+    }
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -22510,7 +22692,14 @@ app.use((error, _request, response, _next) => {
 // Automatically closes forgotten overnight shifts at 23:59:59 Manila time
 async function autoCloseOvernightShifts() {
   try {
-    await pool.query();
+    await pool.query(`
+      UPDATE employee_shifts
+      SET clock_out = ((clock_in AT TIME ZONE 'Asia/Manila')::date + time '23:59:59') AT TIME ZONE 'Asia/Manila',
+          status = 'AUTO_CLOSED',
+          notes = COALESCE(notes, 'Auto-closed at midnight; pending manager audit')
+      WHERE clock_out IS NULL 
+        AND (clock_in AT TIME ZONE 'Asia/Manila')::date < (now() AT TIME ZONE 'Asia/Manila')::date
+    `);
   } catch (error) {
     logger.warn('Overnight shift auto-close check failed:', { error: error.message });
   }
@@ -22523,6 +22712,7 @@ async function ensureShiftColumns() {
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS closing_cash_count NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS expected_cash NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS cash_discrepancy NUMERIC(12,2);
+      ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'OPEN';
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS notes TEXT;
     `);
     logger.info('Employee shift audit columns ensured');
