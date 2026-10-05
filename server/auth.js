@@ -14,7 +14,7 @@ async function requireSession(request, response, next) {
   try {
     const pool = request.pool;
     const result = await pool.query(
-      'SELECT u.user_id, u.username, u.display_name, u.role FROM sessions s JOIN app_users u ON u.user_id = s.user_id WHERE s.token = $1 AND s.expires_at > NOW()',
+      'SELECT u.user_id, u.username, u.display_name, u.role FROM sessions s JOIN app_users u ON u.user_id = s.user_id WHERE s.token = $1 AND s.expires_at > NOW() AND u.active = TRUE',
       [token]
     );
     
@@ -97,4 +97,3 @@ function createAuthRouter(express, pool) {
 }
 
 module.exports = { createAuthRouter };
-
