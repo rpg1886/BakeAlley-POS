@@ -660,6 +660,49 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
   }
 });
 
+app.post('/api/v1/employees/:userId/reset-password', auth.requireSession, auth.requireAdmin, async(request, response, next) => {
+  try {
+    const { userId } = request.params; 
+    const { password } = request.body ?? {};
+
+    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      return response.status(400).json({ error: 'INVALID\_USER\_ID', message: 'User ID must be a valid UUID' });
+    }
+
+    if (!password || String(password).length < 12) { 
+      return response.status(400).json({ error: 'PASSWORD_TOO_SHORT',
+        message: 'New Password must be at least 12 characters' });
+    }
+
+    const userCheck = await pool.query('SELECT user_id, username FROM app_users WHERE user_id = $1 AND active = TRUE', [userId]);
+    if (!userCheck.rowCount) {
+      return response.status(404).json({ error: 'USER_NOT_FOUND', message: 'Employee not found or inactive' });
+    }
+
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.scryptSync(String(password), salt, 64).toString('hex');
+    const client = await pool.connect();
+    try { 
+      await client.query('BEGIN');
+      await client.query(
+        'UPDATE app\_users SET password\_salt = $1, password\_hash = $2, updated\_at = now() WHERE user\_id = $3',
+        [salt, hash, userId]);
+      await client.query('DELETE FROM sessions WHERE user\_id = $1', [userId]);  
+      await client.query('COMMIT');
+      logger.info('Employee password reset by admin', { targetUserId: userId, adminUserId: request.user.userId });
+      response.status(200).json({ message: 'Password reset successfully' });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    logger.error('Employee password reset failed', { error: error.message });
+    next(error);
+  }
+});
+
 // Employee Shifts List Endpoint (Strict YYYY-MM-DD Date Filter)
 app.get('/api/v1/employees/shifts', auth.requireSession, async (request, response, next) => {
   try {

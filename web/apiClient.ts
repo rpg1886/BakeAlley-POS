@@ -125,7 +125,9 @@ export class CloudApiClient {
   public async deleteEmployee(userId: string): Promise<void> {
     await this.request(`/api/v1/employees/${userId}`, { method: 'DELETE' });
   }
-
+  public async resetEmployeePassword(userId: string, newPassword: string): Promise<void> {
+    await this.request(`/api/v1/employees/${userId}/reset-password`, { method: 'POST', body: JSON.stringify({ password: newPassword }), });
+  }
   public async updateInventoryProduct(variantId: string, update: { variantName?: string; sku?: string; retailPrice?: number; initialCost?: number; quantity?: number; lotNumber?: string; expirationDate?: string | null }): Promise<void> {
     await this.request(`/api/v1/inventory/products/${variantId}`, { method: 'PUT', body: JSON.stringify(update) });
   }

@@ -2103,7 +2103,10 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ userId: string; displayName: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
-
+  const [resetModal, setResetConfirm] = useState<{ userId: string; displayName: string } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetting, setResetting] = useState(false);
+  
   useEffect(() => {
     localStorage.setItem('bakealley_pos_emp_date', selectedDate);
   }, [selectedDate]);
@@ -2208,6 +2211,22 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
       setSaving(false);
     }
   };
+  
+  const handleResetPassword = async (): Promise<void> => {
+    if (!resetModal || newPassword.length < 12) return;
+    setResetting(true);
+    setError(null);
+    try {
+      await api.resetEmployeePassword(resetModal.userId, newPassword);
+      setMessage(`Password for "${resetModal.displayName}" reset successfully.`);
+      setResetConfirm(null);
+      setNewPassword('');
+    } catch (reason) {
+      setError(errorText(reason, 'Unable to reset password.'));
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const deleteEmployee = async (userId: string): Promise<void> => {
     setDeleting(true);
@@ -2279,9 +2298,21 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
                     {isAdmin && <td className="px-3 py-4 text-right">{money.format(Number(employee.salesAmount) || 0)}</td>}
                     <td className="px-3 py-4 text-right">{employee.salesCount}</td>
                     <td className="pr-5 text-right">
-                      {isSelf && (
+                      <div className="flex justify-end gap-2"></div>
+                        {isSelf && (
                         <button className="rounded-lg border border-amber-200/80 px-3 py-2 text-xs font-semibold" type="button" onClick={handleOpenClockModal}>
                           {ownShift ? 'Clock out' : 'Clock in'}
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button className="rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-900"
+                          type="button"
+                          onClick={() => {setResetConfirm({
+                            userId: employee.userId,
+                            displayName: employee.displayName
+                          }); setNewPassword('');
+                          }} 
+                          > Reset Password
                         </button>
                       )}
                       {isAdmin && !isSelf && (
@@ -2382,6 +2413,43 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
                 className="flex-1 rounded-lg bg-gray-300 px-4 py-2 text-gray-900 font-semibold hover:bg-gray-400 disabled:opacity-50"
                 onClick={() => setDeleteConfirm(null)}
                 disabled={deleting}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-96 shadow-lg space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Reset Password for {resetModal.displayName}</h2>
+            <p className="text-xs text-amber-800">
+              Enter a new password for <strong>{resetModal.displayName}</strong> (minimum 12 characters).
+            </p>
+            <input
+              type="password"
+              className="w-full rounded-lg border border-amber-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-800"
+              placeholder="New Password (12+ characters)"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              minLength={12}
+            />
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                className="flex-1 rounded-lg bg-amber-800 px-4 py-2 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
+                onClick={() => void handleResetPassword()}
+                disabled={resetting || newPassword.length < 12}
+              >
+                {resetting ? 'Resetting...' : 'Save New Password'}
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-lg bg-gray-300 px-4 py-2 text-xs font-bold text-gray-900 hover:bg-gray-400"
+                onClick={() => {setResetConfirm(null); setNewPassword(''); }}
+                disabled={resetting}
               >
                 Cancel
               </button>
