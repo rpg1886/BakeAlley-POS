@@ -73,8 +73,17 @@ function getInactivityTimeout(): number {
 }
 
 function errorText(error: unknown, fallback: string): string {
-  if (error instanceof Error) return error.message;
-  return fallback;
+  if (!(error instanceof Error)) return fallback;
+  const messages: Record<string, string> = {
+    CUSTOMER_HAS_ORDERS: 'This customer cannot be deleted because they have completed orders.',
+    INVALID_CUSTOMER: 'Enter a contact name and pricing tier.',
+    INVALID_EMPLOYEE: 'Enter all employee fields.',
+    PASSWORD_TOO_SHORT: 'Employee passwords must be at least 12 characters.',
+    CANNOT_DELETE_SELF: 'You cannot delete your own logged-in admin account.',
+    USER_NOT_FOUND: 'Employee not found or already deactivated.',
+    USERNAME_EXISTS: 'An active employee with this username already exists.'
+  };
+  return messages[error.message] ?? (error.message || fallback);
 }
 
 function clearSessionStorage(): void {
@@ -2205,11 +2214,11 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
     setError(null);
     try {
       await api.deleteEmployee(userId);
-      setMessage(`Employee "${deleteConfirm?.displayName}" deleted successfully.`);
+      setMessage(`Employee "${deleteConfirm?.displayName}" deactivated successfully.`);
       setDeleteConfirm(null);
       await refresh();
     } catch (reason) {
-      setError(errorText(reason, 'Employee could not be deleted.'));
+      setError(errorText(reason, 'Employee could not be deactivated.'));
     } finally {
       setDeleting(false);
     }
@@ -2276,8 +2285,8 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
                         </button>
                       )}
                       {isAdmin && !isSelf && (
-                        <button className="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-semibold hover:bg-red-700 disabled:opacity-50" type="button" onClick={() => setDeleteConfirm({ userId: employee.userId, displayName: employee.displayName })} disabled={deleting}>
-                          Delete
+                        <button className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-50" type="button" onClick={() => setDeleteConfirm({ userId: employee.userId, displayName: employee.displayName })} disabled={deleting}>
+                          Deactivate
                         </button>
                       )}
                     </td>
@@ -2353,20 +2362,20 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
 
       {/* Delete Confirmation Dialog */}
       {deleteConfirm && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-          <div className="bg-white rounded-2xl p-6 w-96 shadow-lg">
-            <h2 className="text-lg font-bold text-red-600 mb-4">Delete Employee</h2>
-            <p className="text-sm text-gray-700 mb-6">
-              Are you sure you want to delete <strong>{deleteConfirm.displayName}</strong>? This action cannot be undone.
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-96 shadow-lg space-y-4">
+            <h2 className="text-lg font-bold text-red-600">Deactivate Employee Account</h2>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              Are you sure you want to remove <strong>{deleteConfirm.displayName}</strong>? This will deactivate their account and revoke login access while preserving historical sales reports.
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-2">
               <button
                 type="button"
                 className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white font-semibold hover:bg-red-700 disabled:opacity-50"
                 onClick={() => void deleteEmployee(deleteConfirm.userId)}
                 disabled={deleting}
               >
-                {deleting ? 'Deleting...' : 'Delete Employee'}
+                {deleting ? 'Deactivating...' : 'Confirm Deactivation'}
               </button>
               <button
                 type="button"

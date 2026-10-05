@@ -461,7 +461,7 @@ app.get('/api/v1/employees', auth.requireSession, async (request, response, next
        COUNT(o.order_id)::int AS "salesCount", COALESCE(SUM(o.total_amount), 0)::numeric AS "salesAmount"
        FROM app_users u 
        LEFT JOIN orders o ON o.employee_id = u.user_id AND o.status = 'completed' ${dateFilter}
-       WHERE ($1 = 'admin' OR u.user_id = $2) 
+       WHERE u.active = TRUE AND ($1 = 'admin' OR u.user_id = $2) 
        GROUP BY u.user_id 
        ORDER BY u.display_name`, 
       params
@@ -484,6 +484,21 @@ app.post('/api/v1/employees', auth.requireSession, auth.requireAdmin, async (req
     const body = validation.data;
     const salt = crypto.randomBytes(16).toString('hex');
     const hash = crypto.scryptSync(String(body.password), salt, 64).toString('hex');
+    // Check if employee already exists (active or inactive)
+    const existing = await pool.query('SELECT user_id, active FROM app_users WHERE username = lower($1)', [body.username]);
+    if (existing.rowCount > 0) {
+      const user = existing.rows[0];
+      if (user.active) {
+        return response.status(409).json({ error: 'USERNAME_EXISTS', message: 'An active employee with this username already exists' });
+      }
+      // Reactivate previously soft-deleted employee with new credentials
+      const reactivated = await pool.query(
+        `UPDATE app_users SET display_name = $1, role = $2, password_salt = $3, password_hash = $4, active = TRUE, updated_at = now() WHERE user_id = $5 RETURNING user_id AS "userId", username, display_name AS "displayName", role, active`,
+        [body.displayName, body.role, salt, hash, user.user_id]
+      );
+      logger.info('Employee reactivated', { userId: user.user_id, username: body.username });
+      return response.status(200).json(reactivated.rows[0]);
+    }
     const result = await pool.query(
       `INSERT INTO app_users (user_id, username, display_name, role, password_salt, password_hash)
        VALUES (gen_random_uuid(), lower($1), $2, $3, $4, $5)
@@ -618,20 +633,26 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
       return response.status(404).json({ error: 'USER_NOT_FOUND', message: 'Employee not found' });
     }
 
-    const orderCheck = await pool.query('SELECT COUNT(*)::int as count FROM orders WHERE employee_id=\$1', [userId]);
-    if (Number(orderCheck.rows[0].count) > 0) {
-      logger.warn('Employee deletion blocked - has orders', { userId, orderCount: orderCheck.rows[0].count });
-      return response.status(409).json({ error: 'EMPLOYEE_HAS_ORDERS', message: `Cannot delete employee with ${orderCheck.rows[0].count} associated orders` });
+    if (userId === request.user.userId) { 
+      return response.status(400).json({ error: 'CANNOT_DELETE_SELF', 
+      message: 'You cannot delete your own logged-in admin account' });
+    }
+
+    const userCheck = await pool.query('SELECT user_id, username FROM app_users WHERE user_id = $1 AND active = TRUE', [userId]);
+    if (!userCheck.rowCount) {
+      return response.status(404).json({
+        error: 'USER_NOT_FOUND', message:
+          'Employee not found or already deactivated' });
     }
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('DELETE FROM employee_shifts WHERE user_id=\$1', [userId]);
-      await client.query('DELETE FROM app_users WHERE user_id=\$1', [userId]);
+      await client.query('UPDATE app\_users SET active = FALSE, updated\_at = now() WHERE user\_id = $1', [userId]);
+      await client.query('DELETE FROM sessions WHERE user\_id = $1', [userId]);
       await client.query('COMMIT');
-      logger.info('Employee deleted', { userId, username: userCheck.rows[0].username });
-      response.status(200).json({ message: 'Employee deleted successfully' });
+      logger.info('Employee deactivated', { userId, username: userCheck.rows[0].username });
+      response.status(200).json({ message: 'Employee deactivated successfully', active: false });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
