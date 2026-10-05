@@ -628,11 +628,6 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
       return response.status(400).json({ error: 'INVALID_USER_ID', message: 'User ID must be a valid UUID' });
     }
 
-    const userCheck = await pool.query('SELECT user_id, username FROM app_users WHERE user_id=\$1', [userId]);
-    if (!userCheck.rowCount) {
-      return response.status(404).json({ error: 'USER_NOT_FOUND', message: 'Employee not found' });
-    }
-
     if (userId === request.user.userId) { 
       return response.status(400).json({ error: 'CANNOT_DELETE_SELF', 
       message: 'You cannot delete your own logged-in admin account' });
