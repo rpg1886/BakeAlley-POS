@@ -624,7 +624,7 @@ app.post('/api/v1/employees/clock-out', auth.requireSession, async (request, res
 app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
   try {
     const { userId } = request.params;
-    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\$/i.test(userId)) {
+    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
       return response.status(400).json({ error: 'INVALID_USER_ID', message: 'User ID must be a valid UUID' });
     }
 
@@ -643,8 +643,8 @@ app.delete('/api/v1/employees/:userId', auth.requireSession, auth.requireAdmin, 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('UPDATE app\_users SET active = FALSE, updated\_at = now() WHERE user\_id = $1', [userId]);
-      await client.query('DELETE FROM sessions WHERE user\_id = $1', [userId]);
+      await client.query('UPDATE app_users SET active = FALSE, updated_at = now() WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
       await client.query('COMMIT');
       logger.info('Employee deactivated', { userId, username: userCheck.rows[0].username });
       response.status(200).json({ message: 'Employee deactivated successfully', active: false });

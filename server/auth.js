@@ -8,19 +8,19 @@ function verifyPassword(password, salt, expectedHash) {
 }
 
 async function requireSession(request, response, next) { 
-  const token = request.headers.authorization?.replace(/^Bearer\\s+/i, ''); 
+  const token = request.headers.authorization?.replace(/^Bearer\s+/i, ''); 
   if (!token) return response.status(401).json({ error: 
-    'AUTHENTICATION\_REQUIRED' }); 
+    'AUTHENTICATION_REQUIRED' }); 
     
   try { 
     const pool = request.pool; 
     const result = await pool.query( 
-      'SELECT u.user\_id, u.username, u.display\_name, u.role FROM sessions s JOIN app\_users u ON u.user\_id = s.user\_id WHERE s.token = $1 AND s.expires\_at &gt; NOW() AND u.active = TRUE', 
+      'SELECT u.user_id, u.username, u.display_name, u.role FROM sessions s JOIN app_users u ON u.user_id = s.user_id WHERE s.token = $1 AND s.expires_at > NOW() AND u.active = TRUE', 
       [token] 
     );
     if (!result.rows[0]) {
       logger.warn('Session lookup failed or expired', { token: token.substring(0, 8) + '...' });
-      return response.status(401).json({ error: 'AUTHENTICATION\_REQUIRED' });
+      return response.status(401).json({ error: 'AUTHENTICATION_REQUIRED' });
     }
     const user = result.rows[0];
     request.user = { userId: user.user_id, username: user.username, displayName: user.display_name, role: user.role };
