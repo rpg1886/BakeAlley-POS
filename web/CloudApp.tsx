@@ -2298,9 +2298,9 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
                     {isAdmin && <td className="px-3 py-4 text-right">{money.format(Number(employee.salesAmount) || 0)}</td>}
                     <td className="px-3 py-4 text-right">{employee.salesCount}</td>
                     <td className="pr-5 text-right">
-                      <div className="flex justify-end gap-2"></div>
+                      <div className="flex justify-end items-center gap-2"></div>
                         {isSelf && (
-                        <button className="rounded-lg border border-amber-200/80 px-3 py-2 text-xs font-semibold" type="button" onClick={handleOpenClockModal}>
+                        <button className="rounded-lg border border-amber-200/80 px-3 py-1.5 text-xs font-semibold" type="button" onClick={handleOpenClockModal}>
                           {ownShift ? 'Clock out' : 'Clock in'}
                         </button>
                       )}
