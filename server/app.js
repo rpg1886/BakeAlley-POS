@@ -331,7 +331,7 @@ app.post('/api/v1/inventory/products', auth.requireSession, auth.requireAdmin, a
 app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
   try {
     const { variantId } = request.params;
-    if (!variantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\$/i.test(variantId)) {
+    if (!variantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(variantId)) {
       return response.status(400).json({ error: 'INVALID_VARIANT_ID', message: 'Variant ID must be a valid UUID' });
     }
 
