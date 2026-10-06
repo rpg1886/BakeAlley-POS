@@ -35,6 +35,9 @@ jobs:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run cloud:build
 
+      - name: Verify Build Output 
+        run: ls -la dist/cloud  
+
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
