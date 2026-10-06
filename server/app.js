@@ -765,10 +765,10 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
     let totalCashReceived = Number(validatedPayload.cashReceived || 0);
 
     if (validatedPayload.paymentMethod === 'split' && Array.isArray(validatedPayload.payments)) {
-     const cashPayment = validatedPayload.payments.find(p => p.method === 'cash');
+     const cashPayment = validatedPayload.payments.filter(p => p.method === 'cash');
       if (cashPayment.length > 0) {
-        const totalCashNeeded = cashPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-        const totalCashTenderedInSplit = cashPayments.reduce((sum, p) => sum + Number(p.cashReceived || p.amount || 0), 0);
+        const totalCashNeeded = cashPayment.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const totalCashTenderedInSplit = cashPayment.reduce((sum, p) => sum + Number(p.cashReceived || p.amount || 0), 0);
         if (totalCashTenderedInSplit < totalCashNeeded) { throw Object.assign(new Error('Cash received must be at least the cash portion total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' }); }
         changeDue = Math.max(0, totalCashTenderedInSplit - totalCashNeeded);
         totalCashReceived = totalCashTenderedInSplit;
@@ -804,20 +804,16 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       logger.info('Order is duplicate (idempotent)', { orderId: validatedPayload.orderId });
       return response.json({ orderId: validatedPayload.orderId, duplicate: true }); 
     }
-    
-    if (validatedPayload.paymentMethod === 'cash' && totalCashReceived < Number(validatedPayload.totalAmount)) {
-      throw Object.assign(new Error('Cash received must be at least the order total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' });
-    }
 
     for (const item of validatedPayload.items) {
       let price = await client.query(
-        'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=\$1 AND pp.tier_id=\$2 AND pp.min_quantity <= \$3 ORDER BY pp.min_quantity DESC LIMIT 1', 
+        'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.tier_id=$2 AND pp.min_quantity <= $3 ORDER BY pp.min_quantity DESC LIMIT 1', 
         [item.variantId, validatedPayload.pricingTierId, item.quantity]
       );
 
       if (!price.rowCount) {
         price = await client.query(
-          'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=\$1 AND pp.price_per_unit > 0 ORDER BY pp.min_quantity ASC LIMIT 1',
+          'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.price_per_unit > 0 ORDER BY pp.min_quantity ASC LIMIT 1',
           [item.variantId]
         );
       }
@@ -831,7 +827,7 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         throw Object.assign(new Error('Price changed; review the cart'), { statusCode: 409, code: 'PRICE_CHANGED' });
       }
 
-      const lots = await client.query('SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=\$1 AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST, lot_id FOR UPDATE', [item.variantId]);
+      const lots = await client.query('SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=$1 AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST, lot_id FOR UPDATE', [item.variantId]);
       let remaining = Number(item.quantity);
       const allocations = item.lotId ? [{ lotId: item.lotId, quantity: remaining }] : [];
       
@@ -850,13 +846,13 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       }
       
       for (const [allocationIndex, allocation] of allocations.entries()) { 
-        const update = await client.query('UPDATE inventory_lots SET quantity_on_hand=quantity_on_hand-\$1, updated_at=now() WHERE lot_id=\$2 AND variant_id=\$3 AND quantity_on_hand >= \$1', [allocation.quantity, allocation.lotId, item.variantId]); 
+        const update = await client.query('UPDATE inventory_lots SET quantity_on_hand=quantity_on_hand-$1, updated_at=now() WHERE lot_id=$2 AND variant_id=$3 AND quantity_on_hand >= $1', [allocation.quantity, allocation.lotId, item.variantId]); 
         if (update.rowCount !== 1) {
           logger.error('Inventory conflict during allocation', { lotId: allocation.lotId, requested: allocation.quantity });
           throw Object.assign(new Error('Inventory changed; retry checkout'), { statusCode: 409, code: 'INVENTORY_CONFLICT' });
         }
         
-        await client.query('INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES (\$1,\$2,\$3,\$4,\$5,\$6,\$7)', [allocationIndex === 0 ? item.orderItemId : crypto.randomUUID(), validatedPayload.orderId, item.variantId, allocation.lotId, allocation.quantity, item.unitPrice, Number(item.unitPrice) * allocation.quantity]); 
+        await client.query('INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES ($1,$2,$3,$4,$5,$6,$7)', [allocationIndex === 0 ? item.orderItemId : crypto.randomUUID(), validatedPayload.orderId, item.variantId, allocation.lotId, allocation.quantity, item.unitPrice, Number(item.unitPrice) * allocation.quantity]); 
       }
     }
     
