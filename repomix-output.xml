@@ -574,54 +574,6 @@ You are the Lead Full-Stack Architect and Desktop POS Engineer for Bake Alley, a
 Summarize the implemented behavior, list the files changed, report validation results, and identify any remaining environment or integration dependency.
 </file>
 
-<file path=".github/workflows/deploy-pages.yml">
-name: Deploy Cloud POS to GitHub Pages
-
-on:
-  push:
-    branches:
-      - CloudBase-POS
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install Dependencies
-        run: npm ci
-
-      - name: Build Web Application
-        env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
-        run: npm run cloud:build
-
-      - name: Upload Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist/cloud
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-</file>
-
 <file path="database/init.sql">
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;
@@ -3680,123 +3632,6 @@ if (failedTests > 0) {
   log('Production hardening validation complete.', 'info');
   process.exit(0);
 }
-</file>
-
-<file path="server/validation.js">
-const { z } = require('zod');
-
-// Auth schemas
-const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
-});
-
-// Customer schemas
-const customerSchema = z.object({
-  contactName: z.string().min(1, 'Contact name is required'),
-  companyName: z.string().optional().nullable(),
-  email: z.string().email().optional().nullable(),
-  phone: z.string().optional().nullable(),
-  tierId: z.string().uuid('Tier ID must be a valid UUID'),
-});
-
-// Employee schemas
-const employeeSchema = z.object({
-  username: z.string().min(1, 'Username is required').toLowerCase(),
-  displayName: z.string().min(1, 'Display name is required'),
-  role: z.enum(['admin', 'cashier']),
-  password: z.string().min(12, 'Password must be at least 12 characters'),
-});
-
-// Inventory schemas
-const inventoryAdjustSchema = z.object({
-  variantId: z.string().uuid('Variant ID must be a valid UUID'),
-  quantity: z.number().nonnegative('Quantity must be non-negative'),
-  lotNumber: z.string().optional(),
-  expirationDate: z.string().optional().nullable(),
-  retailPrice: z.number().nonnegative('Retail price must be non-negative').optional(),
-});
-
-const inventoryProductSchema = z.object({
-  name: z.string().min(1, 'Product name is required'),
-  sku: z.string().min(1, 'SKU is required'),
-  variantName: z.string().min(1, 'Variant name is required'),
-  baseUomId: z.string().uuid('Base UOM ID must be a valid UUID'),
-  quantity: z.number().nonnegative('Quantity must be non-negative'),
-  retailPrice: z.number().nonnegative('Retail price must be non-negative'),
-  lotNumber: z.string().min(1, 'Lot number is required'),
-  initialCost: z.number().nonnegative('Initial cost must be non-negative').optional(),
-  expirationDate: z.string().optional().nullable(),
-  barcode: z.string().optional().nullable(),
-  soldByWeight: z.boolean().optional().default(false),
-  requiresLotTracking: z.boolean().optional().default(false),
-});
-
-const inventoryUpdateSchema = z.object({
-  variantName: z.string().min(1, 'Variant name is required').optional(),
-  sku: z.string().min(1, 'SKU is required').optional(),
-  retailPrice: z.number().nonnegative('Retail price must be non-negative').optional(),
-  initialCost: z.number().nonnegative('Initial cost must be non-negative').optional(),
-  quantity: z.number().nonnegative('Quantity must be non-negative').optional(),
-  lotNumber: z.string().optional(),
-  expirationDate: z.string().optional().nullable(),
-});
-
-// Order schemas
-const orderItemSchema = z.object({
-  orderItemId: z.string().uuid('Order item ID must be a valid UUID'),
-  variantId: z.string().uuid('Variant ID must be a valid UUID'),
-  lotId: z.string().uuid('Lot ID must be a valid UUID').optional().nullable(),
-  quantity: z.number().positive('Quantity must be positive'),
-  unitPrice: z.number().nonnegative('Unit price must be non-negative'),
-  totalPrice: z.number().nonnegative('Total price must be non-negative'),
-});
-
-const orderPayloadSchema = z.object({
-  orderId: z.string().uuid('Order ID must be a valid UUID'),
-  customerId: z.string().uuid('Customer ID must be a valid UUID').optional().nullable(),
-  pricingTierId: z.string().uuid('Pricing tier ID must be a valid UUID'),
-  orderType: z.enum(['retail', 'commercial']),
-  items: z.array(orderItemSchema).min(1, 'Order must have at least one item'),
-  subtotal: z.number().nonnegative('Subtotal must be non-negative'),
-  taxAmount: z.number().nonnegative('Tax amount must be non-negative').optional(),
-  totalAmount: z.number().nonnegative('Total amount must be non-negative'),
-  paymentMethod: z.enum(['cash', 'card', 'gcash', 'account']),
-  cashReceived: z.number().nonnegative('Cash received must be non-negative').optional(),
-  createdAt: z.string().optional(),
-});
-
-// Search schema
-const searchSchema = z.object({
-  q: z.string().optional().default(''),
-});
-
-// Date schema
-const dateSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
-});
-
-// Validation helper
-function validate(schema, data) {
-  try {
-    return { success: true, data: schema.parse(data) };
-  } catch (error) {
-    return { success: false, errors: error.errors };
-  }
-}
-
-module.exports = {
-  loginSchema,
-  customerSchema,
-  employeeSchema,
-  inventoryAdjustSchema,
-  inventoryProductSchema,
-  inventoryUpdateSchema,
-  orderPayloadSchema,
-  searchSchema,
-  dateSchema,
-  validate,
-};
 </file>
 
 <file path="src/db/schema.ts">
@@ -15135,6 +14970,57 @@ export default defineConfig({
 });
 </file>
 
+<file path=".github/workflows/deploy-pages.yml">
+name: Deploy Cloud POS to GitHub Pages
+
+on:
+  push:
+    branches:
+      - CloudBase-POS
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Web Application
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: npm run cloud:build
+
+      - name: Verify Build Output 
+        run: ls -la dist/cloud  
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/cloud
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+</file>
+
 <file path="server/db.js">
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15200,6 +15086,128 @@ setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
 cleanupExpiredSessions(); // Run once on startup
 
 module.exports = { pool, migrate, cleanupExpiredSessions };
+</file>
+
+<file path="server/validation.js">
+const { z } = require('zod');
+
+// Auth schemas
+const loginSchema = z.object({
+  username: z.string().min(1, 'Username is required'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+// Customer schemas
+const customerSchema = z.object({
+  contactName: z.string().min(1, 'Contact name is required'),
+  companyName: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  tierId: z.string().uuid('Tier ID must be a valid UUID'),
+});
+
+// Employee schemas
+const employeeSchema = z.object({
+  username: z.string().min(1, 'Username is required').toLowerCase(),
+  displayName: z.string().min(1, 'Display name is required'),
+  role: z.enum(['admin', 'cashier']),
+  password: z.string().min(12, 'Password must be at least 12 characters'),
+});
+
+// Inventory schemas
+const inventoryAdjustSchema = z.object({
+  variantId: z.string().uuid('Variant ID must be a valid UUID'),
+  quantity: z.number().nonnegative('Quantity must be non-negative'),
+  lotNumber: z.string().optional(),
+  expirationDate: z.string().optional().nullable(),
+  retailPrice: z.number().nonnegative('Retail price must be non-negative').optional(),
+});
+
+const inventoryProductSchema = z.object({
+  name: z.string().min(1, 'Product name is required'),
+  sku: z.string().min(1, 'SKU is required'),
+  variantName: z.string().min(1, 'Variant name is required'),
+  baseUomId: z.string().uuid('Base UOM ID must be a valid UUID'),
+  quantity: z.number().nonnegative('Quantity must be non-negative'),
+  retailPrice: z.number().nonnegative('Retail price must be non-negative'),
+  lotNumber: z.string().min(1, 'Lot number is required'),
+  initialCost: z.number().nonnegative('Initial cost must be non-negative').optional(),
+  expirationDate: z.string().optional().nullable(),
+  barcode: z.string().optional().nullable(),
+  soldByWeight: z.boolean().optional().default(false),
+  requiresLotTracking: z.boolean().optional().default(false),
+});
+
+const inventoryUpdateSchema = z.object({
+  variantName: z.string().min(1, 'Variant name is required').optional(),
+  sku: z.string().min(1, 'SKU is required').optional(),
+  retailPrice: z.number().nonnegative('Retail price must be non-negative').optional(),
+  initialCost: z.number().nonnegative('Initial cost must be non-negative').optional(),
+  quantity: z.number().nonnegative('Quantity must be non-negative').optional(),
+  lotNumber: z.string().optional(),
+  expirationDate: z.string().optional().nullable(),
+});
+
+// Order schemas
+const orderItemSchema = z.object({
+  orderItemId: z.string().uuid('Order item ID must be a valid UUID'),
+  variantId: z.string().uuid('Variant ID must be a valid UUID'),
+  lotId: z.string().uuid('Lot ID must be a valid UUID').optional().nullable(),
+  quantity: z.number().positive('Quantity must be positive'),
+  unitPrice: z.number().nonnegative('Unit price must be non-negative'),
+  totalPrice: z.number().nonnegative('Total price must be non-negative'),
+});
+
+const orderPayloadSchema = z.object({
+  orderId: z.string().uuid('Order ID must be a valid UUID'),
+  customerId: z.string().uuid('Customer ID must be a valid UUID').optional().nullable(),
+  pricingTierId: z.string().uuid('Pricing tier ID must be a valid UUID'),
+  orderType: z.enum(['retail', 'commercial']),
+  items: z.array(orderItemSchema).min(1, 'Order must have at least one item'),
+  subtotal: z.number().nonnegative('Subtotal must be non-negative'),
+  taxAmount: z.number().nonnegative('Tax amount must be non-negative').optional(),
+  totalAmount: z.number().nonnegative('Total amount must be non-negative'),
+  paymentMethod: z.enum(['cash', 'card', 'gcash', 'account', 'split']),
+  cashReceived: z.number().nonnegative('Cash received must be non-negative').optional(),
+  payments: z.array(z.object({
+    method: z.enum(['cash', 'card', 'gcash', 'account']),
+    amount: z.number().nonnegative(),
+    cashReceived: z.number().nonnegative().optional(),
+  })).optional(),
+  createdAt: z.string().optional(),
+});
+
+// Search schema
+const searchSchema = z.object({
+  q: z.string().optional().default(''),
+});
+
+// Date schema
+const dateSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
+});
+
+// Validation helper
+function validate(schema, data) {
+  try {
+    return { success: true, data: schema.parse(data) };
+  } catch (error) {
+    return { success: false, errors: error.errors };
+  }
+}
+
+module.exports = {
+  loginSchema,
+  customerSchema,
+  employeeSchema,
+  inventoryAdjustSchema,
+  inventoryProductSchema,
+  inventoryUpdateSchema,
+  orderPayloadSchema,
+  searchSchema,
+  dateSchema,
+  validate,
+};
 </file>
 
 <file path="src/renderer/components/Checkout.tsx">
@@ -16208,6 +16216,15 @@ All identified issues have been remediated through recent commits. No blocking i
 **Report Generated:** 2026-10-03 15:48  
 **Deployment Status:** ✅ APPROVED FOR DEPLOYMENT  
 **Validated By:** Automated Analysis + Binary Inspection
+</file>
+
+<file path="gemini_prompts">
+# Set your Neon DATABASE_URL environment variable
+
+
+git checkout CloudBase-POS
+git commit --allow-empty -m "Update frontend build target to Railway API"
+git push origin CloudBase-POS
 </file>
 
 <file path="package.json">
@@ -17391,6 +17408,98 @@ const logger = winston.createLogger({
 module.exports = logger;
 </file>
 
+<file path="web/cloudApi.ts">
+import { CloudApiClient, type CloudEmployee, type CloudProduct, type CloudShift } from './apiClient';
+
+export interface CloudCategory {
+  categoryId: string;
+  name: string;
+}
+
+export interface CloudSession {
+  token: string;
+  user: { userId: string; username: string; displayName: string; role: 'admin' | 'cashier' };
+}
+
+export class CloudPosApi extends CloudApiClient {
+  public async login(username: string, password: string): Promise<CloudSession> {
+    const response = await fetch(this.apiUrl('/api/v1/auth/login'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error ?? 'Login failed');
+    return response.json() as Promise<CloudSession>;
+  }
+
+  public async categories(): Promise<CloudCategory[]> {
+    const token = this.options.getToken();
+    const response = await fetch(this.apiUrl('/api/v1/categories'), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to fetch categories');
+    }
+    return response.json() as Promise<CloudCategory[]>;
+  }
+
+  public override async searchProducts(query: string): Promise<CloudProduct[]> {
+    const token = this.options.getToken();
+    const endpoint = query.startsWith('?')
+      ? `/api/v1/products/search${query}`
+      : `/api/v1/products/search?q=${encodeURIComponent(query)}`;
+
+    const response = await fetch(this.apiUrl(endpoint), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Product search failed');
+    }
+    return response.json() as Promise<CloudProduct[]>;
+  }
+
+  public override async employees(date?: string): Promise<CloudEmployee[]> {
+    const token = this.options.getToken();
+    const path = date ? `/api/v1/employees?date=${encodeURIComponent(date)}` : '/api/v1/employees';
+    const response = await fetch(this.apiUrl(path), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to fetch employees');
+    }
+    return response.json() as Promise<CloudEmployee[]>;
+  }
+
+  public override async shifts(date?: string): Promise<CloudShift[]> {
+    const token = this.options.getToken();
+    const path = date ? `/api/v1/employees/shifts?date=${encodeURIComponent(date)}` : '/api/v1/employees/shifts';
+    const response = await fetch(this.apiUrl(path), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to fetch shifts');
+    }
+    return response.json() as Promise<CloudShift[]>;
+  }
+}
+</file>
+
 <file path="web/apiClient.ts">
 export interface CloudApiClientOptions {
   baseUrl: string;
@@ -17472,7 +17581,7 @@ export interface CloudSalesPeriod {
 
 export interface CloudSalesReport {
   selectedDate: string;
-  items: Array<{ orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: string }>;
+  items: Array<{ orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: string; payments?: Array <{ method: string; amount: number; cashReceived?: number }> }>;
   dayGrossTotal: number;
   dayNetTotal: number;
   dayOrderCount: number;
@@ -17567,107 +17676,6 @@ export class CloudApiClient {
     return response.status === 204 ? undefined : response.json();
   }
 }
-</file>
-
-<file path="web/cloudApi.ts">
-import { CloudApiClient, type CloudEmployee, type CloudProduct, type CloudShift } from './apiClient';
-
-export interface CloudCategory {
-  categoryId: string;
-  name: string;
-}
-
-export interface CloudSession {
-  token: string;
-  user: { userId: string; username: string; displayName: string; role: 'admin' | 'cashier' };
-}
-
-export class CloudPosApi extends CloudApiClient {
-  public async login(username: string, password: string): Promise<CloudSession> {
-    const response = await fetch(this.apiUrl('/api/v1/auth/login'), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error ?? 'Login failed');
-    return response.json() as Promise<CloudSession>;
-  }
-
-  public async categories(): Promise<CloudCategory[]> {
-    const token = this.options.getToken();
-    const response = await fetch(this.apiUrl('/api/v1/categories'), {
-      headers: {
-        'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to fetch categories');
-    }
-    return response.json() as Promise<CloudCategory[]>;
-  }
-
-  public override async searchProducts(query: string): Promise<CloudProduct[]> {
-    const token = this.options.getToken();
-    const endpoint = query.startsWith('?')
-      ? `/api/v1/products/search${query}`
-      : `/api/v1/products/search?q=${encodeURIComponent(query)}`;
-
-    const response = await fetch(this.apiUrl(endpoint), {
-      headers: {
-        'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Product search failed');
-    }
-    return response.json() as Promise<CloudProduct[]>;
-  }
-
-  public override async employees(date?: string): Promise<CloudEmployee[]> {
-    const token = this.options.getToken();
-    const path = date ? `/api/v1/employees?date=${encodeURIComponent(date)}` : '/api/v1/employees';
-    const response = await fetch(this.apiUrl(path), {
-      headers: {
-        'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to fetch employees');
-    }
-    return response.json() as Promise<CloudEmployee[]>;
-  }
-
-  public override async shifts(date?: string): Promise<CloudShift[]> {
-    const token = this.options.getToken();
-    const path = date ? `/api/v1/employees/shifts?date=${encodeURIComponent(date)}` : '/api/v1/employees/shifts';
-    const response = await fetch(this.apiUrl(path), {
-      headers: {
-        'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to fetch shifts');
-    }
-    return response.json() as Promise<CloudShift[]>;
-  }
-}
-</file>
-
-<file path="gemini_prompts">
-# Set your Neon DATABASE_URL environment variable
-
-
-git checkout CloudBase-POS
-git commit --allow-empty -m "Update frontend build target to Railway API"
-git push origin CloudBase-POS
 </file>
 
 <file path="import-log.txt">
@@ -18128,6 +18136,12 @@ export interface CheckoutOrderItem {
   totalPrice: number;
 }
 
+export interface CheckoutOrderPayment {
+  method: 'cash' | 'card' | 'gcash' | 'account';
+  amount: number;
+  cashReceived?: number;
+}
+
 export interface CheckoutOrderPayload {
   customerId: string | null;
   pricingTierId: string;
@@ -18136,8 +18150,9 @@ export interface CheckoutOrderPayload {
   subtotal: number;
   taxAmount: number;
   totalAmount: number;
-  paymentMethod: 'cash' | 'card' | 'gcash' | 'account';
+  paymentMethod: 'cash' | 'card' | 'gcash' | 'account' | 'split';
   cashReceived: number;
+  payments: CheckoutOrderPayment[];
 }
 
 export interface CheckoutDataSource {
@@ -18251,7 +18266,8 @@ export function CheckoutScreen({
 
   const [scaleReading, setScaleReading] = useState<CheckoutScaleReading | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<CheckoutOrderPayload['paymentMethod']>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<CheckoutOrderPayment['method']>('cash');
+  const [splitPayments, setSplitPayments] = useState < CheckoutOrderPayment[] > ([]);
   const [cashReceived, setCashReceived] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -18313,8 +18329,10 @@ export function CheckoutScreen({
   const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
   const taxAmount = subtotal * taxRate;
   const totalAmount = subtotal + taxAmount;
+  const totalPaidSoFar = splitPayments.reduce((sum, p) => sum + p.amount, 0);
+  const remainingBalance = Math.max(0, Number((totalAmount - totalPaidSoFar).toFixed(2)));
   const cashTendered = Number(cashReceived);
-  const changeDue = paymentMethod === 'cash' && Number.isFinite(cashTendered) ? cashTendered - totalAmount : 0;
+  const changeDue = paymentMethod === 'cash' && Number.isFinite(cashTendered) ? cashTendered - remainingBalance : 0;
   const activeWeightLine = scaleEnabled ? cart.find((line) => line.product.soldByWeight) : undefined;
 
   const orderItems = cart.map((line) => ({
@@ -18444,10 +18462,39 @@ export function CheckoutScreen({
       setMessage('Add a valid quantity before taking payment.');
       return;
     }
-    if (paymentMethod === 'cash' && (!Number.isFinite(cashTendered) || cashTendered < totalAmount)) {
-      setMessage('Cash received must be at least the total amount.');
+    const currentTendered = Number(cashReceived) || remainingBalance;
+
+    if (paymentMethod === 'cash' && (!Number.isFinite(cashTendered) || cashTendered <= 0)) {
+      setMessage('Enter a valid cash amount.');
       return;
     }
+
+    const allocatedAmount = paymentMethod === 'cash'
+      ? Math.min(cashTendered, remainingBalance)
+      : Math.min(currentTendered, remainingBalance);
+
+    const currentPayment: CheckoutOrderPayment = {
+      method: paymentMethod,
+      amount: allocatedAmount,
+      cashReceived: paymentMethod === 'cash' ? cashTendered : undefined,
+    };
+
+    // If entered amount is LESS than remaining balance, record partial payment and keep prompting
+    if (allocatedAmount < remainingBalance) {
+      const updatedSplit = [...splitPayments, currentPayment];
+      const newPaid = updatedSplit.reduce((sum, p) => sum + p.amount, 0);
+      const newRemaining = Math.max(0, Number((totalAmount - newPaid).toFixed(2)));
+      setSplitPayments(updatedSplit);
+      setCashReceived(newRemaining.toFixed(2));
+      setMessage(`Partial payment of ${money.format(allocatedAmount)} (${paymentMethod.toUpperCase()}) recorded. ${money.format(newRemaining)} remaining.`);
+      return;
+    }
+    // Payment complete (full or final split installment)
+    const finalPayments = [...splitPayments, currentPayment];
+    const finalMethod = finalPayments.length > 1 ? 'split' : finalPayments[0].method;
+    const totalCashTendered = finalPayments
+      .filter((p) => p.method === 'cash')
+      .reduce((sum, p) => sum + (p.cashReceived ?? p.amount), 0);
 
     setBusy(true);
     setMessage(null);
@@ -18461,8 +18508,9 @@ export function CheckoutScreen({
         subtotal: Number(subtotal.toFixed(2)),
         taxAmount: Number(taxAmount.toFixed(2)),
         totalAmount: Number(totalAmount.toFixed(2)),
-        paymentMethod,
-        cashReceived: paymentMethod === 'cash' ? Number(cashTendered.toFixed(2)) : 0,
+        paymentMethod: finalMethod,
+        cashReceived: Number(totalCashTendered.toFixed(2)),
+        payments: finalPayments,
       });
       if (employeeToken && recordEmployeeSale) {
         await recordEmployeeSale(employeeToken, result.orderId);
@@ -18474,12 +18522,10 @@ export function CheckoutScreen({
       localStorage.removeItem('bakealley_pos_customer_id');
 
       setCashReceived('');
+      setSplitPayments([]);
       setPaymentOpen(false);
-      setMessage(`Order ${result.orderId} saved and queued for sync.`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unable to save the order.';
-      setPaymentError(errorMessage);
-      setMessage(errorMessage);
+      setPaymentError(error instanceof Error ? error.message : 'Order submission failed.');
     } finally {
       setBusy(false);
     }
@@ -18766,16 +18812,48 @@ export function CheckoutScreen({
       {/* Payment Modal with Logged Options (Cash, Card, GCash, Account) */}
       {paymentOpen && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-amber-950/50 p-4" role="presentation">
-          <section aria-labelledby="payment-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" role="dialog">
+          <section aria-labelledby="payment-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wide text-amber-600">Payment</p>
                 <h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(totalAmount)}</h2>
+                {splitPayments.length > 0 && (
+                  <p className="text-xs font-semibold text-amber-800 mt-1">
+                    Remaining Needed: <span>{money.format(remainingBalance)}</span>
+                  </p>
+                )}
               </div>
-              <button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setPaymentOpen(false)}>×</button>
+              <button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => { setPaymentOpen(false); setSplitPayments([]); }}>×</button>
             </div>
 
-            <fieldset className="mt-6">
+            {/* Recorded Partial Payments List */}
+            {splitPayments.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3 space-y-1.5 text-xs text-amber-950">
+                <p className="font-bold text-amber-900">Recorded Partial Payments:</p>
+                {splitPayments.map((p, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-white/90 rounded-lg px-2.5 py-1.5 border border-amber-200/60 font-medium">
+                    <span className="uppercase tracking-wider font-bold text-amber-800">{p.method}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="tabular-nums font-bold">{money.format(p.amount)}</span>
+                      <button
+                        type="button"
+                        className="text-red-600 hover:text-red-800 font-bold text-sm px-1"
+                        title="Remove partial payment"
+                        onClick={() => {
+                          const updated = splitPayments.filter((_, i) => i !== idx);
+                          setSplitPayments(updated);
+                          const newRemaining = totalAmount - updated.reduce((s, x) => s + x.amount, 0);
+                          setCashReceived(newRemaining.toFixed(2));
+                        }}
+                      >x</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+
+            <fieldset className="mt-2">
               <legend className="text-sm font-semibold mb-3">Select Payment Method</legend>
               <div className="grid grid-cols-2 gap-2.5">
                 {paymentOptions.map((opt) => (
@@ -18784,7 +18862,7 @@ export function CheckoutScreen({
                     type="button"
                     onClick={() => {
                       setPaymentMethod(opt.id);
-                      if (opt.id !== 'cash') setCashReceived('');
+                      setCashReceived(remainingBalance > 0 ? remainingBalance.toFixed(2) : '');
                     }}
                     className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
                       paymentMethod === opt.id
@@ -18800,13 +18878,13 @@ export function CheckoutScreen({
             </fieldset>
 
             {paymentMethod === 'cash' && (
-              <div className="mt-5">
+              <div className="mt-3">
                 <label className="text-sm font-semibold">
                   Cash received
                   <input
                     autoFocus
                     className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
-                    min={totalAmount.toFixed(2)}
+                    min="0.01"
                     step="0.01"
                     type="number"
                     value={cashReceived}
@@ -18820,33 +18898,42 @@ export function CheckoutScreen({
               </div>
             )}
 
-            {paymentMethod === 'gcash' && (
-              <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3.5 text-xs text-sky-900">
-                <p className="font-bold flex items-center gap-1.5">📱 GCash Payment Scan</p>
-                <p className="mt-1">Confirm client transaction reference on the store GCash QR terminal before clicking payment.</p>
+            {paymentMethod !== 'cash' && (
+              <div className="mt-3">
+                <label className="text-sm font-semibold"> Amount to Pay ({paymentMethod.toUpperCase()})
+                  <input
+                    className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
+                    max={remainingBalance.toFixed(2)}
+                    step="0.01"
+                    type="number"
+                    value={cashReceived}
+                    onChange={(event) => setCashReceived(event.target.value)}
+                  />
+                </label>
               </div>
             )}
 
-            {paymentError && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{paymentError}</p>}
+            {paymentError && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{paymentError}</p>}
             
-            <div className="mt-6 flex gap-2.5">
+            <div className="mt-4 flex gap-2.5">
               <button
                 className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-900 hover:bg-amber-100 shadow-sm transition"
                 type="button"
                 onClick={() => {
                   setPaymentError(null);
                   setPaymentOpen(false);
+                  setSplitPayments([]);
                 }}
               >
                 ↩️ Back to Cart
               </button>
               <button
                 className="flex-1 rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50 shadow-sm transition"
-                disabled={busy || (paymentMethod === 'cash' && changeDue < 0)}
+                disabled={busy || !Number.isFinite(Number(cashReceived)) || Number(cashReceived) <= 0}
                 type="button"
                 onClick={() => void submitOrder()}
               >
-                {busy ? 'Saving...' : 'Confirm payment'}
+                {busy ? 'Saving...' : Number(cashReceived) < remainingBalance ? `Add Partial Payment (${money.format(Number(cashReceived) || 0)})` : 'Confirm & Complete payment'}
               </button>
             </div>
           </section>
@@ -19124,26 +19211,48 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const grossProfitDaily = dayGross - dailyCogs;
   const profitMarginPctDaily = dayGross > 0 ? (grossProfitDaily / dayGross) * 100 : 0;
 
-  const paymentBreakdownDaily = (report?.items || []).reduce(
-    (acc, item) => {
-      const rawMethod = String(item.paymentMethod || 'cash').toLowerCase().trim();
-      const amount = Number(item.amount) || 0;
+  const paymentBreakdownDaily = useMemo(() => {
+    if (!report?.items) return { cash: 0, card: 0, gcash: 0, account: 0, other: 0 };
 
-      if (rawMethod.includes('gcash')) {
-        acc.gcash += amount;
-      } else if (rawMethod.includes('card')) {
-        acc.card += amount;
-      } else if (rawMethod.includes('account')) {
-        acc.account += amount;
-      } else if (rawMethod.includes('cash')) {
-        acc.cash += amount;
-      } else {
-        acc.other += amount;
+    const orderMap = new Map < string, { totalAmount: number; paymentMethod: string; payments ?: any[]
+  }> ();
+    for (const item of report.items) {
+      if (!orderMap.has(item.orderId)) {
+        let parsedPayments = (item as any).payments;
+        if (typeof parsedPayments === 'string') {
+          try { parsedPayments = JSON.parse(parsedPayments); } catch { parsedPayments = undefined; }
+        } 
+        orderMap.set(item.orderId, {
+          totalAmount: Number((item as any).totalAmount) || 0,
+          paymentMethod: String(item.paymentMethod || 'cash').toLowerCase().trim(),
+          payments: Array.isArray(parsedPayments) ? parsedPayments : undefined,
+        });
       }
-      return acc;
-    },
-    { cash: 0, card: 0, gcash: 0, account: 0, other: 0 }
-  );
+    }
+
+    const breakdown = { cash: 0, card: 0, gcash: 0, account: 0, other: 0 };
+    for (const order of orderMap.values()) {
+      if (order.paymentMethod === 'split' && Array.isArray(order.payments) && order.payments.length > 0) {
+        for (const p of order.payments) {
+          const method = String(p.method || '').toLowerCase().trim();
+          const amt = Number(p.amount) || 0;
+          if (method.includes('gcash')) breakdown.gcash += amt;
+          else if (method.includes('card')) breakdown.card += amt;
+          else if (method.includes('account')) breakdown.account += amt;
+          else if (method.includes('cash')) breakdown.cash += amt;
+          else breakdown.other += amt;
+        }
+      } else {
+        const amt = order.totalAmount;
+        if (order.paymentMethod.includes('gcash')) breakdown.gcash += amt;
+        else if (order.paymentMethod.includes('card')) breakdown.card += amt;
+        else if (order.paymentMethod.includes('account')) breakdown.account += amt;
+        else if (order.paymentMethod.includes('cash')) breakdown.cash += amt;
+        else breakdown.other += amt;
+      }
+    }
+    return breakdown;
+  }, [report]);
 
   const totalDigitalTenderDaily = paymentBreakdownDaily.card + paymentBreakdownDaily.gcash + paymentBreakdownDaily.account + paymentBreakdownDaily.other;
   const totalConsolidatedTenderDaily = paymentBreakdownDaily.cash + totalDigitalTenderDaily;
@@ -20043,6 +20152,7 @@ interface GroupedTransaction {
   totalAmount: number;
   cashReceived: number;
   changeDue: number;
+  payments?: Array<{ method: string; amount: number }>;
   items: Array<{
     itemName: string;
     sku: string;
@@ -20088,6 +20198,10 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
     for (const item of report.items) {
       if (!map.has(item.orderId)) {
+        let parsedPayments = (item as any).payments;
+        if (typeof parsedPayments === 'string') {
+          try { parsedPayments = JSON.parse(parsedPayments); } catch { parsedPayments = undefined; }
+        }
         map.set(item.orderId, {
           orderId: item.orderId,
           soldAt: item.soldAt,
@@ -20097,6 +20211,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           totalAmount: Number((item as { totalAmount?: number }).totalAmount) || 0,
           cashReceived: Number((item as { cashReceived?: number }).cashReceived) || 0,
           changeDue: Number((item as { changeDue?: number }).changeDue) || 0,
+          payments: Array.isArray(parsedPayments) ? parsedPayments : undefined,
           items: [],
         });
       }
@@ -20165,7 +20280,19 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 {groupedTransactions.map((tx) => {
                   const methodStr = String(tx.paymentMethod || 'cash').toLowerCase();
                   let paymentBadge = <span className="font-semibold text-amber-950">{"\u{1F4B5}"} Cash</span>;
-                  if (methodStr.includes('gcash')) {
+                  if (methodStr === 'split' && Array.isArray(tx.payments) && tx.payments.length > 0) {
+                    paymentBadge = (
+                      <div className="flex flex-wrap gap-1 items-center">
+                        <span className="font-bold text-amber-900 text-xs">🔀 Split:</span>
+                        {tx.payments.map((p, i) => ( 
+                          <span key={i} className="text-xs px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50/80 font-medium text-amber-950">
+                            {p.method === 'cash' ? '💵' : p.method === 'gcash' ? '📱' : p.method === 'card' ? '💳' : '📋'}
+                            {String(p.method).toUpperCase()}: {money.format(Number(p.amount) || 0)}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  } else if (methodStr.includes('gcash')) {
                     paymentBadge = <span className="font-bold text-sky-700">{"\u{1F4F2}"} GCash</span>;
                   } else if (methodStr.includes('card')) {
                     paymentBadge = <span className="font-bold text-blue-700">{"\u{1F4B3}"} Card</span>;
@@ -22534,14 +22661,27 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   try {
     await client.query('BEGIN');
     
-    // Calculate changeDue server-side
-    const changeDue = validatedPayload.paymentMethod === 'cash' 
-      ? Math.max(0, Number(validatedPayload.cashReceived || 0) - Number(validatedPayload.totalAmount))
-      : 0;
+    // Calculate changeDue and total cash received server-side
+    let changeDue = 0;
+    let totalCashReceived = Number(validatedPayload.cashReceived || 0);
+
+    if (validatedPayload.paymentMethod === 'split' && Array.isArray(validatedPayload.payments)) {
+     const cashPayment = validatedPayload.payments.filter(p => p.method === 'cash');
+      if (cashPayment.length > 0) {
+        const totalCashNeeded = cashPayment.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const totalCashTenderedInSplit = cashPayment.reduce((sum, p) => sum + Number(p.cashReceived || p.amount || 0), 0);
+        if (totalCashTenderedInSplit < totalCashNeeded) { throw Object.assign(new Error('Cash received must be at least the cash portion total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' }); }
+        changeDue = Math.max(0, totalCashTenderedInSplit - totalCashNeeded);
+        totalCashReceived = totalCashTenderedInSplit;
+      }
+    } else if (validatedPayload.paymentMethod === 'cash') { 
+      if (totalCashReceived < Number(validatedPayload.totalAmount)) { throw Object.assign(new Error('Cash received must be at least the order total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' }); }
+      changeDue = Math.max(0, totalCashReceived - Number(validatedPayload.totalAmount));
+    }
     
     const inserted = await client.query(
-      `INSERT INTO orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, created_at) 
-       VALUES ($1,$2,$3,$4,$5,'completed',$6,$7,$8,$9,$10,$11,$12) 
+      `INSERT INTO orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, payments, created_at) 
+       VALUES ($1,$2,$3,$4,$5,'completed',$6,$7,$8,$9,$10,$11,$12,$13) 
        ON CONFLICT (order_id) DO NOTHING RETURNING order_id`, 
       [
         validatedPayload.orderId, 
@@ -22553,8 +22693,9 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         validatedPayload.taxAmount ?? 0, 
         validatedPayload.totalAmount, 
         validatedPayload.paymentMethod, 
-        validatedPayload.cashReceived ?? 0, 
+        totalCashReceived, 
         changeDue,
+        validatedPayload.payments ? JSON.stringify(validatedPayload.payments) : null,
         validatedPayload.createdAt ?? new Date().toISOString()
       ]
     );
@@ -22564,20 +22705,16 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       logger.info('Order is duplicate (idempotent)', { orderId: validatedPayload.orderId });
       return response.json({ orderId: validatedPayload.orderId, duplicate: true }); 
     }
-    
-    if (validatedPayload.paymentMethod === 'cash' && Number(validatedPayload.cashReceived || 0) < Number(validatedPayload.totalAmount)) {
-      throw Object.assign(new Error('Cash received must be at least the order total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' });
-    }
 
     for (const item of validatedPayload.items) {
       let price = await client.query(
-        'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=\$1 AND pp.tier_id=\$2 AND pp.min_quantity <= \$3 ORDER BY pp.min_quantity DESC LIMIT 1', 
+        'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.tier_id=$2 AND pp.min_quantity <= $3 ORDER BY pp.min_quantity DESC LIMIT 1', 
         [item.variantId, validatedPayload.pricingTierId, item.quantity]
       );
 
       if (!price.rowCount) {
         price = await client.query(
-          'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=\$1 AND pp.price_per_unit > 0 ORDER BY pp.min_quantity ASC LIMIT 1',
+          'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.price_per_unit > 0 ORDER BY pp.min_quantity ASC LIMIT 1',
           [item.variantId]
         );
       }
@@ -22591,7 +22728,7 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         throw Object.assign(new Error('Price changed; review the cart'), { statusCode: 409, code: 'PRICE_CHANGED' });
       }
 
-      const lots = await client.query('SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=\$1 AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST, lot_id FOR UPDATE', [item.variantId]);
+      const lots = await client.query('SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id=$1 AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST, lot_id FOR UPDATE', [item.variantId]);
       let remaining = Number(item.quantity);
       const allocations = item.lotId ? [{ lotId: item.lotId, quantity: remaining }] : [];
       
@@ -22610,13 +22747,13 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       }
       
       for (const [allocationIndex, allocation] of allocations.entries()) { 
-        const update = await client.query('UPDATE inventory_lots SET quantity_on_hand=quantity_on_hand-\$1, updated_at=now() WHERE lot_id=\$2 AND variant_id=\$3 AND quantity_on_hand >= \$1', [allocation.quantity, allocation.lotId, item.variantId]); 
+        const update = await client.query('UPDATE inventory_lots SET quantity_on_hand=quantity_on_hand-$1, updated_at=now() WHERE lot_id=$2 AND variant_id=$3 AND quantity_on_hand >= $1', [allocation.quantity, allocation.lotId, item.variantId]); 
         if (update.rowCount !== 1) {
           logger.error('Inventory conflict during allocation', { lotId: allocation.lotId, requested: allocation.quantity });
           throw Object.assign(new Error('Inventory changed; retry checkout'), { statusCode: 409, code: 'INVENTORY_CONFLICT' });
         }
         
-        await client.query('INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES (\$1,\$2,\$3,\$4,\$5,\$6,\$7)', [allocationIndex === 0 ? item.orderItemId : crypto.randomUUID(), validatedPayload.orderId, item.variantId, allocation.lotId, allocation.quantity, item.unitPrice, Number(item.unitPrice) * allocation.quantity]); 
+        await client.query('INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES ($1,$2,$3,$4,$5,$6,$7)', [allocationIndex === 0 ? item.orderItemId : crypto.randomUUID(), validatedPayload.orderId, item.variantId, allocation.lotId, allocation.quantity, item.unitPrice, Number(item.unitPrice) * allocation.quantity]); 
       }
     }
     
@@ -22641,7 +22778,8 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
 
     const start = `${date}T00:00:00+08:00`;
     const result = await pool.query(
-      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", COALESCE(u.display_name, u.username, 'System') AS "cashierName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType" 
+      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", COALESCE(u.display_name, u.username, 'System') AS "cashierName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType"
+       ,o.payments AS "payments"
        FROM order_items oi 
        JOIN orders o ON o.order_id=oi.order_id 
        JOIN product_variants v ON v.variant_id=oi.variant_id 
@@ -22657,12 +22795,7 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
       ...row, 
       quantity: Number(row.quantity) || 0, 
       amount: Number(row.amount) || 0,
-      cashReceived: Number(row.cashReceived) || 0,
-      changeDue: Number(row.changeDue) || 0,
-      totalAmount: Number(row.totalAmount) || 0,
-      initialCost: Number(row.initialCost) || 0,
-      orderType: row.orderType || 'retail',
-      cashierName: row.cashierName || 'System'
+      payments: row.payments ? (typeof row.payments === 'string' ? JSON.parse(row.payments) : row.payments) : undefined
     }));
     
     const summary = async (periodStart, periodEnd) => {
@@ -22724,14 +22857,13 @@ app.get('/api/v1/sales/monthly', auth.requireSession, async (request, response, 
     const result = await pool.query(
       `SELECT 
          EXTRACT(MONTH FROM o.created_at AT TIME ZONE 'Asia/Manila')::int AS "month",
+         o.order_id AS "orderId",
+         o.total_amount AS "totalAmount",
+         o.payment_method AS "paymentMethod",
+         o.payments AS "payments",
          COALESCE(SUM(oi.total_price), 0)::numeric AS "grossSales",
          COALESCE(SUM(oi.quantity * COALESCE(p.initial_cost, 0)), 0)::numeric AS "cogs",
-         COUNT(DISTINCT o.order_id)::int AS "orderCount",
-         COALESCE(SUM(oi.quantity), 0)::numeric AS "itemsSold",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%cash%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "cashSales",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%gcash%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "gcashSales",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%card%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "cardSales",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%account%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "accountSales"
+         COALESCE(SUM(oi.quantity), 0)::numeric AS "itemsSold"
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.order_id
        JOIN product_variants v ON v.variant_id = oi.variant_id
@@ -22739,62 +22871,81 @@ app.get('/api/v1/sales/monthly', auth.requireSession, async (request, response, 
        WHERE o.status = 'completed'
          AND o.created_at >= $1::timestamptz
          AND o.created_at < ($1::timestamptz + interval '1 year')
-       GROUP BY EXTRACT(MONTH FROM o.created_at AT TIME ZONE 'Asia/Manila')
+       GROUP BY EXTRACT(MONTH FROM o.created_at AT TIME ZONE 'Asia/Manila'), o.order_id, o.total_amount, o.payment_method, o.payments
        ORDER BY "month" ASC`,
       [yearStart]
     );
 
     const monthlyMap = new Map();
+    for (let m = 1; m <= 12; m++) {
+      monthlyMap.set(m, { month: m, grossSales: 0, cogs: 0, orderIds: new Set(), itemsSold: 0, cashSales: 0, gcashSales: 0, cardSales: 0, accountSales: 0 });
+    }
+
     for (const row of result.rows) {
+      const m = Number(row.month);
+      const entry = monthlyMap.get(m);
+      if (!entry) continue;
+
       const gross = Number(row.grossSales) || 0;
       const cogs = Number(row.cogs) || 0;
-      const profit = gross - cogs;
-      const margin = gross > 0 ? (profit / gross) * 100 : 0;
-      const orders = Number(row.orderCount) || 0;
       const items = Number(row.itemsSold) || 0;
-      const card = Number(row.cardSales) || 0;
 
-      monthlyMap.set(Number(row.month), {
-        month: Number(row.month),
-        grossSales: gross,
-        cogs: cogs,
-        grossProfit: profit,
-        profitMarginPct: margin,
-        orderCount: orders,
-        itemsSold: items,
-        aov: orders > 0 ? gross / orders : 0,
-        avgUnitsPerOrder: orders > 0 ? items / orders : 0,
-        cashSales: Number(row.cashSales) || 0,
-        gcashSales: Number(row.gcashSales) || 0,
-        cardSales: card,
-        accountSales: Number(row.accountSales) || 0,
-        estimatedCardFees: card * 0.025
-      });
-    }
+      entry.grossSales += gross;
+      entry.cogs += cogs;
+      entry.itemsSold += items;
 
-    const months = [];
-    for (let m = 1; m <= 12; m++) {
-      if (monthlyMap.has(m)) {
-        months.push(monthlyMap.get(m));
-      } else {
-        months.push({
-          month: m,
-          grossSales: 0,
-          cogs: 0,
-          grossProfit: 0,
-          profitMarginPct: 0,
-          orderCount: 0,
-          itemsSold: 0,
-          aov: 0,
-          avgUnitsPerOrder: 0,
-          cashSales: 0,
-          gcashSales: 0,
-          cardSales: 0,
-          accountSales: 0,
-          estimatedCardFees: 0
-        });
+      if (!entry.orderIds.has(row.orderId)) {
+        entry.orderIds.add(row.orderId);
+        const method = String(row.paymentMethod || 'cash').toLowerCase().trim();
+        let parsedPayments = row.payments;
+        if (typeof parsedPayments === 'string') {
+          try { parsedPayments = JSON.parse(parsedPayments); } catch { parsedPayments = null; }
+        }
+
+        if (method === 'split' && Array.isArray(parsedPayments) && parsedPayments.length > 0) {
+          for (const p of parsedPayments) {
+            const pm = String(p.method || '').toLowerCase().trim();
+            const amt = Number(p.amount) || 0;
+            if (pm.includes('gcash')) entry.gcashSales += amt;
+            else if (pm.includes('card')) entry.cardSales += amt;
+            else if (pm.includes('account')) entry.accountSales += amt;
+            else if (pm.includes('cash')) entry.cashSales += amt;
+          }
+        } else {
+          const totalAmt = Number(row.totalAmount) || gross;
+          if (method.includes('gcash')) entry.gcashSales += totalAmt;
+          else if (method.includes('card')) entry.cardSales += totalAmt;
+          else if (method.includes('account')) entry.accountSales += totalAmt; 
+          else if (method.includes('cash')) entry.cashSales += totalAmt;
+        }
       }
     }
+    const months = Array.from(monthlyMap.values()).map((entry) => { 
+      const gross = entry.grossSales;
+      const cogs = entry.cogs;
+      const grossProfit = gross - cogs;
+      const profitMarginPct = gross > 0 ? (grossProfit / gross) * 100 : 0;
+      const orderCount = entry.orderIds.size;
+      const aov = orderCount & gt; 0 ? gross / orderCount : 0;
+      const avgUnitsPerOrder = orderCount > 0 ? entry.itemsSold / orderCount : 0;
+
+      return {  
+        month: entry.month,
+        grossSales: Number(gross.toFixed(2)),
+        cogs: Number(cogs.toFixed(2)),
+        grossProfit: Number(grossProfit.toFixed(2)),
+        profitMarginPct: Number(profitMarginPct.toFixed(1)),
+        orderCount,
+        itemsSold: Number(entry.itemsSold.toFixed(4)),
+        aov: Number(aov.toFixed(2)),
+        avgUnitsPerOrder: Number(avgUnitsPerOrder.toFixed(2)),
+        cashSales: Number(entry.cashSales.toFixed(2)),
+        gcashSales: Number(entry.gcashSales.toFixed(2)),
+        cardSales: Number(entry.cardSales.toFixed(2)),
+        accountSales: Number(entry.accountSales.toFixed(2)),
+        estimatedCardFees: Number((entry.cardSales * 0.025).toFixed(2)),
+  };
+});
 
     response.json({
       year: targetYear,
@@ -22851,8 +23002,10 @@ async function ensureShiftColumns() {
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS cash_discrepancy NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'OPEN';
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS notes TEXT;
+      ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS payments JSONB;
     `);
-    logger.info('Employee shift audit columns ensured');
+    logger.info('Employee shift audit and split payment schema ensured');
   } catch (error) {
     logger.error('Failed to ensure employee shift audit columns', { error: error.message });
   }
