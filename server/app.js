@@ -877,7 +877,8 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
 
     const start = `${date}T00:00:00+08:00`;
     const result = await pool.query(
-      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", COALESCE(u.display_name, u.username, 'System') AS "cashierName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType" 
+      `SELECT o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", COALESCE(u.display_name, u.username, 'System') AS "cashierName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType"
+       ,o.payments AS "payments"
        FROM order_items oi 
        JOIN orders o ON o.order_id=oi.order_id 
        JOIN product_variants v ON v.variant_id=oi.variant_id 
@@ -893,12 +894,7 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
       ...row, 
       quantity: Number(row.quantity) || 0, 
       amount: Number(row.amount) || 0,
-      cashReceived: Number(row.cashReceived) || 0,
-      changeDue: Number(row.changeDue) || 0,
-      totalAmount: Number(row.totalAmount) || 0,
-      initialCost: Number(row.initialCost) || 0,
-      orderType: row.orderType || 'retail',
-      cashierName: row.cashierName || 'System'
+      payments: row.payments ? (typeof row.payments === 'string' ? JSON.parse(row.payments) : row.payments) : undefined
     }));
     
     const summary = async (periodStart, periodEnd) => {
@@ -960,14 +956,13 @@ app.get('/api/v1/sales/monthly', auth.requireSession, async (request, response, 
     const result = await pool.query(
       `SELECT 
          EXTRACT(MONTH FROM o.created_at AT TIME ZONE 'Asia/Manila')::int AS "month",
+         o.order_id AS "orderId",
+         o.total_amount AS "totalAmount",
+         o.payment_method AS "paymentMethod",
+         o.payments AS "payments",
          COALESCE(SUM(oi.total_price), 0)::numeric AS "grossSales",
          COALESCE(SUM(oi.quantity * COALESCE(p.initial_cost, 0)), 0)::numeric AS "cogs",
-         COUNT(DISTINCT o.order_id)::int AS "orderCount",
-         COALESCE(SUM(oi.quantity), 0)::numeric AS "itemsSold",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%cash%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "cashSales",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%gcash%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "gcashSales",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%card%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "cardSales",
-         COALESCE(SUM(CASE WHEN o.payment_method ILIKE '%account%' THEN oi.total_price ELSE 0 END), 0)::numeric AS "accountSales"
+         COALESCE(SUM(oi.quantity), 0)::numeric AS "itemsSold"
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.order_id
        JOIN product_variants v ON v.variant_id = oi.variant_id
@@ -975,62 +970,81 @@ app.get('/api/v1/sales/monthly', auth.requireSession, async (request, response, 
        WHERE o.status = 'completed'
          AND o.created_at >= $1::timestamptz
          AND o.created_at < ($1::timestamptz + interval '1 year')
-       GROUP BY EXTRACT(MONTH FROM o.created_at AT TIME ZONE 'Asia/Manila')
+       GROUP BY EXTRACT(MONTH FROM o.created_at AT TIME ZONE 'Asia/Manila'), o.order_id, o.total_amount, o.payment_method, o.payments
        ORDER BY "month" ASC`,
       [yearStart]
     );
 
     const monthlyMap = new Map();
+    for (let m = 1; m <= 12; m++) {
+      monthlyMap.set(m, { month: m, grossSales: 0, cogs: 0, orderIds: new Set(), itemsSold: 0, cashSales: 0, gcashSales: 0, cardSales: 0, accountSales: 0 });
+    }
+
     for (const row of result.rows) {
+      const m = Number(row.month);
+      const entry = monthlyMap.get(m);
+      if (!entry) continue;
+
       const gross = Number(row.grossSales) || 0;
       const cogs = Number(row.cogs) || 0;
-      const profit = gross - cogs;
-      const margin = gross > 0 ? (profit / gross) * 100 : 0;
-      const orders = Number(row.orderCount) || 0;
       const items = Number(row.itemsSold) || 0;
-      const card = Number(row.cardSales) || 0;
 
-      monthlyMap.set(Number(row.month), {
-        month: Number(row.month),
-        grossSales: gross,
-        cogs: cogs,
-        grossProfit: profit,
-        profitMarginPct: margin,
-        orderCount: orders,
-        itemsSold: items,
-        aov: orders > 0 ? gross / orders : 0,
-        avgUnitsPerOrder: orders > 0 ? items / orders : 0,
-        cashSales: Number(row.cashSales) || 0,
-        gcashSales: Number(row.gcashSales) || 0,
-        cardSales: card,
-        accountSales: Number(row.accountSales) || 0,
-        estimatedCardFees: card * 0.025
-      });
-    }
+      entry.grossSales += gross;
+      entry.cogs += cogs;
+      entry.itemsSold += items;
 
-    const months = [];
-    for (let m = 1; m <= 12; m++) {
-      if (monthlyMap.has(m)) {
-        months.push(monthlyMap.get(m));
-      } else {
-        months.push({
-          month: m,
-          grossSales: 0,
-          cogs: 0,
-          grossProfit: 0,
-          profitMarginPct: 0,
-          orderCount: 0,
-          itemsSold: 0,
-          aov: 0,
-          avgUnitsPerOrder: 0,
-          cashSales: 0,
-          gcashSales: 0,
-          cardSales: 0,
-          accountSales: 0,
-          estimatedCardFees: 0
-        });
+      if (!entry.orderIds.has(row.orderId)) {
+        entry.orderIds.add(row.orderId);
+        const method = String(row.paymentMethod || 'cash').toLowerCase().trim();
+        let parsedPayments = row.payments;
+        if (typeof parsedPayments === 'string') {
+          try { parsedPayments = JSON.parse(parsedPayments); } catch { parsedPayments = null; }
+        }
+
+        if (method === 'split' && Array.isArray(parsedPayments) && parsedPayments.length > 0) {
+          for (const p of parsedPayments) {
+            const pm = String(p.method || '').toLowerCase().trim();
+            const amt = Number(p.amount) || 0;
+            if (pm.includes('gcash')) entry.gcashSales += amt;
+            else if (pm.includes('card')) entry.cardSales += amt;
+            else if (pm.includes('account')) entry.accountSales += amt;
+            else if (pm.includes('cash')) entry.cashSales += amt;
+          }
+        } else {
+          const totalAmt = Number(row.totalAmount) || gross;
+          if (method.includes('gcash')) entry.gcashSales += totalAmt;
+          else if (method.includes('card')) entry.cardSales += totalAmt;
+          else if (method.includes('account')) entry.accountSales += totalAmt; 
+          else if (method.includes('cash')) entry.cashSales += totalAmt;
+        }
       }
     }
+    const months = Array.from(monthlyMap.values()).map((entry) => { 
+      const gross = entry.grossSales;
+      const cogs = entry.cogs;
+      const grossProfit = gross - cogs;
+      const profitMarginPct = gross > 0 ? (grossProfit / gross) * 100 : 0;
+      const orderCount = entry.orderIds.size;
+      const aov = orderCount & gt; 0 ? gross / orderCount : 0;
+      const avgUnitsPerOrder = orderCount > 0 ? entry.itemsSold / orderCount : 0;
+
+      return {  
+        month: entry.month,
+        grossSales: Number(gross.toFixed(2)),
+        cogs: Number(cogs.toFixed(2)),
+        grossProfit: Number(grossProfit.toFixed(2)),
+        profitMarginPct: Number(profitMarginPct.toFixed(1)),
+        orderCount,
+        itemsSold: Number(entry.itemsSold.toFixed(4)),
+        aov: Number(aov.toFixed(2)),
+        avgUnitsPerOrder: Number(avgUnitsPerOrder.toFixed(2)),
+        cashSales: Number(entry.cashSales.toFixed(2)),
+        gcashSales: Number(entry.gcashSales.toFixed(2)),
+        cardSales: Number(entry.cardSales.toFixed(2)),
+        accountSales: Number(entry.accountSales.toFixed(2)),
+        estimatedCardFees: Number((entry.cardSales * 0.025).toFixed(2)),
+  };
+});
 
     response.json({
       year: targetYear,

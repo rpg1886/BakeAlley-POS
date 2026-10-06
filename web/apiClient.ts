@@ -78,7 +78,7 @@ export interface CloudSalesPeriod {
 
 export interface CloudSalesReport {
   selectedDate: string;
-  items: Array<{ orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: string }>;
+  items: Array<{ orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: string; payments?: Array <{ method: string; amount: number; cashReceived?: number }> }>;
   dayGrossTotal: number;
   dayNetTotal: number;
   dayOrderCount: number;

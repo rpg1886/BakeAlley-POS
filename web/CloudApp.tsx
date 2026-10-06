@@ -264,26 +264,48 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const grossProfitDaily = dayGross - dailyCogs;
   const profitMarginPctDaily = dayGross > 0 ? (grossProfitDaily / dayGross) * 100 : 0;
 
-  const paymentBreakdownDaily = (report?.items || []).reduce(
-    (acc, item) => {
-      const rawMethod = String(item.paymentMethod || 'cash').toLowerCase().trim();
-      const amount = Number(item.amount) || 0;
+  const paymentBreakdownDaily = useMemo(() => {
+    if (!report?.items) return { cash: 0, card: 0, gcash: 0, account: 0, other: 0 };
 
-      if (rawMethod.includes('gcash')) {
-        acc.gcash += amount;
-      } else if (rawMethod.includes('card')) {
-        acc.card += amount;
-      } else if (rawMethod.includes('account')) {
-        acc.account += amount;
-      } else if (rawMethod.includes('cash')) {
-        acc.cash += amount;
-      } else {
-        acc.other += amount;
+    const orderMap = new Map < string, { totalAmount: number; paymentMethod: string; payments ?: any[]
+  }> ();
+    for (const item of report.items) {
+      if (!orderMap.has(item.orderId)) {
+        let parsedPayments = (item as any).payments;
+        if (typeof parsedPayments === 'string') {
+          try { parsedPayments = JSON.parse(parsedPayments); } catch { parsedPayments = undefined; }
+        } 
+        orderMap.set(item.orderId, {
+          totalAmount: Number((item as any).totalAmount) || 0,
+          paymentMethod: String(item.paymentMethod || 'cash').toLowerCase().trim(),
+          payments: Array.isArray(parsedPayments) ? parsedPayments : undefined,
+        });
       }
-      return acc;
-    },
-    { cash: 0, card: 0, gcash: 0, account: 0, other: 0 }
-  );
+    }
+
+    const breakdown = { cash: 0, card: 0, gcash: 0, account: 0, other: 0 };
+    for (const order of orderMap.values()) {
+      if (order.paymentMethod === 'split' && Array.isArray(order.payments) && order.payments.length > 0) {
+        for (const p of order.payments) {
+          const method = String(p.method || '').toLowerCase().trim();
+          const amt = Number(p.amount) || 0;
+          if (method.includes('gcash')) breakdown.gcash += amt;
+          else if (method.includes('card')) breakdown.card += amt;
+          else if (method.includes('account')) breakdown.account += amt;
+          else if (method.includes('cash')) breakdown.cash += amt;
+          else breakdown.other += amt;
+        }
+      } else {
+        const amt = order.totalAmount;
+        if (order.paymentMethod.includes('gcash')) breakdown.gcash += amt;
+        else if (order.paymentMethod.includes('card')) breakdown.card += amt;
+        else if (order.paymentMethod.includes('account')) breakdown.account += amt;
+        else if (order.paymentMethod.includes('cash')) breakdown.cash += amt;
+        else breakdown.other += amt;
+      }
+    }
+    return breakdown;
+  }, [report]);
 
   const totalDigitalTenderDaily = paymentBreakdownDaily.card + paymentBreakdownDaily.gcash + paymentBreakdownDaily.account + paymentBreakdownDaily.other;
   const totalConsolidatedTenderDaily = paymentBreakdownDaily.cash + totalDigitalTenderDaily;
@@ -1183,6 +1205,7 @@ interface GroupedTransaction {
   totalAmount: number;
   cashReceived: number;
   changeDue: number;
+  payments?: Array<{ method: string; amount: number }>;
   items: Array<{
     itemName: string;
     sku: string;
@@ -1228,6 +1251,10 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
     for (const item of report.items) {
       if (!map.has(item.orderId)) {
+        let parsedPayments = (item as any).payments;
+        if (typeof parsedPayments === 'string') {
+          try { parsedPayments = JSON.parse(parsedPayments); } catch { parsedPayments = undefined; }
+        }
         map.set(item.orderId, {
           orderId: item.orderId,
           soldAt: item.soldAt,
@@ -1237,6 +1264,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
           totalAmount: Number((item as { totalAmount?: number }).totalAmount) || 0,
           cashReceived: Number((item as { cashReceived?: number }).cashReceived) || 0,
           changeDue: Number((item as { changeDue?: number }).changeDue) || 0,
+          payments: Array.isArray(parsedPayments) ? parsedPayments : undefined,
           items: [],
         });
       }
@@ -1305,7 +1333,19 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 {groupedTransactions.map((tx) => {
                   const methodStr = String(tx.paymentMethod || 'cash').toLowerCase();
                   let paymentBadge = <span className="font-semibold text-amber-950">{"\u{1F4B5}"} Cash</span>;
-                  if (methodStr.includes('gcash')) {
+                  if (methodStr === 'split' && Array.isArray(tx.payments) && tx.payments.length > 0) {
+                    paymentBadge = (
+                      <div className="flex flex-wrap gap-1 items-center">
+                        <span className="font-bold text-amber-900 text-xs">🔀 Split:</span>
+                        {tx.payments.map((p, i) => ( 
+                          <span key={i} className="text-xs px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50/80 font-medium text-amber-950">
+                            {p.method === 'cash' ? '💵' : p.method === 'gcash' ? '📱' : p.method === 'card' ? '💳' : '📋'}
+                            {String(p.method).toUpperCase()}: {money.format(Number(p.amount) || 0)}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  } else if (methodStr.includes('gcash')) {
                     paymentBadge = <span className="font-bold text-sky-700">{"\u{1F4F2}"} GCash</span>;
                   } else if (methodStr.includes('card')) {
                     paymentBadge = <span className="font-bold text-blue-700">{"\u{1F4B3}"} Card</span>;
