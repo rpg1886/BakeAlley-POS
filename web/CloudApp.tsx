@@ -1438,7 +1438,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                                     <span className="font-semibold text-amber-800">Payment Method:</span>{' '}
                                     <span className="capitalize font-bold text-amber-950">{tx.paymentMethod}</span>
                                   </div>
-                                  {methodStr.includes('cash') && (
+                                  {(methodStr.includes('cash') || methodStr.includes('split') || tx.cashReceived > 0 || tx.changeDue > 0) && (
                                     <>
                                       <div>
                                         <span className="text-amber-800">Cash Received:</span>{' '}
@@ -2777,7 +2777,19 @@ export function CloudApp(): JSX.Element {
         ...order,
         orderId: crypto.randomUUID(),
         items: order.items.map((item) => ({ ...item, orderItemId: crypto.randomUUID() })),
-        changeDue: order.paymentMethod === 'cash' ? Number((order.cashReceived - order.totalAmount).toFixed(2)) : 0,
+        changeDue: (() => {
+          if (order.paymentMethod === 'cash') {
+            return Math.max(0, Number((order.cashReceived - order.totalAmount).toFixed(2)));
+          }
+          if (order.paymentMethod === 'split' && Array.isArray(order.payments)) {
+            const cashP = order.payments.filter((p) => p.method === 'cash');
+            if (cashP.length > 0) {
+              const needed = cashP.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+              const tendered = cashP.reduce((sum, p) => sum + Number(p.cashReceived || p.amount || 0), 0);
+              return Math.max(0, Number((tendered - needed).toFixed(2)));
+            }
+          } return 0;
+        })(),
       };
       return api.createOrder(cloudOrder);
     },

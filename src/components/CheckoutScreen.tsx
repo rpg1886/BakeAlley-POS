@@ -422,6 +422,14 @@ export function CheckoutScreen({
         await recordEmployeeSale(employeeToken, result.orderId);
       }
 
+      const cashPayments = finalPayments.filter((p) => p.method === 'cash');
+      let finalChangeDue = 0;
+      if (cashPayments.length > 0) {
+        const totalCashNeeded = cashPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const totalCashTenderedInSplit = cashPayments.reduce((sum, p) => sum + Number(p.cashReceived || p.amount || 0), 0);
+        finalChangeDue = Math.max(0, Number((totalCashTenderedInSplit - totalCashNeeded).toFixed(2)));
+      }
+
       setCart([]);
       setCustomerId(null);
       localStorage.removeItem('bakealley_pos_cart');
@@ -430,6 +438,13 @@ export function CheckoutScreen({
       setCashReceived('');
       setSplitPayments([]);
       setPaymentOpen(false);
+
+      if (finalChangeDue > 0) {
+        setMessage(`Order completed successfully! Change due to customer: ${money.format(finalChangeDue)}`);
+      } else {
+        setMessage('Order completed successfully!');
+      }
+
     } catch (error) {
       setPaymentError(error instanceof Error ? error.message : 'Order submission failed.');
     } finally {
@@ -839,7 +854,7 @@ export function CheckoutScreen({
                 type="button"
                 onClick={() => void submitOrder()}
               >
-                {busy ? 'Saving...' : Number(cashReceived) < remainingBalance ? `Add Partial Payment (${money.format(Number(cashReceived) || 0)})` : 'Confirm & Complete payment'}
+                {busy ? 'Saving...' : Number(cashReceived) < remainingBalance ? `Add Partial Payment (${money.format(Number(cashReceived) || 0)})` : changeDue > 0 ? `Confirm & Complete payment (Change Due: ${money.format(changeDue)})` : 'Confirm & Complete payment'}
               </button>
             </div>
           </section>
