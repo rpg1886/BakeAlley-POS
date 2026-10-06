@@ -370,8 +370,8 @@ export function CheckoutScreen({
     }
     const currentTendered = Number(cashReceived) || remainingBalance;
 
-    if (paymentMethod === 'cash' && (!Number.isFinite(cashTendered) || cashTendered < totalAmount)) {
-      setMessage('Cash received must be at least the remaining balance.');
+    if (paymentMethod === 'cash' && (!Number.isFinite(cashTendered) || cashTendered <= 0)) {
+      setMessage('Enter a valid cash amount.');
       return;
     }
 
@@ -790,7 +790,7 @@ export function CheckoutScreen({
                   <input
                     autoFocus
                     className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
-                    min={remainingBalance.toFixed(2)}
+                    min="0.01"
                     step="0.01"
                     type="number"
                     value={cashReceived}
@@ -835,7 +835,7 @@ export function CheckoutScreen({
               </button>
               <button
                 className="flex-1 rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50 shadow-sm transition"
-                disabled={busy || (paymentMethod === 'cash' && changeDue < 0)}
+                disabled={busy || !Number.isFinite(Number(cashReceived)) || Number(cashReceived) <= 0}
                 type="button"
                 onClick={() => void submitOrder()}
               >

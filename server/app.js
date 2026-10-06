@@ -766,13 +766,15 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
 
     if (validatedPayload.paymentMethod === 'split' && Array.isArray(validatedPayload.payments)) {
      const cashPayment = validatedPayload.payments.find(p => p.method === 'cash');
-       if (cashPayment) {
-         const cashTendered = Number(cashPayment.cashReceived || cashPayment.amount || 0);
-         const cashNeeded = Number(cashPayment.amount || 0);
-         changeDue = Math.max(0, cashTendered - cashNeeded);
-        totalCashReceived = cashTendered;
+      if (cashPayment.length > 0) {
+        const totalCashNeeded = cashPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const totalCashTenderedInSplit = cashPayments.reduce((sum, p) => sum + Number(p.cashReceived || p.amount || 0), 0);
+        if (totalCashTenderedInSplit < totalCashNeeded) { throw Object.assign(new Error('Cash received must be at least the cash portion total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' }); }
+        changeDue = Math.max(0, totalCashTenderedInSplit - totalCashNeeded);
+        totalCashReceived = totalCashTenderedInSplit;
       }
     } else if (validatedPayload.paymentMethod === 'cash') { 
+      if (totalCashReceived < Number(validatedPayload.totalAmount)) { throw Object.assign(new Error('Cash received must be at least the order total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' }); }
       changeDue = Math.max(0, totalCashReceived - Number(validatedPayload.totalAmount));
     }
     
@@ -790,7 +792,7 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         validatedPayload.taxAmount ?? 0, 
         validatedPayload.totalAmount, 
         validatedPayload.paymentMethod, 
-        totalcashReceived, 
+        totalCashReceived, 
         changeDue,
         validatedPayload.payments ? JSON.stringify(validatedPayload.payments) : null,
         validatedPayload.createdAt ?? new Date().toISOString()
