@@ -150,6 +150,7 @@ codebase.txt
 DEPLOYMENT_READY.md
 DEPLOYMENT_VALIDATION_REPORT.md
 FIXES_IMPLEMENTED.md
+Function-Design-POS_gemini.md
 gemini_prompts
 import-log.txt
 index.html
@@ -3308,6 +3309,279 @@ async function importLocal() {
 }
 
 importLocal().catch((error) => { console.error(error); process.exitCode = 1; });
+</file>
+
+<file path="server/scripts/import-main-inventory.js">
+// server/scripts/import-main-inventory.js
+// Imports Inventory_Main.csv directly into the cloud PostgreSQL catalog [1].
+// Usage: node server/scripts/import-main-inventory.js [path-to-csv] [defaultMarkupPercent]
+
+const path = require('node:path');
+const crypto = require('node:crypto');
+const XLSX = require('xlsx');
+const { pool, migrate } = require('../db');
+
+const STOCK_TAKE_LOT_NUMBER = 'STOCKTAKE-MAIN';
+const UNCATEGORIZED_CATEGORY = 'UNCATEGORIZED';
+const CANONICAL_RETAIL_TIER_ID = '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
+
+function slug(value) {
+  return (
+    value
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '-')
+      .replace(/^-+|-+\$/g, '')
+      .slice(0, 24) || 'ITEM'
+  );
+}
+
+function parseNonNegativeNumber(value) {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : Number(String(value ?? '0').replace(/,/g, ''));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function roundMoney(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function roundQuantity(value) {
+  return Math.round(value * 10000) / 10000;
+}
+
+function mergeRows(sourceRows) {
+  const merged = new Map();
+  let skippedRows = 0;
+  for (const row of sourceRows) {
+    const name = typeof row.Name === 'string' ? row.Name.trim() : '';
+    if (!name) {
+      skippedRows += 1;
+      continue;
+    }
+    const category =
+      typeof row.Category === 'string' && row.Category.trim() !== ''
+        ? row.Category.trim().toUpperCase()
+        : UNCATEGORIZED_CATEGORY;
+    const warehouseRaw = typeof row.Warehouse === 'string' ? row.Warehouse.trim() : '';
+    const warehouse = warehouseRaw === '' ? null : warehouseRaw;
+    const quantity = roundQuantity(parseNonNegativeNumber(row['Stock Qty']));
+    const cost = roundMoney(parseNonNegativeNumber(row.Cost));
+    const key = `${category}::${name.toLowerCase()}`;
+    const existing = merged.get(key);
+    if (existing) {
+      const totalQuantity = existing.quantity + quantity;
+      existing.cost =
+        totalQuantity > 0
+          ? roundMoney((existing.cost * existing.quantity + cost * quantity) / totalQuantity)
+          : roundMoney((existing.cost + cost) / 2);
+      existing.quantity = totalQuantity;
+      existing.warehouse = existing.warehouse ?? warehouse;
+    } else {
+      merged.set(key, { name, category, warehouse, quantity, cost });
+    }
+  }
+  return { rows: merged, skippedRows };
+}
+
+async function ensurePieceUom(client) {
+  const existing = await client.query(
+    "SELECT uom_id AS \"uomId\" FROM units_of_measure WHERE name = 'Piece'"
+  );
+  if (existing.rowCount) {
+    return existing.rows[0].uomId;
+  }
+  const inserted = await client.query(
+    "INSERT INTO units_of_measure (uom_id, name, symbol) VALUES (gen_random_uuid(), 'Piece', 'pc') RETURNING uom_id AS \"uomId\""
+  );
+  return inserted.rows[0].uomId;
+}
+
+async function importMainInventory(csvPath, defaultMarkupPercent) {
+  console.log('Starting import process...');
+  console.log(`CSV Path: ${csvPath}`);
+  console.log(`Default Markup: ${defaultMarkupPercent}%\n`);
+
+  console.log('Step 1: Running database migration...');
+  await migrate();
+  console.log('Step 1: ✓ Migration complete\n');
+
+  console.log('Step 2: Reading CSV file...');
+  const workbook = XLSX.readFile(csvPath, { cellDates: false });
+  const sheet = workbook.Sheets[workbook.SheetNames];
+  if (!sheet) throw new Error(`No worksheet found in ${csvPath}`);
+  const sourceRows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
+  if (sourceRows.length === 0) throw new Error(`${csvPath} contains no rows`);
+  console.log(`Step 2: ✓ Read ${sourceRows.length} rows from CSV\n`);
+
+  console.log('Step 3: Merging duplicate rows...');
+  const { rows: merged, skippedRows } = mergeRows(sourceRows);
+  if (merged.size === 0) throw new Error(`${csvPath} contains no usable rows`);
+  console.log(`Step 3: ✓ Merged to ${merged.size} unique products (${skippedRows} skipped)\n`);
+
+  const client = await pool.connect();
+  const usedSkus = new Set();
+  let createdCategories = 0;
+  let createdProducts = 0;
+  let updatedProducts = 0;
+  let createdLots = 0;
+  let updatedLots = 0;
+  let processedRows = 0;
+
+  try {
+    console.log('Step 4: Starting database transaction...');
+    await client.query('BEGIN');
+    console.log('Step 4: ✓ Transaction started\n');
+
+    console.log('Step 5: Ensuring Piece UOM exists...');
+    const uomId = await ensurePieceUom(client);
+    console.log(`Step 5: ✓ Using UOM ID: ${uomId}\n`);
+
+    console.log('Step 6: Ensuring Retail Tier exists...');
+    await client.query(
+      `
+      INSERT INTO price_tiers (tier_id, tier_name)
+      VALUES ($1, 'Retail')
+      ON CONFLICT (tier_id) DO UPDATE SET tier_name = 'Retail';
+    `,
+      [CANONICAL_RETAIL_TIER_ID]
+    );
+    console.log('Step 6: ✓ Retail tier ready\n');
+
+    const retailTierId = CANONICAL_RETAIL_TIER_ID;
+
+    console.log('Step 7: Loading existing SKUs...');
+    const existingSkus = await client.query('SELECT sku FROM product_variants');
+    for (const row of existingSkus.rows) usedSkus.add(row.sku);
+    console.log(`Step 7: ✓ Found ${usedSkus.size} existing SKUs\n`);
+
+    console.log('Step 8: Processing inventory rows...');
+    for (const row of merged.values()) {
+      processedRows += 1;
+      if (processedRows % 10 === 0) {
+        console.log(`  Processing row ${processedRows}/${merged.size}...`);
+      }
+
+      let categoryId;
+      const existingCategory = await client.query(
+        'SELECT category_id AS "categoryId" FROM categories WHERE lower(name) = lower(\$1)',
+        [row.category]
+      );
+      if (existingCategory.rowCount) {
+        categoryId = existingCategory.rows[0].categoryId;
+      } else {
+        const inserted = await client.query(
+          'INSERT INTO categories (category_id, name) VALUES (gen_random_uuid(), \$1) RETURNING category_id AS "categoryId"',
+          [row.category]
+        );
+        categoryId = inserted.rows[0].categoryId;
+        createdCategories += 1;
+      }
+
+      const attributes = row.warehouse ? { warehouse: row.warehouse } : {};
+      const existingProduct = await client.query(
+        `SELECT p.product_id AS "productId", v.variant_id AS "variantId"
+         FROM products p JOIN product_variants v ON v.product_id = p.product_id
+         WHERE lower(p.name) = lower($1) AND p.category_id = $2 LIMIT 1`,
+        [row.name, categoryId]
+      );
+
+      let variantId;
+      if (existingProduct.rowCount) {
+        variantId = existingProduct.rows[0].variantId;
+        await client.query(
+          'UPDATE products SET initial_cost = \$1, updated_at = now() WHERE product_id = \$2',
+          [row.cost, existingProduct.rows[0].productId]
+        );
+        await client.query(
+          'UPDATE product_variants SET attributes = \$1::jsonb, updated_at = now() WHERE variant_id = \$2',
+          [JSON.stringify(attributes), variantId]
+        );
+        updatedProducts += 1;
+      } else {
+        const productId = crypto.randomUUID();
+        variantId = crypto.randomUUID();
+        let sku = `${slug(row.category)}-${slug(row.name)}`;
+        let suffix = 2;
+        while (usedSkus.has(sku)) {
+          sku = `${slug(row.category)}-${slug(row.name)}-${suffix}`;
+          suffix += 1;
+        }
+        usedSkus.add(sku);
+        await client.query(
+          `INSERT INTO products (product_id, category_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, initial_cost)
+           VALUES ($1, $2, $3, $4, FALSE, FALSE, $5)`,
+          [productId, categoryId, row.name, uomId, row.cost]
+        );
+        await client.query(
+          `INSERT INTO product_variants (variant_id, product_id, sku, barcode, variant_name, attributes)
+           VALUES ($1, $2, $3, NULL, $4, $5::jsonb)`,
+          [variantId, productId, sku, row.name, JSON.stringify(attributes)]
+        );
+        createdProducts += 1;
+      }
+
+      if (retailTierId) {
+        const retailPrice = roundMoney(row.cost * (1 + defaultMarkupPercent / 100));
+        await client.query(
+          `INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity)
+           VALUES (gen_random_uuid(), $1, $2, $3, 0)
+           ON CONFLICT (variant_id, tier_id, min_quantity) DO UPDATE SET price_per_unit = excluded.price_per_unit`,
+          [variantId, retailTierId, retailPrice]
+        );
+      }
+
+      const existingLot = await client.query(
+        'SELECT lot_id AS "lotId" FROM inventory_lots WHERE variant_id = \$1 AND lot_number = \$2',
+        [variantId, STOCK_TAKE_LOT_NUMBER]
+      );
+      if (existingLot.rowCount) {
+        await client.query(
+          'UPDATE inventory_lots SET quantity_on_hand = \$1, updated_at = now() WHERE lot_id = \$2',
+          [row.quantity, existingLot.rows[0].lotId]
+        );
+        updatedLots += 1;
+      } else {
+        await client.query(
+          `INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand)
+           VALUES (gen_random_uuid(), $1, $2, NULL, $3)`,
+          [variantId, STOCK_TAKE_LOT_NUMBER, row.quantity]
+        );
+        createdLots += 1;
+      }
+    }
+
+    console.log(`Step 8: ✓ Processed ${merged.size} rows\n`);
+
+    console.log('Step 9: Committing transaction...');
+    await client.query('COMMIT');
+    console.log('Step 9: ✓ Transaction committed\n');
+
+    console.log(`Imported ${sourceRows.length} rows from ${csvPath} (${skippedRows} skipped).`);
+    console.log(
+      JSON.stringify({ createdCategories, createdProducts, updatedProducts, createdLots, updatedLots })
+    );
+  } catch (error) {
+    console.error('ERROR - Rolling back transaction...');
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+    await pool.end();
+  }
+}
+
+const csvPath = path.resolve(
+  process.argv[2] || path.join(__dirname, '..', '..', 'Inventory_Main.csv')
+);
+// Default markup set to 20%
+const defaultMarkupPercent = Number(process.argv[3] || 20);
+
+importMainInventory(csvPath, defaultMarkupPercent).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
 </file>
 
 <file path="server/tests/self-unit-test.js">
@@ -6803,6 +7077,15 @@ The beforeunload handler ensures that:
 2. Test the inventory add/edit functionality
 3. Test login/logout and browser close behavior
 4. Verify no 23503 or 404 errors appear in the console
+</file>
+
+<file path="gemini_prompts">
+# Set your Neon DATABASE_URL environment variable
+
+
+git checkout CloudBase-POS
+git commit --allow-empty -m "Update frontend build target to Railway API"
+git push origin CloudBase-POS
 </file>
 
 <file path="index.html">
@@ -16218,13 +16501,232 @@ All identified issues have been remediated through recent commits. No blocking i
 **Validated By:** Automated Analysis + Binary Inspection
 </file>
 
-<file path="gemini_prompts">
-# Set your Neon DATABASE_URL environment variable
+<file path="Function-Design-POS_gemini.md">
+# Bake Alley Cloud POS — Master Functional Design & System Architecture
 
+## 1. Executive Purpose & System Scope
 
-git checkout CloudBase-POS
-git commit --allow-empty -m "Update frontend build target to Railway API"
-git push origin CloudBase-POS
+Bake Alley POS is an omnichannel point-of-sale platform migrating from a standalone desktop application (Electron, React, Vite, Tailwind CSS, `better-sqlite3`) to a cloud-ready, multi-device Progressive Web App (PWA) backed by Node.js, Express, and PostgreSQL.
+
+### Core Objectives
+* **Omnichannel Multi-Device Availability**: Support seamless store operations on desktop browsers, tablets, and mobile phones, while retaining the desktop Electron application as an optional hardware companion for physical store peripherals (RS-232 weight scales, thermal receipt printers, cash drawers).
+* **Remote Store Administration**: Enable store owners and managers to monitor live transactions, inspect financial reconciliation statements, manage inventory catalogs, and audit cashier shifts remotely from any browser.
+* **Offline-First Resilience**: Guarantee uninterrupted store checkout during internet outages through IndexedDB local caching, transactional outboxes, and idempotent synchronization.
+* **Strict Domain & Compliance Rules**: Enforce First-Expired, First-Out (FEFO) inventory lot deductions, exact decimal currency/weight precision, strict role-based access control (RBAC), and staff accountability.
+
+---
+
+## 2. Architecture & Migration Baseline
+
+### Target System Architecture
+```text
+Desktop / Tablet / Mobile Browser
+              │
+       React + Vite + Tailwind PWA
+              │
+       Node.js / Express REST API
+              │
+      Managed PostgreSQL (Neon.tech)
+              │
+ Optional Local Desktop Companion (Electron)
+              │
+       RS-232 Scale / Thermal Printer
+```
+
+### Offline-First Synchronization Flow
+```text
+React PWA ──> Local IndexedDB ──> Transactional Outbox ──> Idempotent Batch Sync ──> Express API ──> PostgreSQL
+```
+
+### Separation of Concerns
+* **Reusable UI Components**: Checkout cart, product grids, inventory management tables, sales report cards, CRM profiles, and shift management panels depend on platform-neutral TypeScript contracts.
+* **Desktop Hardware Adapters**: Electron `main` process, `src/preload.ts`, `better-sqlite3`, `serialport`, and ESC/POS thermal printing routines remain encapsulated as optional desktop-only bridges.
+* **Server Authority**: The Express/PostgreSQL backend remains authoritative for pricing calculations, money operations, inventory deductions, employee authentication, and session control.
+
+---
+
+## 3. PostgreSQL Database Schema & Data Models
+
+All primary keys across SQLite, IndexedDB, and PostgreSQL use UUID v4 strings (`crypto.randomUUID()` or `gen_random_uuid()`). Money fields use `NUMERIC(12,2)` with `CHECK >= 0`, and quantity/weight fields use `NUMERIC(12,4)`.
+
+### Core Data Models
+
+#### `app_users`
+Stores user accounts for administrators and cashiers, supporting soft deletion and session controls.
+```sql
+CREATE TABLE IF NOT EXISTS app_users (
+  user_id UUID PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('admin', 'cashier')),
+  password_salt TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+#### `sessions`
+Persists active user bearer token sessions across server restarts with hourly expiration cleanup.
+```sql
+CREATE TABLE IF NOT EXISTS sessions (
+  session_id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+#### `employee_shifts`
+Tracks shift clock-ins, starting cash floats, blind cash counts, expected totals, and cash discrepancies.
+```sql
+CREATE TABLE IF NOT EXISTS employee_shifts (
+  shift_id UUID PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES app_users(user_id) ON DELETE CASCADE,
+  clock_in TIMESTAMPTZ NOT NULL DEFAULT now(),
+  clock_out TIMESTAMPTZ,
+  opening_float NUMERIC(12,2) DEFAULT 1500.00,
+  closing_cash_count NUMERIC(12,2),
+  expected_cash NUMERIC(12,2),
+  cash_discrepancy NUMERIC(12,2),
+  status TEXT DEFAULT 'OPEN',
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+#### `orders`
+Stores order headers including single-tender and multi-tender split payment details.
+```sql
+CREATE TABLE IF NOT EXISTS orders (
+  order_id UUID PRIMARY KEY,
+  customer_id UUID REFERENCES customers(customer_id) ON DELETE SET NULL,
+  pricing_tier_id UUID NOT NULL REFERENCES price_tiers(tier_id),
+  employee_id UUID REFERENCES app_users(user_id) ON DELETE SET NULL,
+  order_type TEXT NOT NULL CHECK (order_type IN ('retail', 'commercial')),
+  status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('open', 'completed', 'voided')),
+  subtotal NUMERIC(12,2) NOT NULL CHECK (subtotal >= 0),
+  tax_amount NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (tax_amount >= 0),
+  total_amount NUMERIC(12,2) NOT NULL CHECK (total_amount >= 0),
+  payment_method TEXT NOT NULL CHECK (payment_method IN ('cash', 'card', 'gcash', 'account', 'split')),
+  cash_received NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (cash_received >= 0),
+  change_due NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (change_due >= 0),
+  payments JSONB,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+#### `order_items`
+Itemized transaction line items linked directly to FEFO inventory lots.
+```sql
+CREATE TABLE IF NOT EXISTS order_items (
+  order_item_id UUID PRIMARY KEY,
+  order_id UUID NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+  variant_id UUID NOT NULL REFERENCES product_variants(variant_id),
+  lot_id UUID REFERENCES inventory_lots(lot_id),
+  quantity NUMERIC(12,4) NOT NULL CHECK (quantity > 0),
+  unit_price NUMERIC(12,2) NOT NULL CHECK (unit_price >= 0),
+  total_price NUMERIC(12,2) NOT NULL CHECK (total_price >= 0)
+);
+```
+
+---
+
+## 4. API Specification & Endpoint Directory
+
+All Express API endpoints enforce strict JSON schema validation via Zod, rate limiting via `express-rate-limit`, structured logging via Winston, and CORS origin whitelisting.
+
+| Method | Endpoint Path | Auth Guard | Purpose & Description |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/login` | Public | Validates user credentials with `crypto.scryptSync`, creates bearer session token in `sessions` table (24-hour expiry). |
+| `POST` | `/api/v1/auth/logout` | Session | Removes bearer token from `sessions` table. |
+| `GET` | `/api/v1/health` | Public | System health and connectivity probe. |
+| `GET` | `/api/v1/version` | Public | Returns application build and version metadata. |
+| `GET` | `/api/v1/categories` | Session | Fetches product categories list. |
+| `GET` | `/api/v1/products/search` | Session | Full-text search for product variants by SKU, barcode, or name with tier pricing. |
+| `GET` | `/api/v1/units-of-measure` | Session | Fetches unit of measure reference definitions. |
+| `GET` | `/api/v1/customers` | Session | Fetches customer profiles with pricing tier assignments. |
+| `POST` | `/api/v1/customers` | Session | Creates new customer record with pricing tier assignment. |
+| `DELETE` | `/api/v1/customers/:id` | Admin | Deletes customer profile (protected; blocks deletion if customer has completed orders). |
+| `GET` | `/api/v1/inventory` | Session | Fetches aggregated inventory levels, FEFO lot expiration dates, capital costs, and retail prices. |
+| `POST` | `/api/v1/inventory/adjust` | Session | Restocks or adjusts lot quantity and retail price in a single transaction. |
+| `POST` | `/api/v1/inventory/products` | Admin | Creates new product, variant, pricing tier entry, and initial lot atomically. |
+| `PUT` | `/api/v1/inventory/products/:variantId` | Admin | Updates variant name, SKU, retail price, initial cost, quantity, or FEFO lot expiration. |
+| `GET` | `/api/v1/employees` | Session | Fetches employee roster with date-filtered sales totals and active status. |
+| `POST` | `/api/v1/employees` | Admin | Creates new employee or reactivates soft-deleted account (`active = TRUE`) with new password hash. |
+| `DELETE` | `/api/v1/employees/:userId` | Admin | Soft-deletes employee account (`active = FALSE`) and purges active sessions (`DELETE FROM sessions`). |
+| `POST` | `/api/v1/employees/:userId/reset-password` | Admin | Admin-only password reset with 12+ char validation and active session purge. |
+| `POST` | `/api/v1/employees/clock-in` | Session | Starts employee shift with opening cash float validation (default ₱1,500.00). |
+| `POST` | `/api/v1/employees/clock-out` | Session | Ends employee shift with blind cash count audit and discrepancy calculation. |
+| `GET` | `/api/v1/employees/shifts` | Session | Fetches date-filtered shift calendar and cash reconciliation logs. |
+| `POST` | `/api/v1/orders` | Session | Processes orders with FEFO lot locks, price validation (±0.005 tolerance), multi-tender split processing, and idempotency. |
+| `GET` | `/api/v1/sales/report` | Session | Fetches daily transaction audits, itemized sales, split tender breakdowns, and period summaries. |
+| `GET` | `/api/v1/sales/monthly` | Session | Fetches 12-month comparative analytics, gross profit, actual COGS, and split sales breakdowns. |
+
+---
+
+## 5. Major Feature Implementations & Technical Evolution
+
+### A. Employee Account Soft Delete & Session Revocation System (2026-10-05)
+To preserve historical audit trails on sales reports and shift logs, hard deletion of user accounts was replaced with a soft-delete architecture:
+* **Soft Delete Pattern**: Account removal executes `UPDATE app_users SET active = FALSE, updated_at = now() WHERE user_id = $1`.
+* **Immediate Access Revocation**: Deactivating an employee immediately purges all active session tokens (`DELETE FROM sessions WHERE user_id = $1`), revoking login access instantly across all active browser sessions.
+* **Account Reactivation**: Re-creating an employee with a previously soft-deleted username reactivates the account (`active = TRUE`) and updates display name, role, salt, and hash rather than failing on duplicate username constraints.
+* **Self-Deactivation Guard**: Prevents logged-in admin accounts from deactivating themselves (`CANNOT_DELETE_SELF`).
+* **Session Middleware Integration**: `requireSession` SQL lookup includes `AND u.active = TRUE`, immediately rejecting requests from deactivated staff.
+* **UI Controls**: In `web/CloudApp.tsx`, the action button was updated from "Delete" to "Deactivate", triggering a confirmation modal explaining account deactivation and login revocation.
+
+### B. Admin-Only Employee Password Reset (2026-10-05)
+Implemented a dedicated route and UI workflow for administrators to reset employee credentials:
+* **Endpoint & RBAC Guard**: `POST /api/v1/employees/:userId/reset-password` guarded by `auth.requireSession` and `auth.requireAdmin`.
+* **Security Standards**: Validates minimum 12-character password length, generates a fresh random 16-byte salt (`crypto.randomBytes`), computes scrypt hash (`crypto.scryptSync`), and purges active user sessions (`DELETE FROM sessions WHERE user_id = $1`) to force re-authentication.
+* **UI Controls**: Amber-styled "Reset Password" button added to `EmployeesView` table for admins, configured with flex container spacing (`gap-2`) alongside "Deactivate". Triggers a modal dialog with password validation and real-time state feedback.
+
+### C. Multi-Tender Split & Partial Payment Architecture (2026-10-05 to 2026-10-06)
+Developed a complete multi-tender split payment engine supporting custom partial payments across Cash, GCash, Card, and Commercial Accounts:
+* **Multi-Tender Engine**: Allows single orders to be settled across multiple payment methods (e.g., ₱600 GCash + ₱500 Cash for a ₱1,000 order).
+* **Validation Schema**: `orderPayloadSchema` accepts `paymentMethod: 'split'` and a `payments` JSON array schema (`[{ method, amount, cashReceived? }]`).
+* **Database Representation**: `orders.payments` column stores the full JSON breakdown array. Constraint updated to `CHECK (payment_method IN ('cash', 'card', 'gcash', 'account', 'split'))`.
+* **Checkout UI Engine (`src/components/CheckoutScreen.tsx`)**:
+  * Payment modal supports entering partial payment amounts.
+  * "Add Partial Payment" button records partial amounts, keeps modal open, displays a "Recorded Partial Payments" list, and dynamically calculates remaining balance needed (`totalAmount - totalPaidSoFar`).
+  * Real-time calculation of change due or amount still needed per cash entry (`cashTendered - remainingBalance`).
+  * Confirmation button displays total change due upon completing cash or split-cash transactions (`Confirm & Complete payment (Change Due: ₱X.XX)`).
+  * Post-checkout banner displays exact change due to the customer.
+* **Backend Server-Side Split Change Calculation (`server/app.js`)**:
+  * Calculates `changeDue` from the cash component of split payments (`totalCashTenderedInSplit - totalCashNeeded`).
+* **Financials & Sales Reporting Integration**:
+  * `GET /api/v1/sales/report` returns `payments` JSON array parsed as typed objects.
+  * `GET /api/v1/sales/monthly` parses `payments` JSON to allocate split transaction amounts across `cashSales`, `gcashSales`, `cardSales`, and `accountSales`.
+  * Financials tab "Register Cash Drawer vs Digital Tender" aggregates split payment items per tender type (`paymentBreakdownDaily`) without duplicate counting.
+  * Sales tab transaction audit table displays detailed split tender breakdown pills (e.g. `🔀 Split: 📱 GCash: ₱500.00 · 💵 Cash: ₱300.00 · 💳 Card: ₱200.00`) and displays **Cash Received** & **Change Given** for split-cash orders.
+
+### D. Bug Remediation & Infrastructure Hardening (2026-10-05 to 2026-10-06)
+* **Inventory Update UUID Regex Fix**: Corrected escaped dollar sign (`\$`) in UUID validation regex inside `server/app.js` (`/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`) that previously caused `INVALID_VARIANT_ID` (Error 400) during inventory adjustments.
+* **SQL Parameter Placeholder Un-Escaping**: Fixed escaped backslashes in SQL queries (e.g., `\$1`, `app\_users`) that caused PostgreSQL Syntax Error `42601` during session validation, employee deletion, and order processing.
+* **Variable Reference Fix**: Resolved `totalcashReceived` vs `totalCashReceived` variable casing mismatch in `server/app.js` that previously caused a `ReferenceError` (500 Internal Error) on non-cash payments.
+* **CI/CD Deployment Workflow Hardening**: Updated `.github/workflows/deploy-pages.yml` with build output verification (`ls -la dist/cloud`) and documented switching GitHub Pages deployment source setting to `GitHub Actions` to resolve `Found 0 artifact(s)` deployment errors.
+
+---
+
+## 6. Deployment & Environment Reference
+
+### Production Infrastructure Stack
+* **API Web Service**: Railway.app (Node.js runtime, custom Start Command `node server/app.js`, Port forwarding 8080)
+* **Database Management**: Neon.tech (Managed PostgreSQL instance with connection pooling)
+* **PWA Frontend Hosting**: GitHub Pages (`https://rpg1886.github.io/BakeAlley-POS/`, GitHub Actions deployment workflow)
+
+### Production Deployment Verification
+- [x] Session persistence via PostgreSQL `sessions` table with hourly expiration cleanup
+- [x] Server-side `changeDue` calculation for single cash and multi-tender split orders
+- [x] Zod schema validation across all 15 API endpoints
+- [x] Winston structured logging with daily file rotation and console output
+- [x] Rate limiting configured (Login: 5 req/15min, API: 100 req/1min)
+- [x] Price tolerance verification set to ±0.005 (half-cent boundary)
+- [x] GitHub Pages Actions workflow configured and verified (`ls -la dist/cloud`)
 </file>
 
 <file path="package.json">
@@ -17069,279 +17571,6 @@ curl -X POST https://bakealley-pos-production.up.railway.app/api/v1/auth/login \
 * **Unicode Character Escaping**:
   * Converted all raw multi-byte UTF-8 emojis, currency symbols (`₱` -> `\u20B1`), and special characters to JavaScript Unicode Escape Sequences (`\u{1F464}`, `\u{1F501}`, `\u{1F3E2}`, `\u00D7`, etc.).
   * Eliminated Vite and TypeScript compilation errors during GitHub Actions deployments (`npm run cloud:build`).
-</file>
-
-<file path="server/scripts/import-main-inventory.js">
-// server/scripts/import-main-inventory.js
-// Imports Inventory_Main.csv directly into the cloud PostgreSQL catalog [1].
-// Usage: node server/scripts/import-main-inventory.js [path-to-csv] [defaultMarkupPercent]
-
-const path = require('node:path');
-const crypto = require('node:crypto');
-const XLSX = require('xlsx');
-const { pool, migrate } = require('../db');
-
-const STOCK_TAKE_LOT_NUMBER = 'STOCKTAKE-MAIN';
-const UNCATEGORIZED_CATEGORY = 'UNCATEGORIZED';
-const CANONICAL_RETAIL_TIER_ID = '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
-
-function slug(value) {
-  return (
-    value
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, '-')
-      .replace(/^-+|-+\$/g, '')
-      .slice(0, 24) || 'ITEM'
-  );
-}
-
-function parseNonNegativeNumber(value) {
-  const parsed =
-    typeof value === 'number'
-      ? value
-      : Number(String(value ?? '0').replace(/,/g, ''));
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-}
-
-function roundMoney(value) {
-  return Math.round(value * 100) / 100;
-}
-
-function roundQuantity(value) {
-  return Math.round(value * 10000) / 10000;
-}
-
-function mergeRows(sourceRows) {
-  const merged = new Map();
-  let skippedRows = 0;
-  for (const row of sourceRows) {
-    const name = typeof row.Name === 'string' ? row.Name.trim() : '';
-    if (!name) {
-      skippedRows += 1;
-      continue;
-    }
-    const category =
-      typeof row.Category === 'string' && row.Category.trim() !== ''
-        ? row.Category.trim().toUpperCase()
-        : UNCATEGORIZED_CATEGORY;
-    const warehouseRaw = typeof row.Warehouse === 'string' ? row.Warehouse.trim() : '';
-    const warehouse = warehouseRaw === '' ? null : warehouseRaw;
-    const quantity = roundQuantity(parseNonNegativeNumber(row['Stock Qty']));
-    const cost = roundMoney(parseNonNegativeNumber(row.Cost));
-    const key = `${category}::${name.toLowerCase()}`;
-    const existing = merged.get(key);
-    if (existing) {
-      const totalQuantity = existing.quantity + quantity;
-      existing.cost =
-        totalQuantity > 0
-          ? roundMoney((existing.cost * existing.quantity + cost * quantity) / totalQuantity)
-          : roundMoney((existing.cost + cost) / 2);
-      existing.quantity = totalQuantity;
-      existing.warehouse = existing.warehouse ?? warehouse;
-    } else {
-      merged.set(key, { name, category, warehouse, quantity, cost });
-    }
-  }
-  return { rows: merged, skippedRows };
-}
-
-async function ensurePieceUom(client) {
-  const existing = await client.query(
-    "SELECT uom_id AS \"uomId\" FROM units_of_measure WHERE name = 'Piece'"
-  );
-  if (existing.rowCount) {
-    return existing.rows[0].uomId;
-  }
-  const inserted = await client.query(
-    "INSERT INTO units_of_measure (uom_id, name, symbol) VALUES (gen_random_uuid(), 'Piece', 'pc') RETURNING uom_id AS \"uomId\""
-  );
-  return inserted.rows[0].uomId;
-}
-
-async function importMainInventory(csvPath, defaultMarkupPercent) {
-  console.log('Starting import process...');
-  console.log(`CSV Path: ${csvPath}`);
-  console.log(`Default Markup: ${defaultMarkupPercent}%\n`);
-
-  console.log('Step 1: Running database migration...');
-  await migrate();
-  console.log('Step 1: ✓ Migration complete\n');
-
-  console.log('Step 2: Reading CSV file...');
-  const workbook = XLSX.readFile(csvPath, { cellDates: false });
-  const sheet = workbook.Sheets[workbook.SheetNames];
-  if (!sheet) throw new Error(`No worksheet found in ${csvPath}`);
-  const sourceRows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
-  if (sourceRows.length === 0) throw new Error(`${csvPath} contains no rows`);
-  console.log(`Step 2: ✓ Read ${sourceRows.length} rows from CSV\n`);
-
-  console.log('Step 3: Merging duplicate rows...');
-  const { rows: merged, skippedRows } = mergeRows(sourceRows);
-  if (merged.size === 0) throw new Error(`${csvPath} contains no usable rows`);
-  console.log(`Step 3: ✓ Merged to ${merged.size} unique products (${skippedRows} skipped)\n`);
-
-  const client = await pool.connect();
-  const usedSkus = new Set();
-  let createdCategories = 0;
-  let createdProducts = 0;
-  let updatedProducts = 0;
-  let createdLots = 0;
-  let updatedLots = 0;
-  let processedRows = 0;
-
-  try {
-    console.log('Step 4: Starting database transaction...');
-    await client.query('BEGIN');
-    console.log('Step 4: ✓ Transaction started\n');
-
-    console.log('Step 5: Ensuring Piece UOM exists...');
-    const uomId = await ensurePieceUom(client);
-    console.log(`Step 5: ✓ Using UOM ID: ${uomId}\n`);
-
-    console.log('Step 6: Ensuring Retail Tier exists...');
-    await client.query(
-      `
-      INSERT INTO price_tiers (tier_id, tier_name)
-      VALUES ($1, 'Retail')
-      ON CONFLICT (tier_id) DO UPDATE SET tier_name = 'Retail';
-    `,
-      [CANONICAL_RETAIL_TIER_ID]
-    );
-    console.log('Step 6: ✓ Retail tier ready\n');
-
-    const retailTierId = CANONICAL_RETAIL_TIER_ID;
-
-    console.log('Step 7: Loading existing SKUs...');
-    const existingSkus = await client.query('SELECT sku FROM product_variants');
-    for (const row of existingSkus.rows) usedSkus.add(row.sku);
-    console.log(`Step 7: ✓ Found ${usedSkus.size} existing SKUs\n`);
-
-    console.log('Step 8: Processing inventory rows...');
-    for (const row of merged.values()) {
-      processedRows += 1;
-      if (processedRows % 10 === 0) {
-        console.log(`  Processing row ${processedRows}/${merged.size}...`);
-      }
-
-      let categoryId;
-      const existingCategory = await client.query(
-        'SELECT category_id AS "categoryId" FROM categories WHERE lower(name) = lower(\$1)',
-        [row.category]
-      );
-      if (existingCategory.rowCount) {
-        categoryId = existingCategory.rows[0].categoryId;
-      } else {
-        const inserted = await client.query(
-          'INSERT INTO categories (category_id, name) VALUES (gen_random_uuid(), \$1) RETURNING category_id AS "categoryId"',
-          [row.category]
-        );
-        categoryId = inserted.rows[0].categoryId;
-        createdCategories += 1;
-      }
-
-      const attributes = row.warehouse ? { warehouse: row.warehouse } : {};
-      const existingProduct = await client.query(
-        `SELECT p.product_id AS "productId", v.variant_id AS "variantId"
-         FROM products p JOIN product_variants v ON v.product_id = p.product_id
-         WHERE lower(p.name) = lower($1) AND p.category_id = $2 LIMIT 1`,
-        [row.name, categoryId]
-      );
-
-      let variantId;
-      if (existingProduct.rowCount) {
-        variantId = existingProduct.rows[0].variantId;
-        await client.query(
-          'UPDATE products SET initial_cost = \$1, updated_at = now() WHERE product_id = \$2',
-          [row.cost, existingProduct.rows[0].productId]
-        );
-        await client.query(
-          'UPDATE product_variants SET attributes = \$1::jsonb, updated_at = now() WHERE variant_id = \$2',
-          [JSON.stringify(attributes), variantId]
-        );
-        updatedProducts += 1;
-      } else {
-        const productId = crypto.randomUUID();
-        variantId = crypto.randomUUID();
-        let sku = `${slug(row.category)}-${slug(row.name)}`;
-        let suffix = 2;
-        while (usedSkus.has(sku)) {
-          sku = `${slug(row.category)}-${slug(row.name)}-${suffix}`;
-          suffix += 1;
-        }
-        usedSkus.add(sku);
-        await client.query(
-          `INSERT INTO products (product_id, category_id, name, base_uom_id, is_sold_by_weight, requires_lot_tracking, initial_cost)
-           VALUES ($1, $2, $3, $4, FALSE, FALSE, $5)`,
-          [productId, categoryId, row.name, uomId, row.cost]
-        );
-        await client.query(
-          `INSERT INTO product_variants (variant_id, product_id, sku, barcode, variant_name, attributes)
-           VALUES ($1, $2, $3, NULL, $4, $5::jsonb)`,
-          [variantId, productId, sku, row.name, JSON.stringify(attributes)]
-        );
-        createdProducts += 1;
-      }
-
-      if (retailTierId) {
-        const retailPrice = roundMoney(row.cost * (1 + defaultMarkupPercent / 100));
-        await client.query(
-          `INSERT INTO product_prices (product_price_id, variant_id, tier_id, price_per_unit, min_quantity)
-           VALUES (gen_random_uuid(), $1, $2, $3, 0)
-           ON CONFLICT (variant_id, tier_id, min_quantity) DO UPDATE SET price_per_unit = excluded.price_per_unit`,
-          [variantId, retailTierId, retailPrice]
-        );
-      }
-
-      const existingLot = await client.query(
-        'SELECT lot_id AS "lotId" FROM inventory_lots WHERE variant_id = \$1 AND lot_number = \$2',
-        [variantId, STOCK_TAKE_LOT_NUMBER]
-      );
-      if (existingLot.rowCount) {
-        await client.query(
-          'UPDATE inventory_lots SET quantity_on_hand = \$1, updated_at = now() WHERE lot_id = \$2',
-          [row.quantity, existingLot.rows[0].lotId]
-        );
-        updatedLots += 1;
-      } else {
-        await client.query(
-          `INSERT INTO inventory_lots (lot_id, variant_id, lot_number, expiration_date, quantity_on_hand)
-           VALUES (gen_random_uuid(), $1, $2, NULL, $3)`,
-          [variantId, STOCK_TAKE_LOT_NUMBER, row.quantity]
-        );
-        createdLots += 1;
-      }
-    }
-
-    console.log(`Step 8: ✓ Processed ${merged.size} rows\n`);
-
-    console.log('Step 9: Committing transaction...');
-    await client.query('COMMIT');
-    console.log('Step 9: ✓ Transaction committed\n');
-
-    console.log(`Imported ${sourceRows.length} rows from ${csvPath} (${skippedRows} skipped).`);
-    console.log(
-      JSON.stringify({ createdCategories, createdProducts, updatedProducts, createdLots, updatedLots })
-    );
-  } catch (error) {
-    console.error('ERROR - Rolling back transaction...');
-    await client.query('ROLLBACK').catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-    await pool.end();
-  }
-}
-
-const csvPath = path.resolve(
-  process.argv[2] || path.join(__dirname, '..', '..', 'Inventory_Main.csv')
-);
-// Default markup set to 20%
-const defaultMarkupPercent = Number(process.argv[3] || 20);
-
-importMainInventory(csvPath, defaultMarkupPercent).catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
 </file>
 
 <file path="server/scripts/seed-admin.js">
@@ -18516,6 +18745,14 @@ export function CheckoutScreen({
         await recordEmployeeSale(employeeToken, result.orderId);
       }
 
+      const cashPayments = finalPayments.filter((p) => p.method === 'cash');
+      let finalChangeDue = 0;
+      if (cashPayments.length > 0) {
+        const totalCashNeeded = cashPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const totalCashTenderedInSplit = cashPayments.reduce((sum, p) => sum + Number(p.cashReceived || p.amount || 0), 0);
+        finalChangeDue = Math.max(0, Number((totalCashTenderedInSplit - totalCashNeeded).toFixed(2)));
+      }
+
       setCart([]);
       setCustomerId(null);
       localStorage.removeItem('bakealley_pos_cart');
@@ -18524,6 +18761,13 @@ export function CheckoutScreen({
       setCashReceived('');
       setSplitPayments([]);
       setPaymentOpen(false);
+
+      if (finalChangeDue > 0) {
+        setMessage(`Order completed successfully! Change due to customer: ${money.format(finalChangeDue)}`);
+      } else {
+        setMessage('Order completed successfully!');
+      }
+
     } catch (error) {
       setPaymentError(error instanceof Error ? error.message : 'Order submission failed.');
     } finally {
@@ -18933,7 +19177,7 @@ export function CheckoutScreen({
                 type="button"
                 onClick={() => void submitOrder()}
               >
-                {busy ? 'Saving...' : Number(cashReceived) < remainingBalance ? `Add Partial Payment (${money.format(Number(cashReceived) || 0)})` : 'Confirm & Complete payment'}
+                {busy ? 'Saving...' : Number(cashReceived) < remainingBalance ? `Add Partial Payment (${money.format(Number(cashReceived) || 0)})` : changeDue > 0 ? `Confirm & Complete payment (Change Due: ${money.format(changeDue)})` : 'Confirm & Complete payment'}
               </button>
             </div>
           </section>
@@ -20385,7 +20629,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                                     <span className="font-semibold text-amber-800">Payment Method:</span>{' '}
                                     <span className="capitalize font-bold text-amber-950">{tx.paymentMethod}</span>
                                   </div>
-                                  {methodStr.includes('cash') && (
+                                  {(methodStr.includes('cash') || methodStr.includes('split') || tx.cashReceived > 0 || tx.changeDue > 0) && (
                                     <>
                                       <div>
                                         <span className="text-amber-800">Cash Received:</span>{' '}
@@ -21724,7 +21968,19 @@ export function CloudApp(): JSX.Element {
         ...order,
         orderId: crypto.randomUUID(),
         items: order.items.map((item) => ({ ...item, orderItemId: crypto.randomUUID() })),
-        changeDue: order.paymentMethod === 'cash' ? Number((order.cashReceived - order.totalAmount).toFixed(2)) : 0,
+        changeDue: (() => {
+          if (order.paymentMethod === 'cash') {
+            return Math.max(0, Number((order.cashReceived - order.totalAmount).toFixed(2)));
+          }
+          if (order.paymentMethod === 'split' && Array.isArray(order.payments)) {
+            const cashP = order.payments.filter((p) => p.method === 'cash');
+            if (cashP.length > 0) {
+              const needed = cashP.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+              const tendered = cashP.reduce((sum, p) => sum + Number(p.cashReceived || p.amount || 0), 0);
+              return Math.max(0, Number((tendered - needed).toFixed(2)));
+            }
+          } return 0;
+        })(),
       };
       return api.createOrder(cloudOrder);
     },
