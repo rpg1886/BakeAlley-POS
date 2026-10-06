@@ -760,14 +760,25 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   try {
     await client.query('BEGIN');
     
-    // Calculate changeDue server-side
-    const changeDue = validatedPayload.paymentMethod === 'cash' 
-      ? Math.max(0, Number(validatedPayload.cashReceived || 0) - Number(validatedPayload.totalAmount))
-      : 0;
+    // Calculate changeDue and total cash received server-side
+    let changeDue = 0;
+    let totalCashReceived = Number(validatedPayload.cashReceived || 0);
+
+    if (validatedPayload.paymentMethod === 'split' && Array.isArray(validatedPayload.payments)) {
+     const cashPayment = validatedPayload.payments.find(p => p.method === 'cash');
+       if (cashPayment) {
+         const cashTendered = Number(cashPayment.cashReceived || cashPayment.amount || 0);
+         const cashNeeded = Number(cashPayment.amount || 0);
+         changeDue = Math.max(0, cashTendered - cashNeeded);
+        totalCashReceived = cashTendered;
+      }
+    } else if (validatedPayload.paymentMethod === 'cash') { 
+      changeDue = Math.max(0, totalCashReceived - Number(validatedPayload.totalAmount));
+    }
     
     const inserted = await client.query(
-      `INSERT INTO orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, created_at) 
-       VALUES ($1,$2,$3,$4,$5,'completed',$6,$7,$8,$9,$10,$11,$12) 
+      `INSERT INTO orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, payments, created_at) 
+       VALUES ($1,$2,$3,$4,$5,'completed',$6,$7,$8,$9,$10,$11,$12,$13) 
        ON CONFLICT (order_id) DO NOTHING RETURNING order_id`, 
       [
         validatedPayload.orderId, 
@@ -779,8 +790,9 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         validatedPayload.taxAmount ?? 0, 
         validatedPayload.totalAmount, 
         validatedPayload.paymentMethod, 
-        validatedPayload.cashReceived ?? 0, 
+        totalcashReceived, 
         changeDue,
+        validatedPayload.payments ? JSON.stringify(validatedPayload.payments) : null,
         validatedPayload.createdAt ?? new Date().toISOString()
       ]
     );
@@ -791,7 +803,7 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       return response.json({ orderId: validatedPayload.orderId, duplicate: true }); 
     }
     
-    if (validatedPayload.paymentMethod === 'cash' && Number(validatedPayload.cashReceived || 0) < Number(validatedPayload.totalAmount)) {
+    if (validatedPayload.paymentMethod === 'cash' && totalCashReceived < Number(validatedPayload.totalAmount)) {
       throw Object.assign(new Error('Cash received must be at least the order total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' });
     }
 
@@ -1077,8 +1089,10 @@ async function ensureShiftColumns() {
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS cash_discrepancy NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'OPEN';
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS notes TEXT;
+      ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS payments JSONB;
     `);
-    logger.info('Employee shift audit columns ensured');
+    logger.info('Employee shift audit and split payment schema ensured');
   } catch (error) {
     logger.error('Failed to ensure employee shift audit columns', { error: error.message });
   }

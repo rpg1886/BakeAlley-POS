@@ -42,6 +42,12 @@ export interface CheckoutOrderItem {
   totalPrice: number;
 }
 
+export interface CheckoutOrderPayment {
+  method: 'cash' | 'card' | 'gcash' | 'account';
+  amount: number;
+  cashReceived?: number;
+}
+
 export interface CheckoutOrderPayload {
   customerId: string | null;
   pricingTierId: string;
@@ -50,8 +56,9 @@ export interface CheckoutOrderPayload {
   subtotal: number;
   taxAmount: number;
   totalAmount: number;
-  paymentMethod: 'cash' | 'card' | 'gcash' | 'account';
+  paymentMethod: 'cash' | 'card' | 'gcash' | 'account' | 'split';
   cashReceived: number;
+  payments: CheckoutOrderPayment[];
 }
 
 export interface CheckoutDataSource {
@@ -165,7 +172,8 @@ export function CheckoutScreen({
 
   const [scaleReading, setScaleReading] = useState<CheckoutScaleReading | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<CheckoutOrderPayload['paymentMethod']>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<CheckoutOrderPayment['method']>('cash');
+  const [splitPayments, setSplitPayments] = useState < CheckoutOrderPayment[] > ([]);
   const [cashReceived, setCashReceived] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -227,8 +235,10 @@ export function CheckoutScreen({
   const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
   const taxAmount = subtotal * taxRate;
   const totalAmount = subtotal + taxAmount;
+  const totalPaidSoFar = splitPayments.reduce((sum, p) => sum + p.amount, 0);
+  const remainingBalance = Math.max(0, Number((totalAmount - totalPaidSoFar).toFixed(2)));
   const cashTendered = Number(cashReceived);
-  const changeDue = paymentMethod === 'cash' && Number.isFinite(cashTendered) ? cashTendered - totalAmount : 0;
+  const changeDue = paymentMethod === 'cash' && Number.isFinite(cashTendered) ? cashTendered - remainingBalance : 0;
   const activeWeightLine = scaleEnabled ? cart.find((line) => line.product.soldByWeight) : undefined;
 
   const orderItems = cart.map((line) => ({
@@ -358,10 +368,39 @@ export function CheckoutScreen({
       setMessage('Add a valid quantity before taking payment.');
       return;
     }
+    const currentTendered = Number(cashReceived) || remainingBalance;
+
     if (paymentMethod === 'cash' && (!Number.isFinite(cashTendered) || cashTendered < totalAmount)) {
-      setMessage('Cash received must be at least the total amount.');
+      setMessage('Cash received must be at least the remaining balance.');
       return;
     }
+
+    const allocatedAmount = paymentMethod === 'cash'
+      ? Math.min(cashTendered, remainingBalance)
+      : Math.min(currentTendered, remainingBalance);
+
+    const currentPayment: CheckoutOrderPayment = {
+      method: paymentMethod,
+      amount: allocatedAmount,
+      cashReceived: paymentMethod === 'cash' ? cashTendered : undefined,
+    };
+
+    // If entered amount is LESS than remaining balance, record partial payment and keep prompting
+    if (allocatedAmount < remainingBalance) {
+      const updatedSplit = [...splitPayments, currentPayment];
+      const newPaid = updatedSplit.reduce((sum, p) => sum + p.amount, 0);
+      const newRemaining = Math.max(0, Number((totalAmount - newPaid).toFixed(2)));
+      setSplitPayments(updatedSplit);
+      setCashReceived(newRemaining.toFixed(2));
+      setMessage(`Partial payment of ${money.format(allocatedAmount)} (${paymentMethod.toUpperCase()}) recorded. ${money.format(newRemaining)} remaining.`);
+      return;
+    }
+    // Payment complete (full or final split installment)
+    const finalPayments = [...splitPayments, currentPayment];
+    const finalMethod = finalPayments.length > 1 ? 'split' : finalPayments[0].method;
+    const totalCashTendered = finalPayments
+      .filter((p) => p.method === 'cash')
+      .reduce((sum, p) => sum + (p.cashReceived ?? p.amount), 0);
 
     setBusy(true);
     setMessage(null);
@@ -375,8 +414,9 @@ export function CheckoutScreen({
         subtotal: Number(subtotal.toFixed(2)),
         taxAmount: Number(taxAmount.toFixed(2)),
         totalAmount: Number(totalAmount.toFixed(2)),
-        paymentMethod,
-        cashReceived: paymentMethod === 'cash' ? Number(cashTendered.toFixed(2)) : 0,
+        paymentMethod: finalMethod,
+        cashReceived: Number(totalCashTendered.toFixed(2)),
+        payments: finalPayments,
       });
       if (employeeToken && recordEmployeeSale) {
         await recordEmployeeSale(employeeToken, result.orderId);
@@ -388,12 +428,10 @@ export function CheckoutScreen({
       localStorage.removeItem('bakealley_pos_customer_id');
 
       setCashReceived('');
+      setSplitPayments([]);
       setPaymentOpen(false);
-      setMessage(`Order ${result.orderId} saved and queued for sync.`);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unable to save the order.';
-      setPaymentError(errorMessage);
-      setMessage(errorMessage);
+      setPaymentError(error instanceof Error ? error.message : 'Order submission failed.');
     } finally {
       setBusy(false);
     }
@@ -680,16 +718,48 @@ export function CheckoutScreen({
       {/* Payment Modal with Logged Options (Cash, Card, GCash, Account) */}
       {paymentOpen && (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-amber-950/50 p-4" role="presentation">
-          <section aria-labelledby="payment-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" role="dialog">
+          <section aria-labelledby="payment-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wide text-amber-600">Payment</p>
                 <h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(totalAmount)}</h2>
+                {splitPayments.length > 0 && (
+                  <p className="text-xs font-semibold text-amber-800 mt-1">
+                    Remaining Needed: <span>{money.format(remainingBalance)}</span>
+                  </p>
+                )}
               </div>
-              <button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => setPaymentOpen(false)}>×</button>
+              <button aria-label="Close payment dialog" className="text-2xl text-amber-600 hover:text-amber-900" type="button" onClick={() => { setPaymentOpen(false); setSplitPayments([]); }}>×</button>
             </div>
 
-            <fieldset className="mt-6">
+            {/* Recorded Partial Payments List */}
+            {splitPayments.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3 space-y-1.5 text-xs text-amber-950">
+                <p className="font-bold text-amber-900">Recorded Partial Payments:</p>
+                {splitPayments.map((p, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-white/90 rounded-lg px-2.5 py-1.5 border border-amber-200/60 font-medium">
+                    <span className="uppercase tracking-wider font-bold text-amber-800">{p.method}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="tabular-nums font-bold">{money.format(p.amount)}</span>
+                      <button
+                        type="button"
+                        className="text-red-600 hover:text-red-800 font-bold text-sm px-1"
+                        title="Remove partial payment"
+                        onClick={() => {
+                          const updated = splitPayments.filter((_, i) => i !== idx);
+                          setSplitPayments(updated);
+                          const newRemaining = totalAmount - updated.reduce((s, x) => s + x.amount, 0);
+                          setCashReceived(newRemaining.toFixed(2));
+                        }}
+                      >x</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+
+            <fieldset className="mt-2">
               <legend className="text-sm font-semibold mb-3">Select Payment Method</legend>
               <div className="grid grid-cols-2 gap-2.5">
                 {paymentOptions.map((opt) => (
@@ -698,7 +768,7 @@ export function CheckoutScreen({
                     type="button"
                     onClick={() => {
                       setPaymentMethod(opt.id);
-                      if (opt.id !== 'cash') setCashReceived('');
+                      setCashReceived(remainingBalance > 0 ? remainingBalance.toFixed(2) : '');
                     }}
                     className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${
                       paymentMethod === opt.id
@@ -714,13 +784,13 @@ export function CheckoutScreen({
             </fieldset>
 
             {paymentMethod === 'cash' && (
-              <div className="mt-5">
+              <div className="mt-3">
                 <label className="text-sm font-semibold">
                   Cash received
                   <input
                     autoFocus
                     className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
-                    min={totalAmount.toFixed(2)}
+                    min={remainingBalance.toFixed(2)}
                     step="0.01"
                     type="number"
                     value={cashReceived}
@@ -734,22 +804,31 @@ export function CheckoutScreen({
               </div>
             )}
 
-            {paymentMethod === 'gcash' && (
-              <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3.5 text-xs text-sky-900">
-                <p className="font-bold flex items-center gap-1.5">📱 GCash Payment Scan</p>
-                <p className="mt-1">Confirm client transaction reference on the store GCash QR terminal before clicking payment.</p>
+            {paymentMethod !== 'cash' && (
+              <div className="mt-3">
+                <label className="text-sm font-semibold"> Amount to Pay ({paymentMethod.toUpperCase()})
+                  <input
+                    className="mt-2 w-full rounded-lg border border-amber-200/80 px-3 py-3 text-lg outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
+                    max={remainingBalance.toFixed(2)}
+                    step="0.01"
+                    type="number"
+                    value={cashReceived}
+                    onChange={(event) => setCashReceived(event.target.value)}
+                  />
+                </label>
               </div>
             )}
 
-            {paymentError && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{paymentError}</p>}
+            {paymentError && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{paymentError}</p>}
             
-            <div className="mt-6 flex gap-2.5">
+            <div className="mt-4 flex gap-2.5">
               <button
                 className="flex-1 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-900 hover:bg-amber-100 shadow-sm transition"
                 type="button"
                 onClick={() => {
                   setPaymentError(null);
                   setPaymentOpen(false);
+                  setSplitPayments([]);
                 }}
               >
                 ↩️ Back to Cart
@@ -760,7 +839,7 @@ export function CheckoutScreen({
                 type="button"
                 onClick={() => void submitOrder()}
               >
-                {busy ? 'Saving...' : 'Confirm payment'}
+                {busy ? 'Saving...' : Number(cashReceived) < remainingBalance ? `Add Partial Payment (${money.format(Number(cashReceived) || 0)})` : 'Confirm & Complete payment'}
               </button>
             </div>
           </section>
