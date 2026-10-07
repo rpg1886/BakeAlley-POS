@@ -1223,6 +1223,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     localStorage.setItem('bakealley_pos_sales_date', selectedDate);
@@ -1284,6 +1285,20 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
     return Array.from(map.values());
   }, [report]);
+  
+  const filteredTransactions = useMemo(() => {
+    if (!searchTerm.trim()) return groupedTransactions;
+    const term = searchTerm.toLowerCase().trim();
+
+    return groupedTransactions.filter((tx) => {
+      const matchOrderId = tx.orderId.toLowerCase().includes(term);
+      const matchCustomer = tx.customerName.toLowerCase().includes(term);
+      const matchCashier = tx.cashierName.toLowerCase().includes(term);
+      const matchItems = tx.items.some(
+        (item) => item.itemName.toLowerCase().includes(term) || item.sku.toLowerCase().includes(term) );
+      return matchOrderId || matchCustomer || matchCashier || matchItems;
+    });
+  }, [groupedTransactions, searchTerm]);
 
   const toggleExpand = (orderId: string) => {
     setExpandedOrderId((prev) => (prev === orderId ? null : orderId));
@@ -1292,10 +1307,33 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   return (
     <Panel title="Sales report">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end gap-3 flex-1">
         <label className="text-sm font-semibold">
           Transaction date
           <input className="mt-1 block rounded-lg border border-amber-200/80 px-3 py-2 font-normal" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
         </label>
+          <label className="text-sm font-semibold flex-1 min-w-[240px]">
+            Search Transactions
+            <div className="relative mt-1">
+              <input
+                type="text"
+                className="w-full rounded-lg border border-amber-200/80 pl-9 pr-8 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40 font-normal"
+                placeholder="Search Order ID, Customer, Cashier, SKU, or Item..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)} />
+              <span className="absolute left-3 top-2 text-amber-700 text-sm">🔍</span>
+              {searchTerm && (
+                <button
+                type="button"
+                className="absolute right-2.5 top-2 text-amber-700 hover:text-amber-950 font-bold text-xs"
+                onClick={() => setSearchTerm('')}
+                >
+                  ✖
+                </button>
+              )}
+            </div>
+          </label>
+          </div>
         <ActionButton disabled={loading} onClick={() => void refresh()}>{loading ? 'Refreshing...' : 'Refresh'}</ActionButton>
       </div>
       {error && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
@@ -1330,7 +1368,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 </tr>
               </thead>
               <tbody>
-                {groupedTransactions.map((tx) => {
+                {filteredTransactions.map((tx) => {
                   const methodStr = String(tx.paymentMethod || 'cash').toLowerCase();
                   let paymentBadge = <span className="font-semibold text-amber-950">{"\u{1F4B5}"} Cash</span>;
                   if (methodStr === 'split' && Array.isArray(tx.payments) && tx.payments.length > 0) {
@@ -1465,7 +1503,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                 })}
               </tbody>
             </table>
-            {groupedTransactions.length === 0 && <p className="py-8 text-center text-amber-700">No completed sales for this date.</p>}
+            {filteredTransactions.length === 0 && ( <p> {groupedTransactions.length === 0 ? 'No completed sales for this date.' : 'No transactions match your search filter.'} </p> )}
           </div>
         </>
       )}
