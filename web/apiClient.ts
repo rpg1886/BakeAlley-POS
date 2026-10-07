@@ -21,9 +21,10 @@ export interface CloudOrderPayload {
   subtotal: number;
   taxAmount: number;
   totalAmount: number;
-  paymentMethod: 'cash' | 'card' | 'gcash' | 'account';
+  paymentMethod: 'cash' | 'card' | 'gcash' | 'account' | 'split' | 'exchange';
   cashReceived: number;
   changeDue: number;
+  returnedItems?: Array <{ orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean }>;
 }
 
 export interface CloudCustomer {

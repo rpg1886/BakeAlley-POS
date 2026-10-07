@@ -805,6 +805,18 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       return response.json({ orderId: validatedPayload.orderId, duplicate: true }); 
     }
 
+    // Process restocking for returned exchange items
+    if (Array.isArray(validatedPayload.returnedItems)) {
+      for (const retItem of validatedPayload.returnedItems) {
+        if (retItem.restock && retItem.lotId) {
+          await client.query(
+            'UPDATE inventory_lots SET quantity_on_hand = quantity_on_hand + $1, updated_at = now() WHERE lot_id = $2 AND variant_id = $3',
+            [retItem.quantity, retItem.lotId, retItem.variantId]
+          );
+        }
+      }
+    }
+
     for (const item of validatedPayload.items) {
       let price = await client.query(
         'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.tier_id=$2 AND pp.min_quantity <= $3 ORDER BY pp.min_quantity DESC LIMIT 1', 

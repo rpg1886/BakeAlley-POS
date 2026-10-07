@@ -1489,10 +1489,27 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                                     </>
                                   )}
                                 </div>
-                                <div className="text-right mt-2 sm:mt-0">
+                                <div className="text-right mt-2 sm:mt-0 space-y-2">
                                   <span className="text-amber-800 font-semibold block">Total Transaction Amount</span>
                                   <strong className="text-base text-amber-950 tabular-nums">{money.format(tx.totalAmount)}</strong>
                                 </div>
+                                <button
+                                  type="button"
+                                  className="rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-900 shadow-sm"
+                                  onClick={() => { const returnedItems = tx.items.map((item: any) => ({
+                                    orderItemId: item.orderItemId || crypto.randomUUID(),
+                                    variantId: item.variantId,
+                                    lotId: item.lotId || null,
+                                    quantity: item.quantity,
+                                    restock: true,
+                                  }));
+                                    handleStartExchange({
+                                      originalOrderId: tx.orderId,
+                                      returnCredit: tx.totalAmount,
+                                      returnedItems,
+                                    });
+                                  }} > 🔄 Return / Exchange Items
+                                </button>
                               </div>
                             </div>
                           </td>
@@ -2905,7 +2922,17 @@ export function CloudApp(): JSX.Element {
               </button>
             </div>
           )}
-          <CheckoutScreen dataSource={dataSource} scaleEnabled={false} customers={customers as CheckoutCustomer[]} retailTierId={retailTierId} taxRate={0} isClockedIn={isAdmin || Boolean(ownShift)} />
+          <CheckoutScreen
+            dataSource={dataSource}
+            scaleEnabled={false}
+            customers={customers as CheckoutCustomer[]}
+            retailTierId={retailTierId}
+            taxRate={0}
+            isClockedIn={isAdmin || Boolean(ownShift)}
+            exchangeCredit={exchangeState?.returnCredit || 0}
+            exchangeOriginalOrderId={exchangeState?.originalOrderId}
+            onClearExchange={() => setExchangeState(null)}
+          />
         </div>
       )}
 

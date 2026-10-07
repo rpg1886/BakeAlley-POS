@@ -56,9 +56,10 @@ export interface CheckoutOrderPayload {
   subtotal: number;
   taxAmount: number;
   totalAmount: number;
-  paymentMethod: 'cash' | 'card' | 'gcash' | 'account' | 'split';
+  paymentMethod: 'cash' | 'card' | 'gcash' | 'account' | 'split' | 'exchange';
   cashReceived: number;
   payments: CheckoutOrderPayment[];
+  returnedItems?: Array <{ orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean }>;
 }
 
 export interface CheckoutDataSource {
@@ -81,6 +82,9 @@ export interface CheckoutScreenProps {
   employeeToken?: string;
   recordEmployeeSale?: (token: string, orderId: string) => Promise<void>;
     isClockedIn?: boolean;
+  exchangeCredit?: number;
+  exchangeOriginalOrderId?: string | null;
+  onClearExchange?: () => void;
 }
 
 interface CartLine {
@@ -147,7 +151,10 @@ export function CheckoutScreen({
   taxRate = 0,
   employeeToken,
   recordEmployeeSale,
-    isClockedIn = true,
+  isClockedIn = true,
+  exchangeCredit = 0,
+  exchangeOriginalOrderId = null,
+  onClearExchange,
 }: CheckoutScreenProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CheckoutProduct[]>([]);
@@ -236,7 +243,9 @@ export function CheckoutScreen({
   const taxAmount = subtotal * taxRate;
   const totalAmount = subtotal + taxAmount;
   const totalPaidSoFar = splitPayments.reduce((sum, p) => sum + p.amount, 0);
-  const remainingBalance = Math.max(0, Number((totalAmount - totalPaidSoFar).toFixed(2)));
+  const effectiveExchangeCredit = exchangeCredit || 0;
+  const remainingBalance = Math.max(0, Number((totalAmount - totalPaidSoFar - effectiveExchangeCredit).toFixed(2)));
+  // const remainingBalance = Math.max(0, Number((totalAmount - totalPaidSoFar).toFixed(2)));
   const cashTendered = Number(cashReceived);
   const changeDue = paymentMethod === 'cash' && Number.isFinite(cashTendered) ? cashTendered - remainingBalance : 0;
   const activeWeightLine = scaleEnabled ? cart.find((line) => line.product.soldByWeight) : undefined;
@@ -681,6 +690,28 @@ export function CheckoutScreen({
             </div>
           )}
         </section>
+
+        {effectiveExchangeCredit > 0 && (
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-100/90 p-3 text-xs text-amber-950 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🔄 </span>
+            </div>
+            <strong>Active Item Exchange Mode:</strong>
+            <span className="ml-1 tabular-nums font-bold text-emerald-800">{money.format(effectiveExchangeCredit)}</span> Return Credit Applied
+          </div>
+          </div>
+      {onClearExchange && (
+        <button
+          type="button"
+          className="rounded-md bg-amber-200 px-2 py-1 font-bold text-amber-900 hover:bg-amber-300"
+          onClick={onClearExchange}
+        >
+          Cancel Exchange x
+        </button>
+      )}
+      </div>
+    )}
+
 
         {/* Current Transaction Table & Totals */}
         <section className="grid gap-6 lg:grid-cols-[1fr_22rem]">

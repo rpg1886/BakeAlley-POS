@@ -76,12 +76,19 @@ const orderPayloadSchema = z.object({
   subtotal: z.number().nonnegative('Subtotal must be non-negative'),
   taxAmount: z.number().nonnegative('Tax amount must be non-negative').optional(),
   totalAmount: z.number().nonnegative('Total amount must be non-negative'),
-  paymentMethod: z.enum(['cash', 'card', 'gcash', 'account', 'split']),
+  paymentMethod: z.enum(['cash', 'card', 'gcash', 'account', 'split', 'exchange']),
   cashReceived: z.number().nonnegative('Cash received must be non-negative').optional(),
   payments: z.array(z.object({
-    method: z.enum(['cash', 'card', 'gcash', 'account']),
+    method: z.enum(['cash', 'card', 'gcash', 'account', 'exchange']),
     amount: z.number().nonnegative(),
     cashReceived: z.number().nonnegative().optional(),
+  })).optional(),
+  returnedItems: z.array(z.object({
+    orderItemId: z.string().uuid(),
+    variantId: z.string().uuid(),
+    lotId: z.string().uuid().optional().nullable(),
+    quantity: z.number().positive(),
+    restock: z.boolean(),
   })).optional(),
   createdAt: z.string().optional(),
 });
