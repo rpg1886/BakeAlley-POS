@@ -1217,7 +1217,7 @@ interface GroupedTransaction {
 /* ==========================================================================
    SALES VIEW (GROUPED TRANSACTIONS WITH EXPANDABLE RECEIPT & CASH DETAILS)
    ========================================================================== */
-function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
+function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExchange?: (data: any) => void }): JSX.Element {
   const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_sales_date') || today());
   const [report, setReport] = useState<CloudSalesReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1503,7 +1503,7 @@ function SalesView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                                     quantity: item.quantity,
                                     restock: true,
                                   }));
-                                    handleStartExchange({
+                                    onStartExchange?.({
                                       originalOrderId: tx.orderId,
                                       returnCredit: tx.totalAmount,
                                       returnedItems,
@@ -2716,6 +2716,22 @@ export function CloudApp(): JSX.Element {
   const [shifts, setShifts] = useState<CloudShift[]>([]);
   const [shiftsLoaded, setShiftsLoaded] = useState(false);
 
+  const [exchangeState, setExchangeState] = useState < {
+    originalOrderId: string;
+    returnCredit: number;
+    returnedItems: Array <{ orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean
+}>; } | null > (null);
+
+  const handleStartExchange = (data: {
+    originalOrderId: string;
+    returnCredit: number;
+    returnedItems: Array <{ orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean
+}>; }) => {
+    setExchangeState(data);
+    setTab('checkout');
+    localStorage.setItem('bakealley_cloud_tab', 'checkout');
+  };
+
   // Top-level shift modal state
   const [clockInModalOpen, setClockInModalOpen] = useState(false);
   const [openingFloat, setOpeningFloat] = useState('1500.00');
@@ -2938,7 +2954,7 @@ export function CloudApp(): JSX.Element {
 
       {tab !== 'checkout' && (
         <main className="mx-auto max-w-7xl p-4 sm:p-6">
-          {tab === 'sales' && <SalesView isAdmin={isAdmin} />}
+          {tab === 'sales' && <SalesView isAdmin={isAdmin} onStartExchange={handleStartExchange} />}
           {tab === 'financials' && isAdmin && <FinancialsView isAdmin={isAdmin} />}
           {tab === 'bi' && isAdmin && <BiView />}
           {tab === 'inventory' && <InventoryView isAdmin={isAdmin} />}
