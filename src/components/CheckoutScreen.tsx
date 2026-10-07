@@ -712,7 +712,6 @@ export function CheckoutScreen({
       </div>
     )}
 
-
         {/* Current Transaction Table & Totals */}
         <section className="grid gap-6 lg:grid-cols-[1fr_22rem]">
           <div className="overflow-hidden rounded-xl border border-amber-200/80 bg-white shadow-sm">
