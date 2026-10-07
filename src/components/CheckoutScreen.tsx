@@ -695,7 +695,7 @@ export function CheckoutScreen({
           <div className="mb-4 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-100/90 p-3 text-xs text-amber-950 shadow-sm">
             <div className="flex items-center gap-2">
               <span className="text-base">🔄 </span>
-            </div>
+            <div>
             <strong>Active Item Exchange Mode:</strong>
             <span className="ml-1 tabular-nums font-bold text-emerald-800">{money.format(effectiveExchangeCredit)}</span> Return Credit Applied
           </div>
