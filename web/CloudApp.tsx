@@ -1231,6 +1231,20 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
   
   const [exchangeModalTx, setExchangeModalTxState] = useState<GroupedTransaction | null>(null);
   const [exchangeSelections, setExchangeSelections] = useState<Record<string, { returnQty: number; restock: boolean }>>({});
+  const openExchangeModal = (tx: GroupedTransaction) => {
+    setExchangeModalTxState(tx);
+    const initial: Record<string, { returnQty: number; restock: boolean }> = {};
+    tx.items.forEach((item, idx) => {
+      const key = item.orderItemId || `${tx.orderId}-${idx}`;
+      initial[key] = { returnQty: 0, restock: true };
+    });
+    setExchangeSelections(initial);
+  };
+
+  const closeExchangeModal = () => {
+    setExchangeModalTxState(null);
+    setExchangeSelections({});
+  };
 
   const selectedReturnCredit = useMemo(() => {
     if (!exchangeModalTx) return 0;
@@ -1444,16 +1458,6 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
 
                   const isExpanded = expandedOrderId === tx.orderId;
 
-                  function setExchangeModalTx(tx: GroupedTransaction) {
-                    setExchangeModalTxState(tx);
-                    const initial: Record<string, { returnQty: number; restock: boolean }> = {};
-                    tx.items.forEach((item, idx) => {
-                      const key = item.orderItemId || `${tx.orderId}-${idx}`;
-                      initial[key] = { returnQty: 0, restock: true };
-                    });
-                    setExchangeSelections(initial);
-                  }
-
                   return (
                     <Fragment key={tx.orderId}>
                       <tr 
@@ -1557,7 +1561,7 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
                                 <button
                                   type="button"
                                   className="rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-900 shadow-sm"
-                                  onClick={() => setExchangeModalTx(tx)} > 🔄 Return / Exchange Items
+                                  onClick={() => openExchangeModal(tx)} > 🔄 Return / Exchange Items
                                 </button>
                               </div>
                             </div>
@@ -1583,7 +1587,7 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
              <button 
                 type="button"
                 className="rounded-lg p-1 text-amber-700 hover:bg-amber-100 font-bold"
-                onClick={() => setExchangeModalTx(null)} > ✕ </button> 
+                onClick={closeExchangeModal} > ✕ </button> 
                 </div>
             <p className="text-xs text-amber-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200/80">
             💡 Specify the quantity of items being returned by the customer. Uncheck "Restock" if the item is damaged or non-reusable. </p>
@@ -1648,7 +1652,7 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
               <div className="flex gap-2">
                 <button
                   type="button"
-                  className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100" onClick={() => setExchangeModalTx(null)}
+                  className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100" onClick={closeExchangeModal}
                 >
                   Cancel
                 </button>
