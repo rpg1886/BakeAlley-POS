@@ -2872,7 +2872,31 @@ export function CloudApp(): JSX.Element {
     returnCredit: number;
     returnedItems: Array <{ orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean
 }>; }) => {
-    setExchangeState(data);
+    setExchangeState((prev) => {
+      if (prev && prev.originalOrderId === data.originalOrderId) {
+        const mergedItems = [...prev.returnedItems];
+        for (const newItem of data.returnedItems) {
+          const existingIndex = mergedItems.findIndex(
+            (item) => item.orderItemId === newItem.orderItemId );
+          if (existingIndex >= 0) {
+            mergedItems[existingIndex] = {
+              ...mergedItems[existingIndex],
+              quantity: mergedItems[existingIndex].quantity + newItem.quantity,
+              restock: newItem.restock,
+            };
+          } else {
+            mergedItems.push(newItem);
+          }
+        }
+        return {
+          originalOrderId: data.originalOrderId,
+          returnCredit: Number((prev.returnCredit + data.returnCredit).toFixed(2)),
+          returnedItems: mergedItems,
+        };
+      }
+      return data;
+    });
+
     setTab('checkout');
     localStorage.setItem('bakealley_cloud_tab', 'checkout');
   };
