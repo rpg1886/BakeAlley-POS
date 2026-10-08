@@ -1207,9 +1207,13 @@ interface GroupedTransaction {
   changeDue: number;
   payments?: Array<{ method: string; amount: number }>;
   items: Array<{
+    orderItemId?: string;
+    variantId?: string;
+    lotId?: string;
     itemName: string;
     sku: string;
     quantity: number;
+    unitPrice?: number;
     amount: number;
   }>;
 }
@@ -1224,6 +1228,49 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
   const [error, setError] = useState<string | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const [exchangeModalTx, setExchangeModalTxState] = useState<GroupedTransaction | null>(null);
+  const [exchangeSelections, setExchangeSelections] = useState<Record<string, { returnQty: number; restock: boolean }>>({});
+
+  const selectedReturnCredit = useMemo(() => {
+    if (!exchangeModalTx) return 0;
+    return exchangeModalTx.items.reduce((sum, item, idx) => {
+      const key = item.orderItemId || `${exchangeModalTx.orderId}-${idx}`;
+      const sel = exchangeSelections[key];
+      const qty = sel ? sel.returnQty : 0;
+      const unitP = item.unitPrice || (item.quantity > 0 ? item.amount / item.quantity : 0);
+      return sum + qty * unitP;
+    }, 0);
+  }, [exchangeModalTx, exchangeSelections]);
+
+  const confirmExchange = () => {
+    if (!exchangeModalTx || selectedReturnCredit <= 0) return;
+    const returnedItems: Array <{
+      orderItemId: string; 
+      variantId: string;
+      lotId?: string; 
+      quantity: number; 
+      restock: boolean
+    }> = []; exchangeModalTx.items.forEach((item, idx) => {
+      const key = item.orderItemId || `${exchangeModalTx.orderId}-${idx}`;
+      const sel = exchangeSelections[key];
+      if (sel && sel.returnQty > 0) {
+        returnedItems.push({
+          orderItemId: item.orderItemId || crypto.randomUUID(),
+          variantId: item.variantId || '',
+          lotId: item.lotId || undefined,
+          quantity: sel.returnQty,
+          restock: sel.restock,
+        });
+      }
+    }); 
+
+  onStartExchange?.({
+    originalOrderId: exchangeModalTx.orderId,
+    returnCredit: Number(selectedReturnCredit.toFixed(2)),
+    returnedItems,
+  }); setExchangeModalTxState(null);
+};
 
   useEffect(() => {
     localStorage.setItem('bakealley_pos_sales_date', selectedDate);
@@ -1272,10 +1319,14 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
 
       const tx = map.get(item.orderId)!;
       tx.items.push({
+        orderItemId: (item as any).orderItemId,
+        variantId: (item as any).variantId,
+        lotId: (item as any).lotId,
         itemName: item.itemName,
         sku: item.sku,
         quantity: Number(item.quantity) || 0,
         amount: Number(item.amount) || 0,
+        unitPrice: Number((item as any).unitPrice) || (Number(item.amount) / (Number(item.quantity) || 1)) || 0, 
       });
 
       if (!tx.totalAmount) {
@@ -1393,6 +1444,16 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
 
                   const isExpanded = expandedOrderId === tx.orderId;
 
+                  function setExchangeModalTx(tx: GroupedTransaction) {
+                    setExchangeModalTxState(tx);
+                    const initial: Record<string, { returnQty: number; restock: boolean }> = {};
+                    tx.items.forEach((item, idx) => {
+                      const key = item.orderItemId || `${tx.orderId}-${idx}`;
+                      initial[key] = { returnQty: 0, restock: true };
+                    });
+                    setExchangeSelections(initial);
+                  }
+
                   return (
                     <Fragment key={tx.orderId}>
                       <tr 
@@ -1496,19 +1557,7 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
                                 <button
                                   type="button"
                                   className="rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-900 shadow-sm"
-                                  onClick={() => { const returnedItems = tx.items.map((item: any) => ({
-                                    orderItemId: item.orderItemId || crypto.randomUUID(),
-                                    variantId: item.variantId,
-                                    lotId: item.lotId || null,
-                                    quantity: item.quantity,
-                                    restock: true,
-                                  }));
-                                    onStartExchange?.({
-                                      originalOrderId: tx.orderId,
-                                      returnCredit: tx.totalAmount,
-                                      returnedItems,
-                                    });
-                                  }} > 🔄 Return / Exchange Items
+                                  onClick={() => setExchangeModalTx(tx)} > 🔄 Return / Exchange Items
                                 </button>
                               </div>
                             </div>
@@ -1523,6 +1572,98 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
             {filteredTransactions.length === 0 && ( <p> {groupedTransactions.length === 0 ? 'No completed sales for this date.' : 'No transactions match your search filter.'} </p> )}
           </div>
         </>
+      )}
+      {exchangeModalTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-amber-100 pb-3"> <div>
+              <h3 className="font-bakery text-lg font-bold text-amber-950"> 🔄 Select Items to Return / Exchange </h3>
+              <p className="text-xs text-amber-800"> Customer: <strong>{exchangeModalTx.customerName}</strong> · Order ID: <span>{exchangeModalTx.orderId.slice(0, 8)}...</span> </p>
+            </div>
+             <button 
+                type="button"
+                className="rounded-lg p-1 text-amber-700 hover:bg-amber-100 font-bold"
+                onClick={() => setExchangeModalTx(null)} > ✕ </button> 
+                </div>
+            <p className="text-xs text-amber-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200/80">
+            💡 Specify the quantity of items being returned by the customer. Uncheck "Restock" if the item is damaged or non-reusable. </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-amber-50/80 text-amber-800 uppercase font-semibold border-b border-amber-200">
+                  <tr>
+                    <th className="p-2.5">Item Name & SKU</th>
+                  <th className="p-2.5 text-center">Purchased</th>
+                    <th className="p-2.5 text-right">Unit Price</th>
+                    <th className="p-2.5 text-center">Return Qty</th>
+                    <th className="p-2.5 text-center">Restock?</th>
+                    <th className="p-2.5 text-right">Return Credit</th>
+                  </tr>
+                  </thead>
+                <tbody className="divide-y divide-amber-100"> {exchangeModalTx.items.map((item, idx) => { const key = item.orderItemId || `${exchangeModalTx.orderId}-${idx}`;
+                  const sel = exchangeSelections[key] || { returnQty: 0, restock: true };
+                  const unitP = item.unitPrice || (item.quantity > 0 ? item.amount / item.quantity : 0);
+                  const lineCredit = sel.returnQty * unitP;
+                  return (
+                    <tr key={key} className="hover:bg-amber-50/30">
+                      <td className="p-2.5">
+                        <div className="font-bold text-amber-950">{item.itemName}</div>
+                        <div className="font-mono text-[10px] text-amber-700">{item.sku}</div>
+                      </td>
+                      <td className="p-2.5 text-center font-medium tabular-nums">{item.quantity}</td>
+                      <td className="p-2.5 text-right tabular-nums">{money.format(unitP)}</td>
+                      <td className="p-2.5 text-center">
+                        <input 
+                          type="number"
+                          min="0"
+                          max={item.quantity}
+                          step="1"
+                          className="w-16 rounded border border-amber-300 p-1 text-center font-bold text-amber-950 outline-none focus:ring-2 focus:ring-amber-500"
+                          value={sel.returnQty}
+                          onChange={(e) => { const val = Math.min(item.quantity, Math.max(0, Number(e.target.value) || 0));
+                            setExchangeSelections((prev) => ({ ...prev, [key]: { ...prev[key], returnQty: val }, })); }} />
+                      </td>
+                      <td className="p-2.5 text-center">
+                        <label className="inline-flex items-center gap-1 cursor-pointer">
+                          <input 
+                            type="checkbox"
+                            className="rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                            checked={sel.restock}
+                            disabled={sel.returnQty === 0}
+                            onChange={(e) => { setExchangeSelections((prev) => ({ ...prev, [key]: { ...prev[key], restock: e.target.checked }, })); }} />
+                          <span className="text-[10px] text-amber-800">{sel.restock ? 'Yes' : 'No'}</span>
+                        </label>
+                      </td>
+                      <td className="p-2.5 text-right font-bold tabular-nums text-emerald-800">{money.format(lineCredit)}</td>
+                      </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            </div>
+            <div className="flex items-center justify-between border-t border-amber-100 pt-3">
+              <div className="text-xs">
+                <span className="text-amber-800 block">Calculated Return Credit</span>
+                <strong className="text-lg text-emerald-800 tabular-nums">{money.format(selectedReturnCredit)}</strong>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100" onClick={() => setExchangeModalTx(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedReturnCredit <= 0}
+                  className="rounded-lg bg-amber-800 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-amber-900 disabled:opacity-50"
+                  onClick={confirmExchange}
+                >
+                  Confirm & Proceed to Exchange ({money.format(selectedReturnCredit)})
+                </button>
+              </div>
+            </div>
+            </div>
+            </div>
       )}
     </Panel>
   );
