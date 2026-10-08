@@ -148,3 +148,4 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_lots_expiration ON inventory_lots(expiration_date NULLS LAST);
 CREATE INDEX IF NOT EXISTS idx_product_prices_variant_tier ON product_prices(variant_id, tier_id, min_quantity);
 CREATE INDEX IF NOT EXISTS idx_employees_active ON app_users(active) WHERE active = TRUE;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS returned_quantity NUMERIC(12, 4) DEFAULT 0;

@@ -1213,6 +1213,7 @@ interface GroupedTransaction {
     itemName: string;
     sku: string;
     quantity: number;
+    returnedQuantity?: number;
     unitPrice?: number;
     amount: number;
   }>;
@@ -1339,6 +1340,7 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
         itemName: item.itemName,
         sku: item.sku,
         quantity: Number(item.quantity) || 0,
+        returnedQuantity: Number((item as any).returnedQuantity) || 0,
         amount: Number(item.amount) || 0,
         unitPrice: Number((item as any).unitPrice) || (Number(item.amount) / (Number(item.quantity) || 1)) || 0, 
       });
@@ -1522,7 +1524,11 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
                                 <tbody>
                                   {tx.items.map((subItem, idx) => (
                                     <tr key={idx} className="border-b last:border-0 border-amber-100/60">
-                                      <td className="py-2 px-2 font-semibold text-amber-950">{subItem.itemName}</td>
+                                      <td className="py-2 px-2 font-semibold text-amber-950">{subItem.itemName}
+                                        {(subItem.returnedQuantity || 0) > 0 && (
+                                          <span className="ml-2 inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-800">
+                                            🔄 Returned (Qty: {subItem.returnedQuantity})</span> )}
+                                      </td>
                                       <td className="py-2 px-2 font-mono text-amber-700">{subItem.sku}</td>
                                       <td className="py-2 px-2 text-right tabular-nums">{subItem.quantity.toFixed(4)}</td>
                                       <td className="py-2 px-2 text-right font-semibold text-amber-950 tabular-nums">{money.format(subItem.amount)}</td>
@@ -1604,6 +1610,7 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
                   </tr>
                   </thead>
                 <tbody className="divide-y divide-amber-100"> {exchangeModalTx.items.map((item, idx) => { const key = item.orderItemId || `${exchangeModalTx.orderId}-${idx}`;
+                  const unreturnedQty = Math.max(0, item.quantity - (item.returnedQuantity || 0));
                   const sel = exchangeSelections[key] || { returnQty: 0, restock: true };
                   const unitP = item.unitPrice || (item.quantity > 0 ? item.amount / item.quantity : 0);
                   const lineCredit = sel.returnQty * unitP;
@@ -1612,18 +1619,26 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
                       <td className="p-2.5">
                         <div className="font-bold text-amber-950">{item.itemName}</div>
                         <div className="font-mono text-[10px] text-amber-700">{item.sku}</div>
+                        {unreturnedQty === 0 && (
+                          <span className="text-[10px] font-bold text-red-700 block">Fully Returned</span>
+                        )}
                       </td>
-                      <td className="p-2.5 text-center font-medium tabular-nums">{item.quantity}</td>
+                      <td className="p-2.5 text-center font-medium tabular-nums">{item.quantity}
+                        {(item.returnedQuantity || 0) > 0 && (
+                          <div className="text-[10px] text-red-700 font-semibold">({item.returnedQuantity} ret)</div>
+                        )}
+                      </td>
                       <td className="p-2.5 text-right tabular-nums">{money.format(unitP)}</td>
                       <td className="p-2.5 text-center">
                         <input 
                           type="number"
                           min="0"
-                          max={item.quantity}
+                          max={unreturnedQty}
+                          disabled={unreturnedQty === 0}
                           step="1"
-                          className="w-16 rounded border border-amber-300 p-1 text-center font-bold text-amber-950 outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-16 rounded border border-amber-300 p-1 text-center font-bold text-amber-950 outline-none focus:ring-2 focus:ring-amber-500 disabled:bg-slate-100 disabled:text-slate-400"
                           value={sel.returnQty}
-                          onChange={(e) => { const val = Math.min(item.quantity, Math.max(0, Number(e.target.value) || 0));
+                          onChange={(e) => { const val = Math.min(unreturnedQty, Math.max(0, Number(e.target.value) || 0));
                             setExchangeSelections((prev) => ({ ...prev, [key]: { ...prev[key], returnQty: val }, })); }} />
                       </td>
                       <td className="p-2.5 text-center">
