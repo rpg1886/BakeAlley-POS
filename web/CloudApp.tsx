@@ -3089,6 +3089,7 @@ export function CloudApp(): JSX.Element {
             exchangeCredit={exchangeState?.returnCredit || 0}
             exchangeOriginalOrderId={exchangeState?.originalOrderId}
             onClearExchange={() => setExchangeState(null)}
+            returnedItems={exchangeState?.returnedItems}
           />
         </div>
       )}

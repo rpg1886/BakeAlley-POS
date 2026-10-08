@@ -43,7 +43,7 @@ export interface CheckoutOrderItem {
 }
 
 export interface CheckoutOrderPayment {
-  method: 'cash' | 'card' | 'gcash' | 'account';
+  method: 'cash' | 'card' | 'gcash' | 'account' | 'exchange';
   amount: number;
   cashReceived?: number;
 }
@@ -85,6 +85,8 @@ export interface CheckoutScreenProps {
   exchangeCredit?: number;
   exchangeOriginalOrderId?: string | null;
   onClearExchange?: () => void;
+  returnedItems?: Array <{
+    orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean }>;
 }
 
 interface CartLine {
@@ -155,6 +157,7 @@ export function CheckoutScreen({
   exchangeCredit = 0,
   exchangeOriginalOrderId = null,
   onClearExchange,
+  returnedItems = [],
 }: CheckoutScreenProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CheckoutProduct[]>([]);
@@ -244,7 +247,8 @@ export function CheckoutScreen({
   const totalAmount = subtotal + taxAmount;
   const totalPaidSoFar = splitPayments.reduce((sum, p) => sum + p.amount, 0);
   const effectiveExchangeCredit = exchangeCredit || 0;
-  const remainingBalance = Math.max(0, Number((totalAmount - totalPaidSoFar - effectiveExchangeCredit).toFixed(2)));
+  const appliedExchangeCredit = Math.min(totalAmount, effectiveExchangeCredit);
+  const remainingBalance = Math.max(0, Number((totalAmount - appliedExchangeCredit - totalPaidSoFar).toFixed(2)));
   // const remainingBalance = Math.max(0, Number((totalAmount - totalPaidSoFar).toFixed(2)));
   const cashTendered = Number(cashReceived);
   const changeDue = paymentMethod === 'cash' && Number.isFinite(cashTendered) ? cashTendered - remainingBalance : 0;
@@ -379,14 +383,13 @@ export function CheckoutScreen({
     }
     const currentTendered = Number(cashReceived) || remainingBalance;
 
-    if (paymentMethod === 'cash' && (!Number.isFinite(cashTendered) || cashTendered <= 0)) {
+    if (remainingBalance > 0 &&paymentMethod === 'cash' && (!Number.isFinite(cashTendered) || cashTendered <= 0)) {
       setMessage('Enter a valid cash amount.');
       return;
     }
 
-    const allocatedAmount = paymentMethod === 'cash'
-      ? Math.min(cashTendered, remainingBalance)
-      : Math.min(currentTendered, remainingBalance);
+    const allocatedAmount = remainingBalance > 0
+      ? (paymentMethod === 'cash' ? Math.min(cashTendered, remainingBalance) : Math.min(currentTendered, remainingBalance)) : 0;
 
     const currentPayment: CheckoutOrderPayment = {
       method: paymentMethod,
@@ -395,17 +398,24 @@ export function CheckoutScreen({
     };
 
     // If entered amount is LESS than remaining balance, record partial payment and keep prompting
-    if (allocatedAmount < remainingBalance) {
+    if (remainingBalance > 0 && allocatedAmount < remainingBalance) {
       const updatedSplit = [...splitPayments, currentPayment];
       const newPaid = updatedSplit.reduce((sum, p) => sum + p.amount, 0);
-      const newRemaining = Math.max(0, Number((totalAmount - newPaid).toFixed(2)));
+      const newRemaining = Math.max(0, Number((totalAmount - appliedExchangeCredit - newPaid).toFixed(2)));
       setSplitPayments(updatedSplit);
       setCashReceived(newRemaining.toFixed(2));
       setMessage(`Partial payment of ${money.format(allocatedAmount)} (${paymentMethod.toUpperCase()}) recorded. ${money.format(newRemaining)} remaining.`);
       return;
     }
     // Payment complete (full or final split installment)
-    const finalPayments = [...splitPayments, currentPayment];
+    const rawPayments: CheckoutOrderPayment[] = [];
+    if (appliedExchangeCredit > 0) { rawPayments.push({ method: 'exchange', amount: appliedExchangeCredit }); }
+    rawPayments.push(...splitPayments);
+    if (allocatedAmount > 0) {
+      rawPayments.push(currentPayment);
+    }
+
+    const finalPayments = rawPayments.length > 0 ? rawPayments : [currentPayment];
     const finalMethod = finalPayments.length > 1 ? 'split' : finalPayments[0].method;
     const totalCashTendered = finalPayments
       .filter((p) => p.method === 'cash')
@@ -426,6 +436,7 @@ export function CheckoutScreen({
         paymentMethod: finalMethod,
         cashReceived: Number(totalCashTendered.toFixed(2)),
         payments: finalPayments,
+        returnedItems: returnedItems.length > 0? returnedItems : undefined,
       });
       if (employeeToken && recordEmployeeSale) {
         await recordEmployeeSale(employeeToken, result.orderId);
@@ -448,10 +459,14 @@ export function CheckoutScreen({
       setSplitPayments([]);
       setPaymentOpen(false);
 
+      if (onClearExchange) {
+        onClearExchange();
+      }
+
       if (finalChangeDue > 0) {
-        setMessage(`Order completed successfully! Change due to customer: ${money.format(finalChangeDue)}`);
+        setMessage(`Exchange completed successfully! Change due to customer: ${money.format(finalChangeDue)}`);
       } else {
-        setMessage('Order completed successfully!');
+        setMessage('Exchange completed successfully!');
       }
 
     } catch (error) {
@@ -766,8 +781,18 @@ export function CheckoutScreen({
           <section aria-labelledby="payment-title" aria-modal="true" className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl space-y-4" role="dialog">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-wide text-amber-600">Payment</p>
+                <p className="text-sm font-semibold uppercase tracking-wide text-amber-600">{appliedExchangeCredit > 0 ? 'Exchange Payment & Settlement' : 'Payment'}</p>
                 <h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(totalAmount)}</h2>
+                {appliedExchangeCredit > 0 && (
+                  <div className="mt-1 space-y-0.5 text-xs font-semibold">
+                    <p className="text-emerald-700">
+                      🔄 Applied Return Credit: <span className="tabular-nums">{money.format(appliedExchangeCredit)}</span>
+                    </p>
+                    <p className="text-amber-900"> 
+                      Net Balance Due: <span className="tabular-nums">{money.format(remainingBalance)}</span>
+                    </p>
+                  </div>
+                )}
                 {splitPayments.length > 0 && (
                   <p className="text-xs font-semibold text-amber-800 mt-1">
                     Remaining Needed: <span>{money.format(remainingBalance)}</span>
@@ -793,7 +818,7 @@ export function CheckoutScreen({
                         onClick={() => {
                           const updated = splitPayments.filter((_, i) => i !== idx);
                           setSplitPayments(updated);
-                          const newRemaining = totalAmount - updated.reduce((s, x) => s + x.amount, 0);
+                          const newRemaining = totalAmount - appliedExchangeCredit - updated.reduce((s, x) => s + x.amount, 0);
                           setCashReceived(newRemaining.toFixed(2));
                         }}
                       >x</button>
@@ -803,9 +828,18 @@ export function CheckoutScreen({
               </div>
             )}
 
+            {remainingBalance === 0 && appliedExchangeCredit > 0 ? (
+              <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-center text-xs font-medium text-emerald-950">
+                <p className="text-base font-bold text-emerald-800">🔄 100% Covered by Return Credit</p>
+                <p className="mt-1 text-emerald-900">
+                  The applied return credit of <strong>{money.format(appliedExchangeCredit)}</strong>
+                  fully covers this purchase. No additional cash or card payment is required.
+                </p>
+              </div>
+            ) : (
 
             <fieldset className="mt-2">
-              <legend className="text-sm font-semibold mb-3">Select Payment Method</legend>
+              <legend className="text-sm font-semibold mb-3">Select Additional Payment Method</legend>
               <div className="grid grid-cols-2 gap-2.5">
                 {paymentOptions.map((opt) => (
                   <button
@@ -827,6 +861,7 @@ export function CheckoutScreen({
                 ))}
               </div>
             </fieldset>
+            )}
 
             {paymentMethod === 'cash' && (
               <div className="mt-3">
@@ -880,11 +915,15 @@ export function CheckoutScreen({
               </button>
               <button
                 className="flex-1 rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white hover:bg-amber-700 disabled:opacity-50 shadow-sm transition"
-                disabled={busy || !Number.isFinite(Number(cashReceived)) || Number(cashReceived) <= 0}
+                disabled={busy || (remainingBalance > 0 && (!Number.isFinite(Number(cashReceived)) || Number(cashReceived) <= 0))}
                 type="button"
                 onClick={() => void submitOrder()}
               >
-                {busy ? 'Saving...' : Number(cashReceived) < remainingBalance ? `Add Partial Payment (${money.format(Number(cashReceived) || 0)})` : changeDue > 0 ? `Confirm & Complete payment (Change Due: ${money.format(changeDue)})` : 'Confirm & Complete payment'}
+                {busy ? 'Saving...' : remainingBalance === 0 && appliedExchangeCredit > 0
+                  ? `Confirm & Complete Exchange (${ money.format(appliedExchangeCredit) })`
+                : Number(cashReceived) < remainingBalance ? `Add Partial Payment 
+                (${money.format(Number(cashReceived) || 0)})` : changeDue > 0 ? 
+                `Confirm & Complete payment (Change Due: ${money.format(changeDue)})` : 'Confirm & Complete payment'}
               </button>
             </div>
           </section>
