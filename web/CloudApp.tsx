@@ -95,6 +95,7 @@ function clearSessionStorage(): void {
   localStorage.removeItem('bakealley_pos_customer_id');
   localStorage.removeItem('bakealley_pos_crm_form');
   localStorage.removeItem('bakealley_pos_emp_form');
+  localStorage.removeItem('bakealley_pos_exchange_state');
   sessionStorage.removeItem('bakealley_cloud_token');
   sessionStorage.removeItem('bakealley_cloud_user');
   sessionStorage.removeItem('bakealley_cloud_last_active');
@@ -2880,7 +2881,23 @@ export function CloudApp(): JSX.Element {
     originalOrderId: string;
     returnCredit: number;
     returnedItems: Array <{ orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean
-}>; } | null > (null);
+}>; } | null > (() => {
+  const saved = localStorage.getItem('bakealley_pos_exchange_state');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return null;
+    }
+  } return null;
+});
+  useEffect(() => {
+    if (exchangeState) {
+      localStorage.setItem('bakealley_pos_exchange_state', JSON.stringify(exchangeState));
+    } else {
+      localStorage.removeItem('bakealley_pos_exchange_state');
+    }
+  }, [exchangeState]);
 
   const handleStartExchange = (data: {
     originalOrderId: string;
