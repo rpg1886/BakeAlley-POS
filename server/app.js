@@ -805,7 +805,7 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       return response.json({ orderId: validatedPayload.orderId, duplicate: true }); 
     }
 
-    // Record returned quantities on original order items
+    // Record returned quantities on original order items and restock inventory
     if (Array.isArray(validatedPayload.returnedItems)) {
       for (const retItem of validatedPayload.returnedItems) {
         if (retItem.orderItemId) {
@@ -815,18 +815,6 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         if (retItem.restock && retItem.lotId) {
           await client.query(
             'UPDATE inventory_lots SET quantity_on_hand = quantity_on_hand + $1, updated_at = now() WHERE lot_id = $2 AND variant_id = $3', [retItem.quantity, retItem.lotId, retItem.variantId]);
-        }
-      }
-    }
-
-    // Process restocking for returned exchange items
-    if (Array.isArray(validatedPayload.returnedItems)) {
-      for (const retItem of validatedPayload.returnedItems) {
-        if (retItem.restock && retItem.lotId) {
-          await client.query(
-            'UPDATE inventory_lots SET quantity_on_hand = quantity_on_hand + $1, updated_at = now() WHERE lot_id = $2 AND variant_id = $3',
-            [retItem.quantity, retItem.lotId, retItem.variantId]
-          );
         }
       }
     }
