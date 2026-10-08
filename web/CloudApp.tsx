@@ -1233,6 +1233,104 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
   
   const [exchangeModalTx, setExchangeModalTxState] = useState<GroupedTransaction | null>(null);
   const [exchangeSelections, setExchangeSelections] = useState<Record<string, { returnQty: number; restock: boolean }>>({});
+  const printReceipt = (tx: GroupedTransaction): void => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    const itemRowsHtml = tx.items.map((item) => {
+      const retText = item.returnedQuantity ? ' (Ret: ' + item.returnedQuantity + ')' : '';
+      const unitP = item.unitPrice || (item.quantity > 0 ? item.amount / item.quantity : 0);
+      return `
+      <tr>
+      <td colspan="4" class="item-name"&gt;${item.itemName}</td>
+      </tr>
+      <tr>
+      <td class="sub-info"&gt;(${item.sku})${retText}</td>
+      <td class="text-right"&gt;${item.quantity}</td>
+      <td class="text-right"&gt;PHP ${unitP.toFixed(2)}</td>
+      <td class="text-right"&gt;PHP ${item.amount.toFixed(2)}</td>
+      </tr>
+      `;
+    }).join('');
+
+    const receiptHtml = `
+    <!DOCTYPE html>
+    <html>
+        <head>
+          <title>Receipt - ${tx.orderId.slice(0, 8)}</title>
+          <style>
+            @page { margin: 0; size: auto; }
+            body {
+              font-family: 'Courier New', Courier, monospace;
+              width: 280px;
+              margin: 0 auto;
+              padding: 12px;
+              color: #000;
+              font-size: 11px;
+              line-height: 1.3;
+            }
+              .text-center { text-align: center; } 
+              .text-right { text-align: right; } 
+              .bold { font-weight: bold; } 
+              .divider { border-top: 1px dashed #000; margin: 8px 0; } 
+              .double-divider { border-top: 2px solid #000; margin: 8px 0; } 
+              table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 11px; } 
+              th, td { padding: 3px 0; vertical-align: top; } 
+              .item-name { font-weight: bold; word-break: break-word; } 
+              .sub-info { font-size: 10px; color: #333; } @media print { button { display: none; } 
+              body { width: 100%; padding: 0; } 
+              }
+              </style>
+              </head>
+              <body>
+              <div class="text-center">
+              <div style="font-size: 16px; font-weight: bold;">BAKE ALLEY</div>
+              <div style="font-size: 10px;"&gt;Baking Supply Co. &amp; Wholesale</div>
+              <div class="divider"></div>
+              <div class="bold">OFFICIAL RECEIPT</div>
+              <div Order: ${tx.orderId}</div>
+              <div Date: ${new Date(tx.soldAt).toLocaleString()}</div>
+              <div Customer: ${tx.customerName}</div>
+              <div Cashier: ${tx.cashierName}</div>
+              </div>
+              <div class="divider"></div>
+              <table>
+              <thead>
+              <tr style="border-bottom: 1px solid #000;">
+              <th style="text-align: left;">ITEM</th>
+              <th style="text-align: right;">QTY</th>
+              <th style="text-align: right;">PRICE</th>
+              <th style="text-align: right;">TOTAL</th>
+              </tr>
+              </thead>
+              <tbody>
+              ${itemRowsHtml}
+              </tbody>
+              <!-- Removed redundant item rows as they are now included in itemRowsHtml -->
+              </table>
+              <div class="divider"></div>
+              <div style="display: flex; justify-content: space-between;" class="bold">
+              <span> TOTAL AMOUNT:</span>
+              <span>PHP ${tx.totalAmount.toFixed(2)}</span>
+              </div>
+              <div class="divider"></div>
+              <div> 
+              <div>Payment Method: <span style="text-transform: capitalize; font-weight: bold;">${tx.paymentMethod}</span></div>
+              ${tx.cashReceived > 0 ? `<div> Cash Received: PHP \${tx.cashReceived.toFixed(2)}</div>` : ''}
+              <div class="double-divider"></div>
+              <div class="text-center" style="margin-top: 10px; font-size: 10px;">
+              Thank you for baking with Bake Alley!<br/>
+              Please keep this receipt for returns/exchanges.
+              </div>
+              <script>
+              window.onload = function() { window.print(); };
+              </script>
+              </body>
+              </html>
+              `;
+    printWindow.document.write(receiptHtml); 
+    printWindow.document.close();
+  };
+
   const openExchangeModal = (tx: GroupedTransaction) => {
     setExchangeModalTxState(tx);
     const initial: Record<string, { returnQty: number; restock: boolean }> = {};
@@ -1562,14 +1660,23 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
                                   )}
                                 </div>
                                 <div className="text-right mt-2 sm:mt-0 space-y-2">
+                                  <div>
                                   <span className="text-amber-800 font-semibold block">Total Transaction Amount</span>
                                   <strong className="text-base text-amber-950 tabular-nums">{money.format(tx.totalAmount)}</strong>
                                 </div>
+                                  <div className="flex flex-wrap gap-2 justify-end">
                                 <button
                                   type="button"
-                                  className="rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-900 shadow-sm"
-                                  onClick={() => openExchangeModal(tx)} > 🔄 Return / Exchange Items
+                                      className="rounded-lg bg-amber-100 border border-amber-300 px-3 py-1.5 text-xs font-bold text-amber-900 transition hover:bg-amber-200 shadow-sm"
+                                      onClick={() => printReceipt(tx)} > 🖨️ Print Receipt
                                 </button>
+                                <button 
+                                type="button"
+                                      className="rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-900 shadow-sm"
+                                      onClick={() => openExchangeModal(tx)} > 🔄 Return / Exchange Items
+                                </button>
+                                </div>
+                                </div>
                               </div>
                             </div>
                           </td>
