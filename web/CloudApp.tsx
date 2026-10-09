@@ -21,7 +21,7 @@ const CARD_FEE_RATE = 0.025; // 2.5% estimated card fee
 const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 
-type Tab = 'checkout' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees';
+type Tab = 'checkout' | 'reservations' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees';
 type VelocityTimeframe = 'monthly' | 'yearly';
 
 async function clockInWithFloat(openingFloat: number, notes?: string): Promise<CloudShift> {
@@ -2971,6 +2971,24 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
 /* ==========================================================================
    MAIN APPLICATION SHELL WITH ROLE-BASED SESSION TIMEOUT & TAB SECURITY
    ========================================================================== */
+function ReservationsView({ session, onNavigateCheckout }: { session: CloudSession; onNavigateCheckout: () => void }): JSX.Element {
+  return (
+    <Panel title="Reservations">
+      <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-6 text-center">
+        <p className="text-sm text-amber-800">Welcome, {session.user.displayName}.</p>
+        <p className="mt-2 text-sm text-amber-700">Manage customer reservations from the checkout screen.</p>
+        <button
+          className="mt-4 rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
+          type="button"
+          onClick={onNavigateCheckout}
+        >
+          Go to Checkout
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
 export function CloudApp(): JSX.Element {
   const [session, setSession] = useState<CloudSession | null>(() => {
     const token = localStorage.getItem('bakealley_cloud_token');
@@ -3191,6 +3209,7 @@ export function CloudApp(): JSX.Element {
 
   const tabs: Array<[Tab, string]> = [
     ['checkout', 'Checkout'],
+    ['reservations', 'Reservations'],
     ['sales', 'Sales'],
     ...(isAdmin ? ([['financials', 'Financials'], ['bi', 'Business Intelligence']] as Array<[Tab, string]>) : []),
     ['inventory', 'Inventory'],
@@ -3278,6 +3297,7 @@ export function CloudApp(): JSX.Element {
 
       {tab !== 'checkout' && (
         <main className="mx-auto max-w-7xl p-4 sm:p-6">
+          {tab === 'reservations' && <ReservationsView session={session} onNavigateCheckout={() => setTab('checkout')} />}
           {tab === 'sales' && <SalesView isAdmin={isAdmin} onStartExchange={handleStartExchange} />}
           {tab === 'financials' && isAdmin && <FinancialsView isAdmin={isAdmin} />}
           {tab === 'bi' && isAdmin && <BiView />}

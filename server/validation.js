@@ -90,6 +90,11 @@ const orderPayloadSchema = z.object({
     quantity: z.number().positive(),
     restock: z.boolean(),
   })).optional(),
+  orderMode: z.enum(['immediate', 'reservation']).optional().default('immediate'),
+  fulfillmentDate: z.string().optional().nullable(),
+  depositAmount: z.number().nonnegative().optional().default(0),
+  balanceDue: z.number().nonnegative().optional().default(0),
+  reservationStatus: z.enum(['unpaid', 'partially\_paid', 'fully\_prepaid', 'completed', 'expired', 'cancelled']).optional().nullable(),
   createdAt: z.string().optional(),
 });
 

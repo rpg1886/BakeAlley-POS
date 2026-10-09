@@ -781,9 +781,24 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       changeDue = Math.max(0, totalCashReceived - Number(validatedPayload.totalAmount));
     }
     
+    const orderMode = validatedPayload.orderMode || 'immediate';
+    const depositAmount = Number(validatedPayload.depositAmount || 0);
+    const totalAmount = Number(validatedPayload.totalAmount || 0);
+    const balanceDue = validatedPayload.balanceDue !== undefined ? Number(validatedPayload.balanceDue) : Math.max(0, totalAmount - depositAmount);
+
+    let reservationStatus = validatedPayload.reservationStatus;
+    if (orderMode === 'reservation' && !reservationStatus) {
+      if (balanceDue <= 0) reservationStatus = 'fully_prepaid';
+      else if (depositAmount > 0) reservationStatus = 'partially_paid';
+      else reservationStatus = 'unpaid';
+    }
+
+    const orderStatus = orderMode === 'reservation' ? 'open' : 'completed';
+
     const inserted = await client.query(
-      `INSERT INTO orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, total_amount, payment_method, cash_received, change_due, payments, created_at) 
-       VALUES ($1,$2,$3,$4,$5,'completed',$6,$7,$8,$9,$10,$11,$12,$13) 
+      `INSERT INTO orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, 
+      total_amount, payment_method, cash_received, change_due, payments, created_at,order_mode, fulfillment_date, deposit_amount, balance_due, reservation_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (order_id) DO NOTHING RETURNING order_id`, 
       [
         validatedPayload.orderId, 
@@ -791,14 +806,20 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         validatedPayload.pricingTierId, 
         request.user.userId, 
         validatedPayload.orderType === 'commercial' ? 'commercial' : 'retail', 
+        orderStatus,
         validatedPayload.subtotal, 
         validatedPayload.taxAmount ?? 0, 
-        validatedPayload.totalAmount, 
+        totalAmount, 
         validatedPayload.paymentMethod, 
         totalCashReceived, 
         changeDue,
         validatedPayload.payments ? JSON.stringify(validatedPayload.payments) : null,
-        validatedPayload.createdAt ?? new Date().toISOString()
+        validatedPayload.createdAt ?? new Date().toISOString(),
+        orderMode,
+        validatedPayload.fulfillmentDate ?? null,
+        depositAmount,
+        balanceDue,
+        reservationStatus ?? null
       ]
     );
     
@@ -813,7 +834,8 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       for (const retItem of validatedPayload.returnedItems) {
         if (retItem.orderItemId) {
           await client.query(
-            'UPDATE order_items SET returned_quantity = COALESCE(returned_quantity, 0) + $1 WHERE order_item_id = $2', [retItem.quantity, retItem.orderItemId]);
+            'UPDATE order_items SET returned_quantity = COALESCE(returned_quantity, 0) + $1 WHERE order_item_id = $2', 
+            [retItem.quantity, retItem.orderItemId]);
         } 
         if (retItem.restock && retItem.lotId) {
           await client.query(
@@ -882,6 +904,159 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
     next(error); 
   } finally { 
     client.release(); 
+  }
+});
+
+// GET Active Reservations
+app.get('/api/v1/reservations', auth.requireSession, async(_request, response, next) => {
+  try {
+    const result = await pool.query(
+    `SELECT o.order_id AS "orderId", o.created_at AS "createdSoldAt", o.fulfillment_date AS "fulfillmentDate", 
+    COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName",
+    COALESCE(u.display_name, u.username, 'System') AS "cashierName",
+    o.total_amount AS "totalAmount",
+    COALESCE(o.deposit_amount, 0) AS "depositAmount",
+    COALESCE(o.balance_due, 0) AS "balanceDue",
+    COALESCE(o.reservation_status, 'unpaid') AS "reservationStatus",
+    o.payment_method AS "paymentMethod",
+    oi.order_item_id AS "orderItemId",
+    v.variant_id AS "variantId",
+    v.sku,
+    v.variant_name AS "itemName",
+    oi.quantity, oi.unit_price AS "unitPrice", oi.total_price AS "amount"
+    FROM orders o
+    JOIN order_items oi ON oi.order_id = o.order_id
+    JOIN product_variants v ON v.variant_id = oi.variant_id
+    LEFT JOIN customers c ON c.customer_id = o.customer_id
+    LEFT JOIN app_users u ON u.user_id = o.employee_id
+    WHERE o.order_mode = 'reservation' AND o.status = 'open'
+    ORDER BY o.fulfillment_date ASC, o.created_at ASC` );
+
+    const map = new Map();
+    for (const row of result.rows) {
+      if (!map.has(row.orderId)) {
+        map.set(row.orderId, {
+          orderId: row.orderId,
+          createdSoldAt: row.createdSoldAt,
+          fulfillmentDate: row.fulfillmentDate ? new
+            Date(row.fulfillmentDate).toISOString().slice(0, 10) : '',
+          customerName: row.customerName,
+          cashierName: row.cashierName,
+          totalAmount: Number(row.totalAmount) || 0,
+          depositAmount: Number(row.depositAmount) || 0,
+          balanceDue: Number(row.balanceDue) || 0,
+          reservationStatus: row.reservationStatus,
+          paymentMethod: row.paymentMethod,
+          items: [],
+        });
+      }
+
+      const res = map.get(row.orderId);
+      res.items.push({
+        orderItemId: row.orderItemId,
+        variantId: row.variantId,
+        sku: row.sku,
+        itemName: row.itemName,
+        quantity: Number(row.quantity) || 0,
+        unitPrice: Number(row.unitPrice) || 0,
+        amount: Number(row.amount) || 0,
+      });
+    }
+
+    response.json(Array.from(map.values()));
+  } catch (error) {
+    logger.error('Reservations list failed', { error: error.message });
+    next(error);
+  }
+});
+
+// Fulfill Reservation
+app.post('/api/v1/orders/:orderId/fulfill', auth.requireSession, async(request, response, next) => {
+  const { orderId } = request.params;
+  const payload = request.body ?? {};
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const orderCheck = await client.query(
+      "SELECT * FROM orders WHERE order_id = $1 AND status = 'open' AND order_mode = 'reservation' FOR UPDATE",
+      [orderId]);
+
+    if (!orderCheck.rowCount) {
+      throw Object.assign(new Error('Reservation not found or already fulfilled'), { statusCode: 404, code: 'RESERVATION_NOT_FOUND' });
+    }
+    const order = orderCheck.rows[0];
+    const items = await client.query(
+      'SELECT order_item_id, variant_id, quantity, unit_price FROM order_items WHERE order_id = $1',
+      [orderId]
+    );
+
+    for (const item of items.rows) {
+      const lots = await client.query(
+        'SELECT lot_id, quantity_on_hand FROM inventory_lots WHERE variant_id = $1 AND quantity_on_hand > 0 ORDER BY expiration_date NULLS LAST, lot_id FOR UPDATE',
+        [item.variant_id]
+      );
+      let remaining = Number(item.quantity);
+      for (const lot of lots.rows) {
+        if (remaining < 0) break;
+        const allocated = Math.min(remaining, Number(lot.quantity_on_hand));
+        const update = await client.query(
+          'UPDATE inventory_lots SET quantity_on_hand = quantity_on_hand - $1, updated_at = now() WHERE lot_id = $2 AND variant_id = $3 AND quantity_on_hand >= $1',
+          [allocated, lot.lot_id, item.variant_id]
+        );
+        if (update.rowCount !== 1) {
+          throw Object.assign(new Error('Inventory conflict during fulfillment'), { statusCode: 409, code: 'INVENTORY_CONFLICT' });
+        } remaining -= allocated;
+      }
+      if (remaining > 0) {
+        throw Object.assign(new Error(`Insufficient inventory to fulfill reservation for variant ${item.variant_id}`), { statusCode: 409, code: 'INSUFFICIENT_INVENTORY' });
+      }
+    }
+
+    const newCashReceived = Number(payload.cashReceived || 0) + Number(order.cash_received || 0);
+    let updatedPayments = [];
+    if (order.payments) {
+      try { updatedPayments = typeof order.payments === 'string' ? JSON.parse(order.payments) : order.payments; } catch { }
+    }
+    if (Array.isArray(payload.payments) && payload.payments.length > 0) {
+      updatedPayments.push(...payload.payments);
+    } else if (payload.paymentMethod) {
+      updatedPayments.push({ method: payload.paymentMethod, amount: Number(order.balance_due) || 0 });
+    }
+
+    await client.query(
+      `UPDATE orders SET status = 'completed', 
+      reservation_status = 'completed', 
+      balance_due = 0, 
+      cash_received = $1, 
+      payments = $2, 
+      updated_at = now() 
+      WHERE order_id = $3`, 
+      [newCashReceived, JSON.stringify(updatedPayments), orderId] );
+
+    await client.query('COMMIT'); logger.info('Reservation fulfilled successfully', { orderId }); response.json({ orderId, fulfilled: true });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined); 
+    logger.error('Reservation fulfillment failed', { error: error.message, orderId });
+    next(error);
+  } finally { client.release(); }
+});
+
+// Cancel Reservation
+app.post('/api/v1/orders/:orderId/cancel', auth.requireSession, async(request, response, next) => {
+  const { orderId } = request.params;
+  try {
+    const result = await pool.query(
+      "UPDATE orders SET status = 'cancelled',reservation_status = 'cancelled',updated_at = now() WHERE order_id = $1 AND status = 'open' RETURNING order_id", 
+      [orderId]);
+
+    if (!result.rowCount) {
+      return response.status(404).json({ error: 'RESERVATION_NOT_FOUND', message: 'Reservation not found or already completed/cancelled' });
+    }
+    
+    response.json({ orderId, cancelled: true });
+  } catch (error) {
+    logger.error('Reservation cancellation failed', { error: error.message, orderId });
+    next(error);
   }
 });
 

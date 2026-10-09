@@ -25,7 +25,35 @@ export interface CloudOrderPayload {
   cashReceived: number;
   changeDue: number;
   returnedItems?: Array <{ orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean }>;
+  orderMode?: 'immediate' | 'reservation';
+  fulfillmentDate?: string | null;
+  depositAmount?: number;
+  balanceDue?: number;
+  reservationStatus?: 'unpaid' | 'partially_paid' | 'fully_prepaid' | 'completed' | 'expired' | 'cancelled' | null;
 }
+
+export interface CloudReservation {
+  orderId: string;
+  createdSoldAt: string;
+  fulfillmentDate: string;
+  customerName: string;
+  cashierName: string;
+  totalAmount: number;
+  depositAmount: number;
+  balanceDue: number;
+  reservationStatus: 'unpaid' | 'partially_paid' | 'fully_prepaid' | 'completed' | 'expired' | 'cancelled';
+  paymentMethod: string;
+  items: Array <{
+    orderItemId: string;
+    variantId: string;
+    sku: string;
+    itemName: string;
+    quantity: number;
+    unitPrice: number;
+    amount: number;
+  }>;
+}
+
 
 export interface CloudCustomer {
   customerId: string;
@@ -148,6 +176,25 @@ export class CloudApiClient {
 
   public async createOrder(order: CloudOrderPayload): Promise<{ orderId: string }> {
     return this.request('/api/v1/orders', { method: 'POST', body: JSON.stringify(order) });
+  }
+
+  public async reservations(): Promise<CloudReservation[]> {
+    return this.request('/api/v1/reservations');
+  }
+
+  public async fulfillReservation(orderId: string, paymentData: {
+    paymentMethod?: string; cashReceived?: number; payments?: any[]
+  }): Promise<void> {
+    await this.request(`/api/v1/orders/${encodeURIComponent(orderId)}/fulfill`, {
+      method: 'POST',
+      body: JSON.stringify(paymentData)
+    });
+  }
+
+  public async cancelReservation(orderId: string): Promise<void> {
+    await this.request(`/api/v1/orders/${encodeURIComponent(orderId)}/cancel`, {
+      method: 'POST'
+    });
   }
 
   public async salesReport(date: string): Promise<CloudSalesReport> {

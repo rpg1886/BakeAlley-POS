@@ -60,6 +60,11 @@ export interface CheckoutOrderPayload {
   cashReceived: number;
   payments: CheckoutOrderPayment[];
   returnedItems?: Array <{ orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean }>;
+  orderMode?: 'immediate' | 'reservation';
+  fulfillmentDate?: string | null;
+  depositAmount?: number;
+  balanceDue?: number;
+  reservationStatus?: 'unpaid' | 'partially_paid' | 'fully_prepaid' | 'completed' | 'expired' | 'cancelled' | null;
 }
 
 export interface CheckoutDataSource {
