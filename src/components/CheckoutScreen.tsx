@@ -276,8 +276,8 @@ export function CheckoutScreen({
   
   const totalPaidSoFar = splitPayments.reduce((sum, p) => sum + p.amount, 0);
   const effectiveExchangeCredit = exchangeCredit || 0;
-  const appliedExchangeCredit = Math.min(totalAmount, effectiveExchangeCredit);
-  const remainingBalance = Math.max(0, Number((totalAmount - appliedExchangeCredit - totalPaidSoFar).toFixed(2)));
+  const appliedExchangeCredit = Math.min(targetPaymentTotal, effectiveExchangeCredit);
+  const remainingBalance = Math.max(0, Number((targetPaymentTotal - appliedExchangeCredit - totalPaidSoFar).toFixed(2)));
   // const remainingBalance = Math.max(0, Number((totalAmount - totalPaidSoFar).toFixed(2)));
   const cashTendered = Number(cashReceived);
   const changeDue = paymentMethod === 'cash' && Number.isFinite(cashTendered) ? cashTendered - remainingBalance : 0;
@@ -471,7 +471,7 @@ export function CheckoutScreen({
     if (remainingBalance > 0 && allocatedAmount < remainingBalance) {
       const updatedSplit = [...splitPayments, currentPayment];
       const newPaid = updatedSplit.reduce((sum, p) => sum + p.amount, 0);
-      const newRemaining = Math.max(0, Number((totalAmount - appliedExchangeCredit - newPaid).toFixed(2)));
+      const newRemaining = Math.max(0, Number((targetPaymentTotal - appliedExchangeCredit - newPaid).toFixed(2)));
       setSplitPayments(updatedSplit);
       setCashReceived(newRemaining.toFixed(2));
       setMessage(`Partial payment of ${money.format(allocatedAmount)} (${paymentMethod.toUpperCase()}) recorded. ${money.format(newRemaining)} remaining.`);
@@ -513,7 +513,7 @@ export function CheckoutScreen({
         balanceDue: calculatedBalanceDue,
         reservationStatus: orderMode === 'reservation'
           ? (calculatedBalanceDue <= 0? 'fully_prepaid' :
-            calculatedDeposit > 0? 'partially\_paid' : 'unpaid')  
+            calculatedDeposit > 0 ? 'partially_paid' : 'unpaid')  
           : null,
       });
       if (employeeToken && recordEmployeeSale) {
@@ -972,7 +972,7 @@ export function CheckoutScreen({
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wide text-amber-600">{appliedExchangeCredit > 0 ? 'Exchange Payment & Settlement' : 'Payment'}</p>
-                <h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(totalAmount)}</h2>
+                <h2 className="font-bakery mt-1 text-2xl font-bold tabular-nums" id="payment-title">{money.format(targetPaymentTotal)}</h2>
                 {appliedExchangeCredit > 0 && (
                   <div className="mt-1 space-y-0.5 text-xs font-semibold">
                     <p className="text-emerald-700">

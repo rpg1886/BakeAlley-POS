@@ -777,8 +777,13 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         totalCashReceived = totalCashTenderedInSplit;
       }
     } else if (validatedPayload.paymentMethod === 'cash') { 
-      if (totalCashReceived < Number(validatedPayload.totalAmount)) { throw Object.assign(new Error('Cash received must be at least the order total'), { statusCode: 400, code: 'INSUFFICIENT_CASH' }); }
-      changeDue = Math.max(0, totalCashReceived - Number(validatedPayload.totalAmount));
+      const requiredCashToday = orderMode === 'reservation' ? depositAmount : Number(validatedPayload.totalAmount || 0);
+      if (requiredCashToday > 0 && totalCashReceived < requiredCashToday) {
+        throw Object.assign(new Error('Cash received must be at least the deposit required'),
+          { statusCode: 400, code: 'INSUFFICIENT_CASH' }
+        );
+      }
+      changeDue = Math.max(0, totalCashReceived - requiredCashToday);
     }
     
     const orderMode = validatedPayload.orderMode || 'immediate';
@@ -844,6 +849,24 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       }
     }
 
+    if (orderMode === 'reservation') {
+      for (const item of validatedPayload.items) {
+        const lotRes = await client.query(
+          'SELECT lot_id FROM inventory_lots WHERE variant_id = $1 ORDER BY expiration_date NULLS LAST LIMIT 1',
+          [item.variantId]
+        );
+        const lotId = item.lotId || lotRes.rows[0]?.lot_id || null;
+        await client.query(
+          'INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+          [item.orderItemId || crypto.randomUUID(),
+            validatedPayload.orderId,
+            item.variantId,
+            lotId,
+            item.quantity,
+            item.unitPrice,
+            Number(item.unitPrice) * Number(item.quantity)]);
+      }
+    } else {
     for (const item of validatedPayload.items) {
       let price = await client.query(
         'SELECT pp.price_per_unit FROM product_prices pp WHERE pp.variant_id=$1 AND pp.tier_id=$2 AND pp.min_quantity <= $3 ORDER BY pp.min_quantity DESC LIMIT 1', 
@@ -894,6 +917,7 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         await client.query('INSERT INTO order_items (order_item_id, order_id, variant_id, lot_id, quantity, unit_price, total_price) VALUES ($1,$2,$3,$4,$5,$6,$7)', [allocationIndex === 0 ? item.orderItemId : crypto.randomUUID(), validatedPayload.orderId, item.variantId, allocation.lotId, allocation.quantity, item.unitPrice, Number(item.unitPrice) * allocation.quantity]); 
       }
     }
+  }
     
     await client.query('COMMIT');
     logger.info('Order created successfully', { orderId: validatedPayload.orderId, itemCount: validatedPayload.items.length });
