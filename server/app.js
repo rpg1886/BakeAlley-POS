@@ -1070,7 +1070,7 @@ app.post('/api/v1/orders/:orderId/cancel', auth.requireSession, async(request, r
   const { orderId } = request.params;
   try {
     const result = await pool.query(
-      "UPDATE orders SET status = 'cancelled',reservation_status = 'cancelled',updated_at = now() WHERE order_id = $1 AND status = 'open' RETURNING order_id", 
+      "UPDATE orders SET status = 'voided',reservation_status = 'cancelled',updated_at = now() WHERE order_id = $1 AND status = 'open' RETURNING order_id",
       [orderId]);
 
     if (!result.rowCount) {
