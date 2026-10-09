@@ -1241,16 +1241,27 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
       const unitP = item.unitPrice || (item.quantity > 0 ? item.amount / item.quantity : 0);
       return `
       <tr>
-      <td colspan="4" class="item-name"&gt;${item.itemName}</td>
+      <td colspan="4" class="item-name">${item.itemName}</td>
       </tr>
       <tr>
-      <td class="sub-info"&gt;(${item.sku})${retText}</td>
-      <td class="text-right"&gt;${item.quantity}</td>
-      <td class="text-right"&gt;PHP ${unitP.toFixed(2)}</td>
-      <td class="text-right"&gt;PHP ${item.amount.toFixed(2)}</td>
+      <td class="sub-info">SKU: ${item.sku}${retText}</td>
+      <td class="text-right">${item.quantity}</td>
+      <td class="text-right">PHP ${unitP.toFixed(2)}</td>
+      <td class="text-right">PHP ${item.amount.toFixed(2)}</td>
       </tr>
       `;
     }).join('');
+
+    let paymentsHtml = '';
+    if (Array.isArray(tx.payments) && tx.payments.length > 0) {
+      paymentsHtml = tx.payments.map((p) => `
+      <div style="display: flex; justify-content: space-between; font-size: 10px;">
+      <span style="text-transform: uppercase;">${p.method}:</span>
+      </div>
+      `).join('');
+    } else {
+      paymentsHtml = `<div> Payment Method: <span style="text-transform: capitalize; font-weight: bold;">${tx.paymentMethod}</span></div>`;
+    }
 
     const receiptHtml = `
     <!DOCTYPE html>
@@ -1284,13 +1295,15 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
               <body>
               <div class="text-center">
               <div style="font-size: 16px; font-weight: bold;">BAKE ALLEY</div>
-              <div style="font-size: 10px;"&gt;Baking Supply Co. &amp; Wholesale</div>
+              <div style="font-size: 10px;">Baking Supply Co. & Wholesale</div>
               <div class="divider"></div>
               <div class="bold">OFFICIAL RECEIPT</div>
-              <div Order: ${tx.orderId}</div>
-              <div Date: ${new Date(tx.soldAt).toLocaleString()}</div>
-              <div Customer: ${tx.customerName}</div>
-              <div Cashier: ${tx.cashierName}</div>
+              <div style="font-size: 10px; margin-top: 4px; text-align: left;">
+              <div><strong>Receipt / Order #:</strong> ${tx.orderId}</div>
+              <div><strong>Date:</strong> ${new Date(tx.soldAt).toLocaleString()}</div>
+              <div><strong>Customer:</strong> ${tx.customerName}</div>
+              <div><strong>Cashier:</strong> ${tx.cashierName}</div>
+              </div>
               </div>
               <div class="divider"></div>
               <table>
@@ -1305,7 +1318,6 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
               <tbody>
               ${itemRowsHtml}
               </tbody>
-              <!-- Removed redundant item rows as they are now included in itemRowsHtml -->
               </table>
               <div class="divider"></div>
               <div style="display: flex; justify-content: space-between;" class="bold">
@@ -1313,9 +1325,10 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
               <span>PHP ${tx.totalAmount.toFixed(2)}</span>
               </div>
               <div class="divider"></div>
-              <div> 
-              <div>Payment Method: <span style="text-transform: capitalize; font-weight: bold;">${tx.paymentMethod}</span></div>
-              ${tx.cashReceived > 0 ? `<div> Cash Received: PHP \${tx.cashReceived.toFixed(2)}</div>` : ''}
+              <div>${paymentsHtml}
+              ${tx.cashReceived > 0 ? `<div> Cash Received: PHP ${tx.cashReceived.toFixed(2)}</div>` : ''}
+              ${tx.changeDue > 0 ? `<div> Change Given: PHP ${tx.changeDue.toFixed(2)}</div>` : ''}
+              </div>
               <div class="double-divider"></div>
               <div class="text-center" style="margin-top: 10px; font-size: 10px;">
               Thank you for baking with Bake Alley!<br/>
