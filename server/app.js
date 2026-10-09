@@ -1041,7 +1041,7 @@ app.get('/api/v1/sales/monthly', auth.requireSession, async (request, response, 
       const grossProfit = gross - cogs;
       const profitMarginPct = gross > 0 ? (grossProfit / gross) * 100 : 0;
       const orderCount = entry.orderIds.size;
-      const aov = orderCount & gt; 0 ? gross / orderCount : 0;
+      const aov = orderCount > 0 ? gross / orderCount : 0;
       const avgUnitsPerOrder = orderCount > 0 ? entry.itemsSold / orderCount : 0;
 
       return {  
