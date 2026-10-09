@@ -763,12 +763,17 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
   try {
     await client.query('BEGIN');
     
+    const orderMode = validatedPayload.orderMode || 'immediate';
+    const depositAmount = Number(validatedPayload.depositAmount || 0);
+    const totalAmount = Number(validatedPayload.totalAmount || 0);
+    const balanceDue = validatedPayload.balanceDue !== undefined ? Number(validatedPayload.balanceDue) : Math.max(0, totalAmount - depositAmount);
+
     // Calculate changeDue and total cash received server-side
     let changeDue = 0;
     let totalCashReceived = Number(validatedPayload.cashReceived || 0);
 
     if (validatedPayload.paymentMethod === 'split' && Array.isArray(validatedPayload.payments)) {
-     const cashPayment = validatedPayload.payments.filter(p => p.method === 'cash');
+      const cashPayment = validatedPayload.payments.filter(p => p.method === 'cash');
       if (cashPayment.length > 0) {
         const totalCashNeeded = cashPayment.reduce((sum, p) => sum + Number(p.amount || 0), 0);
         const totalCashTenderedInSplit = cashPayment.reduce((sum, p) => sum + Number(p.cashReceived || p.amount || 0), 0);
@@ -776,8 +781,8 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         changeDue = Math.max(0, totalCashTenderedInSplit - totalCashNeeded);
         totalCashReceived = totalCashTenderedInSplit;
       }
-    } else if (validatedPayload.paymentMethod === 'cash') { 
-      const requiredCashToday = orderMode === 'reservation' ? depositAmount : Number(validatedPayload.totalAmount || 0);
+    } else if (validatedPayload.paymentMethod === 'cash') {
+      const requiredCashToday = orderMode === 'reservation' ? depositAmount : totalAmount;
       if (requiredCashToday > 0 && totalCashReceived < requiredCashToday) {
         throw Object.assign(new Error('Cash received must be at least the deposit required'),
           { statusCode: 400, code: 'INSUFFICIENT_CASH' }
@@ -785,11 +790,6 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
       }
       changeDue = Math.max(0, totalCashReceived - requiredCashToday);
     }
-    
-    const orderMode = validatedPayload.orderMode || 'immediate';
-    const depositAmount = Number(validatedPayload.depositAmount || 0);
-    const totalAmount = Number(validatedPayload.totalAmount || 0);
-    const balanceDue = validatedPayload.balanceDue !== undefined ? Number(validatedPayload.balanceDue) : Math.max(0, totalAmount - depositAmount);
 
     let reservationStatus = validatedPayload.reservationStatus;
     if (orderMode === 'reservation' && !reservationStatus) {

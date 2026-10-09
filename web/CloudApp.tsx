@@ -3,7 +3,7 @@ import { CheckoutScreen, type CheckoutCustomer, type CheckoutOrderPayload, type 
 import { LoginScreen } from '../src/renderer/LoginScreen';
 import { CloudPosApi, type CloudSession } from './cloudApi';
 import logoUrl from '../Images/bakeAlley-Logo.jpg';
-import type { CloudCustomer, CloudEmployee, CloudInventoryRow, CloudOrderPayload, CloudSalesReport, CloudShift } from './apiClient';
+import type { CloudCustomer, CloudEmployee, CloudInventoryRow, CloudOrderPayload, CloudReservation, CloudSalesReport, CloudShift } from './apiClient';
 
 const api = new CloudPosApi({
   baseUrl: (import.meta.env.VITE_API_URL || 'https://bakealley-pos-production.up.railway.app').replace(/\/+$/, ''),
@@ -2971,20 +2971,381 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
 /* ==========================================================================
    MAIN APPLICATION SHELL WITH ROLE-BASED SESSION TIMEOUT & TAB SECURITY
    ========================================================================== */
-function ReservationsView({ session, onNavigateCheckout }: { session: CloudSession; onNavigateCheckout: () => void }): JSX.Element {
+function ReservationsView({
+  session,
+  onNavigateCheckout,
+}: {
+  session: CloudSession;
+  onNavigateCheckout: () => void;
+}): JSX.Element {
+  const [reservations, setReservations] = useState<CloudReservation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'unpaid' | 'partially_paid' | 'fully_prepaid'>('all');
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  // Fulfillment Modal State
+  const [fulfillRes, setFulfillRes] = useState<CloudReservation | null>(null);
+  const [fulfillMethod, setFulfillMethod] = useState<'cash' | 'card' | 'gcash' | 'account'>('cash');
+  const [fulfillCash, setFulfillCash] = useState<string>('');
+  const [fulfilling, setFulfilling] = useState(false);
+  const [fulfillError, setFulfillError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const refresh = async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      setReservations(await api.reservations());
+    } catch (reason) {
+      setError(errorText(reason, 'Unable to load reservations.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const filteredReservations = useMemo(() => {
+    return reservations.filter((res) => {
+      const term = searchTerm.toLowerCase().trim();
+      const matchSearch =
+        !term ||
+        res.customerName.toLowerCase().includes(term) ||
+        res.orderId.toLowerCase().includes(term) ||
+        res.items.some((i) => i.itemName.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term));
+
+      const matchStatus =
+        statusFilter === 'all' || res.reservationStatus === statusFilter;
+
+      return matchSearch && matchStatus;
+    });
+  }, [reservations, searchTerm, statusFilter]);
+
+  const totalReservedVal = useMemo(() => reservations.reduce((s, r) => s + r.totalAmount, 0), [reservations]);
+  const totalDepositsVal = useMemo(() => reservations.reduce((s, r) => s + r.depositAmount, 0), [reservations]);
+  const totalBalanceVal = useMemo(() => reservations.reduce((s, r) => s + r.balanceDue, 0), [reservations]);
+
+  const handleOpenFulfill = (res: CloudReservation) => {
+    setFulfillRes(res);
+    setFulfillMethod('cash');
+    setFulfillCash(res.balanceDue > 0 ? res.balanceDue.toFixed(2) : '0.00');
+    setFulfillError(null);
+  };
+
+  const submitFulfill = async () => {
+    if (!fulfillRes) return;
+    setFulfilling(true);
+    setFulfillError(null);
+    try {
+      await api.fulfillReservation(fulfillRes.orderId, {
+        paymentMethod: fulfillMethod,
+        cashReceived: fulfillRes.balanceDue > 0 ? Number(fulfillCash) || fulfillRes.balanceDue : 0,
+      });
+      setSuccessMsg(`Reservation #${fulfillRes.orderId.slice(0, 8)} fulfilled and stock deducted successfully!`);
+      setFulfillRes(null);
+      await refresh();
+    } catch (reason) {
+      setFulfillError(errorText(reason, 'Fulfillment failed. Check stock availability.'));
+    } finally {
+      setFulfilling(false);
+    }
+  };
+
+  const handleCancelReservation = async (res: CloudReservation) => {
+    if (!window.confirm(`Cancel reservation #${res.orderId.slice(0, 8)} for ${res.customerName}?`)) return;
+    try {
+      await api.cancelReservation(res.orderId);
+      setSuccessMsg(`Reservation #${res.orderId.slice(0, 8)} cancelled.`);
+      await refresh();
+    } catch (reason) {
+      setError(errorText(reason, 'Unable to cancel reservation.'));
+    }
+  };
+
   return (
-    <Panel title="Reservations">
-      <div className="rounded-xl border border-amber-200/80 bg-amber-50/50 p-6 text-center">
-        <p className="text-sm text-amber-800">Welcome, {session.user.displayName}.</p>
-        <p className="mt-2 text-sm text-amber-700">Manage customer reservations from the checkout screen.</p>
-        <button
-          className="mt-4 rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
-          type="button"
-          onClick={onNavigateCheckout}
-        >
-          Go to Checkout
-        </button>
+    <Panel title="Advance Orders & Reservations">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="text-xs text-amber-800">Manage pending B2B & retail customer reservations and scheduled pickups.</p>
+        </div>
+        <div className="flex gap-2">
+          <ActionButton onClick={() => void refresh()}>Refresh</ActionButton>
+          <button
+            type="button"
+            className="rounded-lg bg-amber-800 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-900"
+            onClick={onNavigateCheckout}
+          >
+            + Create Advance Order
+          </button>
+        </div>
       </div>
+
+      {successMsg && (
+        <div className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800 font-medium flex justify-between items-center">
+          <span>{successMsg}</span>
+          <button type="button" className="font-bold text-emerald-900" onClick={() => setSuccessMsg(null)}>✕</button>
+        </div>
+      )}
+
+      {/* Metrics Grid */}
+      <div className="mb-6 grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold text-amber-700 uppercase">Active Reservations</p>
+          <strong className="mt-1 block text-2xl font-bold text-amber-950">{reservations.length}</strong>
+        </div>
+        <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold text-amber-700 uppercase">Total Reserved Value</p>
+          <strong className="mt-1 block text-2xl font-bold text-amber-950">{money.format(totalReservedVal)}</strong>
+        </div>
+        <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold text-amber-700 uppercase">Deposits Held</p>
+          <strong className="mt-1 block text-2xl font-bold text-emerald-800">{money.format(totalDepositsVal)}</strong>
+        </div>
+        <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold text-amber-700 uppercase">Outstanding Balance Due</p>
+          <strong className="mt-1 block text-2xl font-bold text-amber-900">{money.format(totalBalanceVal)}</strong>
+        </div>
+      </div>
+
+      {/* Filter & Search Bar */}
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <input
+          type="text"
+          className="w-full max-w-sm rounded-lg border border-amber-200/80 px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
+          placeholder="Search customer, order ID, item..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+
+        <div className="flex gap-1.5 text-xs">
+          {(['all', 'unpaid', 'partially_paid', 'fully_prepaid'] as const).map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setStatusFilter(st)}
+              className={`rounded-lg px-3 py-1.5 font-bold transition capitalize ${statusFilter === st
+                  ? 'bg-amber-800 text-white shadow-sm'
+                  : 'bg-amber-100/60 text-amber-900 hover:bg-amber-200/60'
+                }`}
+            >
+              {st === 'all' ? 'All Status' : st.replace('_', ' ')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Reservations Table */}
+      {loading ? (
+        <p className="p-8 text-center text-sm text-amber-700">Loading active reservations...</p>
+      ) : error ? (
+        <p className="p-4 rounded-lg bg-red-50 text-sm text-red-700">{error}</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-amber-200/80 bg-white shadow-sm">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-amber-50/80 text-amber-800 uppercase font-semibold border-b border-amber-200">
+              <tr>
+                <th className="p-3">Pickup Date</th>
+                <th className="p-3">Customer</th>
+                <th className="p-3">Order ID</th>
+                <th className="p-3 text-center">Items</th>
+                <th className="p-3 text-right">Total</th>
+                <th className="p-3 text-right">Deposit Paid</th>
+                <th className="p-3 text-right">Balance Due</th>
+                <th className="p-3 text-center">Status</th>
+                <th className="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-amber-100">
+              {filteredReservations.map((res) => {
+                const isExpanded = expandedOrderId === res.orderId;
+                return (
+                  <Fragment key={res.orderId}>
+                    <tr className="hover:bg-amber-50/40 transition">
+                      <td className="p-3 font-bold text-amber-950">{res.fulfillmentDate || 'ASAP'}</td>
+                      <td className="p-3 font-semibold text-amber-900">{res.customerName}</td>
+                      <td className="p-3 font-mono text-[11px] text-amber-700">{res.orderId.slice(0, 8)}...</td>
+                      <td className="p-3 text-center font-medium">{res.items.length}</td>
+                      <td className="p-3 text-right font-bold tabular-nums">{money.format(res.totalAmount)}</td>
+                      <td className="p-3 text-right font-bold text-emerald-800 tabular-nums">{money.format(res.depositAmount)}</td>
+                      <td className="p-3 text-right font-bold text-amber-900 tabular-nums">{money.format(res.balanceDue)}</td>
+                      <td className="p-3 text-center">
+                        {res.reservationStatus === 'fully_prepaid' ? (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">100% PREPAID</span>
+                        ) : res.reservationStatus === 'partially_paid' ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-900">PARTIAL ({money.format(res.depositAmount)})</span>
+                        ) : (
+                          <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-800">UNPAID</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right space-x-1">
+                        <button
+                          type="button"
+                          className="rounded-lg bg-amber-100 px-2 py-1 font-bold text-amber-900 hover:bg-amber-200"
+                          onClick={() => setExpandedOrderId(isExpanded ? null : res.orderId)}
+                        >
+                          {isExpanded ? '▲' : '▼'}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg bg-emerald-700 px-2.5 py-1 font-bold text-white hover:bg-emerald-800 shadow-sm"
+                          onClick={() => handleOpenFulfill(res)}
+                        >
+                          📦 Fulfill
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 font-semibold text-red-700 hover:bg-red-100"
+                          onClick={() => handleCancelReservation(res)}
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+
+                    {/* Expandable Order Details */}
+                    {isExpanded && (
+                      <tr className="bg-amber-50/20">
+                        <td colSpan={9} className="p-3">
+                          <div className="rounded-xl border border-amber-200 bg-white p-3 space-y-2">
+                            <p className="text-xs font-bold text-amber-950">Reserved Items List:</p>
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-amber-50 text-amber-800 font-semibold border-b border-amber-100">
+                                <tr>
+                                  <th className="p-1.5">Item</th>
+                                  <th className="p-1.5">SKU</th>
+                                  <th className="p-1.5 text-center">Qty</th>
+                                  <th className="p-1.5 text-right">Unit Price</th>
+                                  <th className="p-1.5 text-right">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {res.items.map((it, idx) => (
+                                  <tr key={idx} className="border-b last:border-0 border-amber-100">
+                                    <td className="p-1.5 font-semibold text-amber-950">{it.itemName}</td>
+                                    <td className="p-1.5 font-mono text-amber-700">{it.sku}</td>
+                                    <td className="p-1.5 text-center">{it.quantity}</td>
+                                    <td className="p-1.5 text-right">{money.format(it.unitPrice)}</td>
+                                    <td className="p-1.5 text-right font-bold">{money.format(it.amount)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+          {filteredReservations.length === 0 && (
+            <p className="p-8 text-center text-amber-700">No active reservations found matching criteria.</p>
+          )}
+        </div>
+      )}
+
+      {/* Fulfillment Modal */}
+      {fulfillRes && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between border-b border-amber-100 pb-3">
+              <div>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">
+                  📦 Fulfill Reservation & Handover
+                </h3>
+                <p className="text-xs text-amber-800">
+                  Customer: <strong>{fulfillRes.customerName}</strong> · Order: <span className="font-mono">{fulfillRes.orderId.slice(0, 8)}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg p-1 text-amber-700 hover:bg-amber-100 font-bold"
+                onClick={() => setFulfillRes(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="rounded-xl bg-amber-50 p-3 border border-amber-200 text-xs space-y-1">
+              <div className="flex justify-between text-amber-900">
+                <span>Total Reserved Amount:</span>
+                <strong className="tabular-nums">{money.format(fulfillRes.totalAmount)}</strong>
+              </div>
+              <div className="flex justify-between text-emerald-800">
+                <span>Deposit Already Paid:</span>
+                <strong className="tabular-nums">{money.format(fulfillRes.depositAmount)}</strong>
+              </div>
+              <div className="flex justify-between text-base font-bold border-t border-amber-200 pt-1 text-amber-950">
+                <span>Balance Due Today:</span>
+                <strong className="tabular-nums text-amber-900">{money.format(fulfillRes.balanceDue)}</strong>
+              </div>
+            </div>
+
+            {fulfillRes.balanceDue > 0 ? (
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-amber-950">Select Settlement Payment Method</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['cash', 'gcash', 'card', 'account'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setFulfillMethod(m)}
+                      className={`rounded-xl border p-2 text-xs font-bold capitalize transition ${fulfillMethod === m
+                          ? 'bg-amber-700 text-white border-amber-700 shadow-sm'
+                          : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-50'
+                        }`}
+                    >
+                      {m === 'cash' ? '💵 Cash' : m === 'gcash' ? '📱 GCash' : m === 'card' ? '💳 Card' : '📋 Account'}
+                    </button>
+                  ))}
+                </div>
+
+                {fulfillMethod === 'cash' && (
+                  <div>
+                    <label className="block text-xs font-bold text-amber-950 mb-1">Cash Tendered (₱)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="w-full rounded-lg border border-amber-300 p-2.5 font-bold text-lg outline-none focus:ring-2 focus:ring-amber-500"
+                      value={fulfillCash}
+                      onChange={(e) => setFulfillCash(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-center text-xs font-semibold text-emerald-900">
+                ✓ 100% Fully Prepaid. Click below to complete handover and deduct stock from inventory.
+              </div>
+            )}
+
+            {fulfillError && <p className="rounded-lg bg-red-50 p-2 text-xs text-red-700">{fulfillError}</p>}
+
+            <div className="flex justify-end gap-2 border-t border-amber-100 pt-3">
+              <button
+                type="button"
+                className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                onClick={() => setFulfillRes(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={fulfilling}
+                className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-50"
+                onClick={submitFulfill}
+              >
+                {fulfilling ? 'Fulfilling...' : 'Confirm Handover & Deduct Stock'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Panel>
   );
 }

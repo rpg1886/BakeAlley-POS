@@ -541,10 +541,22 @@ export function CheckoutScreen({
         onClearExchange();
       }
 
-      if (finalChangeDue > 0) {
-        setMessage(`Exchange completed successfully! Change due to customer: ${money.format(finalChangeDue)}`);
+      if (orderMode === 'reservation') {
+        setMessage(`Advance Order Reservation created successfully for ${fulfillmentDate}! Deposit paid: ${money.format(calculatedDeposit)},
+        Balance Due on pickup:${money.format(calculatedBalanceDue)}${finalChangeDue > 0 ? 
+        ` (Change: ${money.format(finalChangeDue)})` : ''}`);
+      } else if (appliedExchangeCredit > 0) {
+        if (finalChangeDue > 0) {
+          setMessage(`Exchange completed successfully! Change due to customer: ${money.format(finalChangeDue)}`);
+        } else {
+          setMessage('Exchange completed successfully!');
+        }
       } else {
-        setMessage('Exchange completed successfully!');
+        if (finalChangeDue > 0) {
+          setMessage(`Order completed successfully! Change due to customer: ${money.format(finalChangeDue)}`);
+        } else {
+          setMessage('Order completed successfully!');
+        }
       }
 
     } catch (error) {
