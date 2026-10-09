@@ -33,6 +33,7 @@ export interface CloudCustomer {
   email?: string;
   phone?: string;
   tierId: string;
+  totalSpent?: number;
 }
 
 export interface CloudInventoryRow {

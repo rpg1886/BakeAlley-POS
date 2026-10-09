@@ -2424,11 +2424,13 @@ function CrmView({ session, customers, refresh }: { session: CloudSession; custo
           <tbody>
             {customers.map((customer) => {
               const parts = customer.displayName.split(' - ');
-              const lifetimeAmount = Number((customer as { totalSpent?: number }).totalSpent) || 0;
+              const lifetimeAmount = Number(customer.totalSpent) || 0;
+              const companyName = parts.length > 1 ? parts[0] : 'Walk-in'; 
+              const contactName = parts.at(-1);
               return (
                 <tr className="border-b last:border-0" key={customer.customerId}>
-                  <td className="py-3 font-semibold text-amber-950">{parts.at(-1)}</td>
-                  <td>{parts.length > 1 ? parts : 'Walk-in'}</td>
+                  <td className="py-3 font-semibold text-amber-950">{contactName}</td>
+                  <td>{companyName}</td>
                   <td>{customer.email || '—'}</td>
                   <td>{customer.phone || '—'}</td>
                   <td>{customer.tierId === retailTierId ? 'Retail' : 'Wholesale'}</td>

@@ -163,8 +163,11 @@ app.get('/api/v1/units-of-measure', auth.requireSession, async (_request, respon
 
 app.get('/api/v1/customers', auth.requireSession, async (_request, response, next) => {
   try { 
-    const result = await pool.query('SELECT customer_id AS "customerId", COALESCE(company_name || \' - \', \'\') || contact_name AS "displayName", email, phone, tier_id AS "tierId" FROM customers ORDER BY contact_name'); 
-    response.json(result.rows); 
+    const result = await pool.query(`SELECT c.customer_id AS "customerId", COALESCE(c.company_name || ' - ', '') || c.contact_name AS "displayName", 
+      c.email, c.phone, c.tier_id AS "tierId",COALESCE(SUM(o.total_amount), 0)::numeric AS "totalSpent"  FROM customers c LEFT JOIN orders o ON o.customer_id = c.customer_id AND o.status = 'completed' 
+      GROUP BY c.customer_id, c.company_name, c.contact_name, c.email, c.phone, c.tier_id ORDER BY c.contact_name`); 
+    const customers = result.rows.map((row) => ({ ...row, totalSpent: Number(row.totalSpent) || 0, }));
+    response.json(customers); 
   } catch (error) { 
     logger.error('Customer list failed', { error: error.message });
     next(error); 
@@ -187,7 +190,7 @@ app.post('/api/v1/customers', auth.requireSession, async (request, response, nex
       [body.companyName ?? null, body.contactName, body.email ?? null, body.phone ?? null, body.tierId]
     );
     logger.info('Customer created', { customerId: result.rows[0].customerId });
-    response.status(201).json(result.rows[0]);
+    response.status(201).json({ ...result.rows[0], totalSpent: 0 });
   } catch (error) { 
     logger.error('Customer creation failed', { error: error.message });
     next(error); 
