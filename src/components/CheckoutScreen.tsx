@@ -149,6 +149,8 @@ function formatWeight(grams: number): string {
   return grams >= 1_000 ? `${(grams / 1_000).toFixed(3)} kg` : `${grams.toFixed(0)} g`;
 }
 
+const today = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+
 export function CheckoutScreen({
   dataSource,
   scaleSource,
