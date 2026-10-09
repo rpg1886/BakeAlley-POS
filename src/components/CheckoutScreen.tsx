@@ -193,6 +193,29 @@ export function CheckoutScreen({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  // Advance Order / Reservation States
+  const [orderMode, setOrderMode] = useState < 'immediate' | 'reservation' > ('immediate');
+  const [fulfillmentDate, setFulfillmentDate] = useState<string>(() => {
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1)
+    return tomorrow.toISOString().slice(0, 10);
+  });
+  const [depositPreset, setDepositPreset] = useState<'zero' | '50' | '100' | 'custom'>('zero');
+  const [customDeposit, setCustomDeposit] = useState<string>('');
+  const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
+  const taxAmount = subtotal * taxRate;
+  const totalAmount = subtotal + taxAmount;
+  const calculatedDeposit = orderMode === 'reservation' ? depositPreset === 'zero' ? 0
+    : depositPreset === '50' ? Number((totalAmount * 0.5).toFixed(2))
+      : depositPreset === '100' ? Number(totalAmount.toFixed(2))
+        : Math.min(totalAmount, Math.max(0, Number(customDeposit) || 0)) : 0;
+
+  const calculatedBalanceDue = orderMode === 'reservation'
+    ? Math.max(0, Number((totalAmount - calculatedDeposit).toFixed(2))) : 0;
+
+  const targetPaymentTotal = orderMode === 'reservation' && calculatedDeposit > 0
+    ? calculatedDeposit : totalAmount;
+
+
     const searchInputRef = useRef<HTMLInputElement>(null);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
@@ -247,9 +270,8 @@ export function CheckoutScreen({
     if (!term) return true;
     return customer.displayName.toLowerCase().includes(term);
   });
-  const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
-  const taxAmount = subtotal * taxRate;
-  const totalAmount = subtotal + taxAmount;
+  
+  
   const totalPaidSoFar = splitPayments.reduce((sum, p) => sum + p.amount, 0);
   const effectiveExchangeCredit = exchangeCredit || 0;
   const appliedExchangeCredit = Math.min(totalAmount, effectiveExchangeCredit);
@@ -380,6 +402,47 @@ export function CheckoutScreen({
       )
     );
   };
+  const submitZeroDepositReservation = async (): Promise<void> => {
+    if (orderItems.length === 0 || orderItems.some((item) => item.quantity <= 0)) {
+      setMessage('Add valid items to cart before creating a reservation.');
+      return;
+    }
+    if (!customerId) {
+      setMessage('A customer profile is required for reservations. Please select or add a customer above.'); return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      await dataSource.createOrderWithOutbox({
+        customerId,
+        pricingTierId,
+        orderType: isWholesaleCustomer ? 'commercial' : 'retail',
+        items: orderItems,
+        subtotal: Number(subtotal.toFixed(2)),
+        taxAmount: Number(taxAmount.toFixed(2)),
+        totalAmount: Number(totalAmount.toFixed(2)),
+        paymentMethod: 'cash',
+        cashReceived: 0,
+        payments: [],
+        orderMode: 'reservation',
+        fulfillmentDate,
+        depositAmount: 0,
+        balanceDue: Number(totalAmount.toFixed(2)),
+        reservationStatus: 'unpaid',
+      });
+
+      setCart([]);
+      setCustomerId(null);
+      localStorage.removeItem('bakealley\_pos\_cart');
+      localStorage.removeItem('bakealley\_pos\_customer\_id');
+
+      setMessage(`Advance Order Reservation created successfully for ${fulfillmentDate}! Balance Due on pickup: ${money.format(totalAmount)}`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Reservation creation failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submitOrder = async (): Promise<void> => {
     if (orderItems.length === 0 || orderItems.some((item) => item.quantity <= 0)) {
@@ -442,6 +505,14 @@ export function CheckoutScreen({
         cashReceived: Number(totalCashTendered.toFixed(2)),
         payments: finalPayments,
         returnedItems: returnedItems.length > 0? returnedItems : undefined,
+        orderMode,
+        fulfillmentDate: orderMode === 'reservation' ? fulfillmentDate : null,
+        depositAmount: calculatedDeposit,
+        balanceDue: calculatedBalanceDue,
+        reservationStatus: orderMode === 'reservation'
+          ? (calculatedBalanceDue <= 0? 'fully_prepaid' :
+            calculatedDeposit > 0? 'partially\_paid' : 'unpaid')  
+          : null,
       });
       if (employeeToken && recordEmployeeSale) {
         await recordEmployeeSale(employeeToken, result.orderId);
@@ -769,10 +840,122 @@ export function CheckoutScreen({
               </div>
             )}
             <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
+              {/* Order Mode Switcher: Immediate vs Advance Order */}
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 p-1 flex">
+              <button
+              type="button"
+                  onClick={() => setOrderMode('immediate')}
+                  className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${orderMode === 'immediate' ? 
+                    'bg-amber-700 text-white shadow-sm'
+                    : 'text-amber-900 hover:bg-amber-100' }`}
+              >
+                  🛒 Immediate Sale
+              </button>
+              <button
+              type="button"
+                  onClick={() => setOrderMode('reservation')}
+                  className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${orderMode === 'reservation' ? 
+                    'bg-amber-700 text-white shadow-sm'
+                    : 'text-amber-900 hover:bg-amber-100' }`}
+              >
+                  📅 Advance Reservation
+              </button>
+              </div>
+              {/* Advance Order Configuration Panel */}
+              {orderMode === 'reservation' && (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 p-3 space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold text-amber-950 mb-1">📅 Pickup / Fulfillment Date *</label>
+                    <input
+                      type="date"
+                      min={today()}
+                      className="w-full rounded-lg border border-amber-300 p-2 font-medium text-amber-950 outline-none focus:ring-2 focus:ring-amber-500"
+                      value={fulfillmentDate}
+                      onChange={(e) => setFulfillmentDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                      <label className="block font-bold text-amber-950 mb-1">💰 Deposit Choice</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+
+                      <button
+                      type="button"
+                          onClick={() => setDepositPreset('zero')}
+                          className={`rounded-lg border p-1.5 text-center font-bold transition ${
+                            depositPreset === 'zero' ? 'bg-amber-700 text-white border-amber-700' : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-100'
+                          }`}
+                        >
+                          ₱0 Upfront
+                        </button>
+                        <button
+                        type="button"
+                          onClick={() => setDepositPreset('50')}
+                          className={`rounded-lg border p-1.5 text-center font-bold transition ${
+                            depositPreset === '50' ? 'bg-amber-700 text-white border-amber-700' : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-100'
+                          }`}
+                        >
+                          ₱50 Deposit
+                        </button>
+                        <button
+                        type="button"
+                          onClick={() => setDepositPreset('100')}
+                          className={`rounded-lg border p-1.5 text-center font-bold transition ${
+                            depositPreset === '100' ? 'bg-amber-700 text-white border-amber-700' : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-100'
+                          }`}
+                        >
+                          100% Prepaid
+                        </button>
+                        <button
+                        type="button"
+                        onClick={() => setDepositPreset('custom')}
+                          className={`rounded-lg border p-1.5 text-center font-bold transition ${
+                            depositPreset === 'custom' ? 'bg-amber-700 text-white border-amber-700' : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-100'
+                          }`}
+                        >
+                          Custom ₱
+                        </button>
+                        </div>
+                        </div>
+
+                    {depositPreset === 'custom' && (
+                      <div>
+                        <label className="block font-semibold text-amber-900 mb-1">Custom Deposit Amount (₱)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max={totalAmount}
+                          step="0.01"
+                          className="w-full rounded-lg border border-amber-300 p-2 font-bold text-amber-950 outline-none"
+                          value={customDeposit}
+                          placeholder="Enter deposit..."
+                          onChange={(e) => setCustomDeposit(e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    <div className="border-t border-amber-200 pt-2 space-y-1 font-semibold text-amber-950">
+                      <div className="flex justify-between">
+                        <span>Deposit Required Today:</span>
+                        <strong className="text-emerald-800">{money.format(calculatedDeposit)}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Balance Due at Pickup:</span>
+                        <strong className="text-amber-900">{money.format(calculatedBalanceDue)}</strong>
+                      </div>
+                      </div>
+                      </div>
+                      )}
+
+
               <div className="flex justify-between text-sm text-amber-800"><span>Subtotal</span><span className="font-semibold tabular-nums">{money.format(subtotal)}</span></div>
               <div className="mt-2 flex justify-between text-sm text-amber-800"><span>Tax</span><span className="font-semibold tabular-nums">{money.format(taxAmount)}</span></div>
               <div className="mt-4 flex justify-between border-t border-amber-200/80 pt-4 text-xl font-bold"><span>Total</span><span className="tabular-nums">{money.format(totalAmount)}</span></div>
-              <button className="mt-5 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50" disabled={cart.length === 0 || busy || isClockedIn === false} type="button" onClick={() => setPaymentOpen(true)}>{isClockedIn === false ? 'Clock-in Required to Take Payment' : 'Take payment'}</button>
+                  {orderMode === 'reservation' && calculatedDeposit === 0 ? (
+                    <button className="mt-5 w-full rounded-lg bg-amber-700 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-800 disabled:cursor-not-allowed disabled:opacity-50 transition" disabled={cart.length === 0 || busy || isClockedIn === false} type="button" onClick={() => void submitZeroDepositReservation()}>{isClockedIn === false ? 'Clock-in Required' : `📅 Create Reservation (${money.format(totalAmount)} Unpaid)`}</button>
+                  ) : (
+                      <button className="mt-5 w-full rounded-lg bg-amber-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50 transition" disabled={cart.length === 0 || busy || isClockedIn === false} type="button" onClick={() => setPaymentOpen(true)}>{isClockedIn === false ? 'Clock-in Required to Take Payment' : orderMode === 'reservation' ? `📅 Collect Deposit & Reserve (${money.format(calculatedDeposit)})` : 'Take Payment'}</button>
+                  )}
             </div>
           </aside>
         </section>
