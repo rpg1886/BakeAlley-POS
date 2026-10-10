@@ -684,7 +684,7 @@ curl -X POST https://bakealley-pos-production.up.railway.app/api/v1/auth/login \
     *  Service Worker setup
     *  Conflict resolution logic
     *  Batch sync mechanism
-4.  **Additional POS Features**   (TBD)
+4.  **Additional POS Features**   (TBD-to be determined)
     *  Promotions/discounts
     *  Customer credit
     *  Payment gateway integration
