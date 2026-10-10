@@ -809,3 +809,134 @@ curl -X POST https://bakealley-pos-production.up.railway.app/api/v1/auth/login \
   * Resolves HTTP 400 `INVALID_VARIANT_ID` error when updating inventory quantities and details.
 * **SQL Parameter Placeholder Cleanup**:
   * Replaced literal escaped backslashes in parameterized queries across `server/app.js` and `server/auth.js` to ensure clean execution under Node.js and PostgreSQL drivers.
+
+--------------------------------------------------------------------------------
+
+###### RECENT FUNCTIONAL ENHANCEMENTS & UPDATES (2026-10-11)
+
+###### ✅ 1. Reservations & Advance Orders System (`web/CloudApp.tsx` — `ReservationsView`, `server/app.js`)
+Bake Alley now supports pre-orders, deposits, and scheduled fulfillment for B2B and retail customers planning ahead.
+
+**Database Schema Additions**:
+* New columns on `orders` table:
+  * `order_mode TEXT DEFAULT 'immediate'` - Distinguishes immediate checkout ('immediate') from pre-ordered/reserved ('reservation')
+  * `fulfillment_date DATE` - Scheduled pickup/delivery date for reserved orders
+  * `deposit_amount NUMERIC(12,2) DEFAULT 0` - Advance payment/deposit collected upfront
+  * `balance_due NUMERIC(12,2) DEFAULT 0` - Remaining amount due at fulfillment
+  * `reservation_status TEXT` - Tracks prepayment status: 'unpaid', 'partially_paid', 'fully_prepaid', 'completed', 'expired', 'cancelled'
+* Allows multiple payment scenarios: full prepayment on order, partial deposit with balance due at pickup, or no deposit (unpaid)
+
+**Backend API Endpoints**:
+
+**GET /api/v1/reservations** (Authenticated)
+* Retrieves all active open reservations (WHERE order_mode = 'reservation' AND status = 'open')
+* Returns aggregated order and item details with deposit tracking
+* Column mappings include fulfillmentDate, depositAmount, balanceDue, reservationStatus, and nested items array
+* Ordered by fulfillment_date ASC, created_at ASC for chronological workflow
+* Cashiers and admins both can view all active reservations
+
+**POST /api/v1/orders/:orderId/fulfill** (Authenticated)
+* Converts an open reservation to 'completed' status when customer picks up/receives goods
+* Accepts payment data for settling the balance due (paymentMethod, cashReceived, optional split payments)
+* Performs FEFO inventory deduction at fulfillment time (not at reservation time)
+* Validates sufficient inventory exists before confirming fulfillment
+* Atomically updates order status, calculates final change due if payment method is cash, and records fulfillment
+* Returns 404 if reservation not found or already fulfilled; returns 400 if inventory shortage
+
+**POST /api/v1/orders/:orderId/cancel** (Authenticated)
+* Marks a reservation as 'cancelled' without deducting inventory
+* Cashiers can cancel their own reservations; admins can cancel any
+* Preserves historical record for audit purposes (no deletion)
+* Returns 404 if order not found; 403 if cashier lacks permission
+
+**Frontend Reservations Tab** (`web/CloudApp.tsx` — `ReservationsView`):
+* **Metrics Dashboard**:
+  * Active Reservations count (total open orders with order_mode='reservation')
+  * Total Reserved Value (sum of total_amount across all active reservations)
+  * Deposits Held (sum of deposit_amount received upfront)
+  * Outstanding Balance Due (sum of balance_due to be collected at fulfillment)
+  * All metrics update in real-time on refresh
+
+* **Search & Filter**:
+  * Real-time search box filtering by customer name, company name, order ID, item name, or SKU
+  * Status filter buttons: All Status, Unpaid (no deposit), Partially Paid (partial deposit), Fully Prepaid (100% prepaid)
+  * Combines search and status filters for powerful discovery
+
+* **Reservations Table**:
+  * Columns: Pickup Date (fulfillment_date), Customer, Order ID, Item Count, Total Amount, Deposit Paid, Balance Due, Reservation Status Badge, Actions
+  * Status Badges with visual indicators:
+    * 🟢 "100% PREPAID" (green) - no balance due
+    * 🟡 "PARTIAL ({amount})" (amber) - deposit received, balance pending
+    * 🔴 "UNPAID" (red) - no deposit collected
+  * Each row expandable to show detailed items list with SKU, quantity, unit price, and line totals
+  * Hover effects and visual feedback for row selection
+
+* **Fulfillment Modal**:
+  * Triggered by "📦 Fulfill" button on each reservation row
+  * Displays customer name, order ID, total reserved amount, deposit already paid, and balance due
+  * If balance due > 0: Shows payment method selector (💵 Cash, 📱 GCash, 💳 Card, 📋 Account)
+  * Cash method includes input field for tender amount to calculate change due
+  * If 100% prepaid: Shows confirmation message and proceeds directly to stock deduction
+  * Fulfillment action atomically deducts inventory by FEFO and updates reservation status to 'completed'
+  * Success banner displays confirmation with order ID
+  * Error handling for insufficient stock or payment validation failures
+
+* **Cancellation**:
+  * "✕" button on each row shows confirmation modal
+  * Admin/cashier can cancel reservations without stock impact
+  * Cancelled status prevents re-fulfillment
+
+* **Navigation**:
+  * "Refresh" button reloads reservation list from server
+  * "+ Create Advance Order" button navigates to Checkout tab to create new reservation order
+
+**Checkout Integration for Creating Reservations** (`src/components/CheckoutScreen.tsx`):
+* Enhanced `CheckoutScreen` with order mode selector (immediate vs. reservation)
+* When order_mode='reservation':
+  * Shows additional fields: Fulfillment Date picker (required)
+  * Allows deposit entry (optional, defaults to 0 if not specified)
+  * Calculates balance_due = total_amount - deposit_amount
+  * Sets reservation_status based on deposit: unpaid (if 0), partially_paid (if 0 < deposit < total), fully_prepaid (if deposit >= total)
+* Inventory is NOT deducted at reservation time; only at fulfillment
+* Order is submitted with paymentMethod corresponding to deposit payment (if any)
+
+**Reservation Workflow**:
+1. Cashier creates order via Checkout with order_mode='reservation'
+2. Specifies fulfillment_date and optional deposit amount
+3. Order stored with status='open', reservation_status based on deposit
+4. Cashier/Admin views Reservations tab to monitor all pending orders
+5. At fulfillment time, admin/cashier clicks "Fulfill" on the reservation
+6. Selects payment method for balance due (if unpaid/partially paid)
+7. System deducts inventory by FEFO and marks order as 'completed'
+8. Fulfillment is recorded with timestamp and payment details
+9. Historical record preserved for accounting/audit
+
+**Status States & Transitions**:
+* `unpaid`: Order created with no deposit, full balance due at fulfillment
+* `partially_paid`: Deposit collected, balance due at fulfillment  
+* `fully_prepaid`: 100% prepayment received upfront, ready for fulfillment
+* `completed`: Fulfillment processed, inventory deducted, balance settled
+* `cancelled`: Order cancelled without fulfillment or inventory impact
+* `expired`: Future status for handling stale reservations (not yet implemented)
+
+###### ✅ 2. Migration Schema Consolidation Issues (Identified for Future Resolution)
+The following schema migrations are currently applied via ALTER TABLE statements in `server/app.js` startup rather than in `server/migrations/001_cloud_pos.sql`. This should be consolidated:
+
+* **employee_shifts columns** (2026-10-02):
+  * `opening_float NUMERIC(12,2) DEFAULT 1500.00`
+  * `closing_cash_count NUMERIC(12,2)`
+  * `expected_cash NUMERIC(12,2)` (calculated as opening_float + shift cash sales)
+  * `cash_discrepancy NUMERIC(12,2)` (calculated as closing_cash_count - expected_cash)
+  * `status TEXT DEFAULT 'OPEN'` - OPEN | CLOSED
+
+* **orders columns** (2026-10-02 to 2026-10-06):
+  * `order_mode TEXT NOT NULL DEFAULT 'immediate'` - immediate | reservation
+  * `fulfillment_date DATE` - nullable
+  * `deposit_amount NUMERIC(12,2) NOT NULL DEFAULT 0` - deposit/prepayment
+  * `balance_due NUMERIC(12,2) NOT NULL DEFAULT 0` - amount due at pickup
+  * `reservation_status TEXT` - tracks prepayment state
+
+* **orders.payments column** (2026-10-06):
+  * `payments JSONB` - Stores split payment array for multi-tender transactions
+
+**Recommendation**: Consolidate these into a versioned 002_reservations_and_shifts_schema.sql migration to separate initial cloud schema from feature enhancements and maintain clear audit trail.
