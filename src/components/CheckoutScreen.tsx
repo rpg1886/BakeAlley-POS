@@ -661,9 +661,9 @@ export function CheckoutScreen({
         )}
 
         {/* MAIN POS 2-COLUMN LAYOUT */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
           {/* LEFT COLUMN: Quick Action Bar, Cart Table & Payment Bar (~38% width = 5 cols) */}
-          <div className="lg:col-span-5 space-y-4">
+          <div className="col-span-12 md:col-span-5 space-y-4">
             {/* Horizontal Action Tab Bar (Customer, Order Mode, Clear) */}
             <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm">
               <button
@@ -808,7 +808,7 @@ export function CheckoutScreen({
           </div>
 
           {/* RIGHT COLUMN: Search Input & 37-Category / Item Catalog Grid (~62% width = 7 cols) */}
-          <div className="lg:col-span-7 space-y-4">
+          <div className="col-span-12 md:col-span-7 space-y-4">
             {/* Top Barcode & SKU Search Bar */}
             <div className="relative">
               <input
