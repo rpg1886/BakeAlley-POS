@@ -670,8 +670,8 @@ export function CheckoutScreen({
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
                 className={`rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${selectedCustomer
-                    ? 'bg-emerald-700 text-white shadow-sm'
-                    : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
+                  ? 'bg-emerald-700 text-white shadow-sm'
+                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
                 <span>👤</span>
@@ -682,8 +682,8 @@ export function CheckoutScreen({
                 type="button"
                 onClick={() => setOrderModeModalOpen(true)}
                 className={`rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${orderMode === 'reservation'
-                    ? 'bg-amber-800 text-white shadow-sm'
-                    : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
+                  ? 'bg-amber-800 text-white shadow-sm'
+                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
                 <span>⚙️</span>
@@ -967,8 +967,8 @@ export function CheckoutScreen({
                   setCustomerModalOpen(false);
                 }}
                 className={`w-full text-left rounded-xl p-3 text-xs font-bold transition border ${!selectedCustomer
-                    ? 'bg-amber-800 text-white border-amber-800 shadow-sm'
-                    : 'bg-amber-50/50 border-amber-200 text-amber-900 hover:bg-amber-100'
+                  ? 'bg-amber-800 text-white border-amber-800 shadow-sm'
+                  : 'bg-amber-50/50 border-amber-200 text-amber-900 hover:bg-amber-100'
                   }`}
               >
                 <div className="flex items-center justify-between">
@@ -993,8 +993,8 @@ export function CheckoutScreen({
                         setCustomerModalOpen(false);
                       }}
                       className={`flex w-full items-center justify-between rounded-xl p-3 text-xs transition border ${isSelected
-                          ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm font-bold'
-                          : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-50'
+                        ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm font-bold'
+                        : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-50'
                         }`}
                     >
                       <div className="flex items-center gap-2">
@@ -1003,10 +1003,10 @@ export function CheckoutScreen({
                       </div>
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${isSelected
-                            ? 'bg-white/20 text-white'
-                            : isWholesale
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-white/20 text-white'
+                          : isWholesale
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-emerald-100 text-emerald-800'
                           }`}
                       >
                         {isWholesale ? 'Wholesale Tier' : 'Return Client'}
