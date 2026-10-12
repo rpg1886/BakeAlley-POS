@@ -701,7 +701,7 @@ export function CheckoutScreen({
         {/* MAIN POS 2-COLUMN LAYOUT */}
         <div className="grid grid-cols-12 gap-5 items-start w-full">
           {/* LEFT COLUMN: Quick Action Bar, Cart Table & Payment Bar (~38% width = 5 cols) */}
-          <div className="col-span-12 lg:col-span-5 space-y-4 w-full">
+          <div className="col-span-5 space-y-4 w-full">
             {/* Horizontal Action Tab Bar (Customer, Order Mode, Clear) */}
             <div className="flex flex-row items-center justify-between gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm w-full">
               <button
@@ -858,7 +858,7 @@ export function CheckoutScreen({
           </div>
 
           {/* RIGHT COLUMN: Search Input & 37-Category / Item Catalog Grid (~62% width = 7 cols) */}
-          <div className="lg:col-span-7 space-y-4">
+          <div className="col-span-7 space-y-4 w-full">
             {/* Top Barcode & SKU Search Bar */}
             <div className="relative">
               <input
@@ -917,7 +917,7 @@ export function CheckoutScreen({
 
               {!selectedCategory ? (
                 /* 37 CATEGORY TILE GRID */
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-3 gap-2">
                   {DEFAULT_CATEGORIES.map((catName) => (
                     <button
                       key={catName}
@@ -946,7 +946,7 @@ export function CheckoutScreen({
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-3 gap-2.5">
                       {categoryProducts.map((product) => {
                         const unitPrice = resolvePrice(product, pricingTierId, 1);
                         return (
@@ -974,7 +974,6 @@ export function CheckoutScreen({
             </div>
           </div>
         </div>
-      </div>
 
       {/* CUSTOMER PROFILE SELECTION MODAL WINDOW */}
       {customerModalOpen && (
