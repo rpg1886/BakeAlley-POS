@@ -699,15 +699,15 @@ export function CheckoutScreen({
         )}
 
         {/* MAIN POS 2-COLUMN LAYOUT */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="grid grid-cols-12 gap-5 items-start w-full">
           {/* LEFT COLUMN: Quick Action Bar, Cart Table & Payment Bar (~38% width = 5 cols) */}
-          <div className="lg:col-span-5 space-y-4">
+          <div className="col-span-12 lg:col-span-5 space-y-4 w-full">
             {/* Horizontal Action Tab Bar (Customer, Order Mode, Clear) */}
-            <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm">
+            <div className="flex flex-row items-center justify-between gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm w-full">
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
-                className={`rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${selectedCustomer
+                className={`flex-1 rounded-lg py-2.5 px-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${selectedCustomer
                   ? 'bg-emerald-700 text-white shadow-sm'
                   : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
@@ -719,18 +719,19 @@ export function CheckoutScreen({
               <button
                 type="button"
                 onClick={() => setOrderModeModalOpen(true)}
-                className={`rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${orderMode === 'reservation'
+                className={`flex-1 rounded-lg py-2.5 px-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${orderMode === 'reservation'
                   ? 'bg-amber-800 text-white shadow-sm'
                   : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
                 <span>⚙️</span>
-                <span>{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
+                <span className="truncate">{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => { setCart([]);
+                onClick={() => {
+                  setCart([]);
                   setOrderMode('immediate');
                   setDepositPreset('zero');
                   setCustomDeposit('');
@@ -741,28 +742,30 @@ export function CheckoutScreen({
                   localStorage.removeItem('bakealley_pos_custom_deposit');
                 }}
                 disabled={cart.length === 0}
-                className="rounded-lg bg-red-50 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex items-center justify-center gap-1.5"
+                className="flex-1 rounded-lg bg-red-50 py-2.5 px-2 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex items-center justify-center gap-1.5"
               >
                 <span>🗑️</span>
                 <span>Clear</span>
               </button>
             </div>
 
-            {/* Cart Table Container */}
-            <div className="rounded-xl border border-amber-200/80 bg-white shadow-sm overflow-hidden flex flex-col min-h-[420px] justify-between">
-              <div className="border-b border-amber-100 px-4 py-3 bg-amber-50/40 flex justify-between items-center">
+            {/* Cart Table Container - Unconditional Vertical Stack */}
+            <div className="block w-full rounded-xl border border-amber-200/80 bg-white shadow-sm overflow-hidden">
+              {/* 1. Header (Top) */}
+              <div className="w-full border-b border-amber-100 px-4 py-3 bg-amber-50/40 flex justify-between items-center">
                 <h2 className="font-bold text-xs uppercase tracking-wider text-amber-900">Current Transaction</h2>
                 <span className="text-[11px] font-bold text-amber-700">{cart.length} item(s)</span>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              {/* 2. Items List Table / Empty State (Middle - Full Width) */}
+              <div className="w-full min-h-[260px] max-h-[420px] overflow-y-auto block">
                 {cart.length === 0 ? (
-                  <div className="flex h-64 items-center justify-center text-center p-6">
+                  <div className="flex h-52 items-center justify-center text-center p-6 w-full">
                     <p className="text-sm font-semibold text-slate-400">No Records</p>
                   </div>
                 ) : (
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-amber-50/80 text-[11px] font-semibold text-amber-800 uppercase border-b border-amber-100">
+                    <thead className="bg-amber-50/80 text-[11px] font-semibold text-amber-800 uppercase border-b border-amber-100 sticky top-0 z-10">
                       <tr>
                         <th className="p-2.5">Item</th>
                         <th className="p-2.5 text-center">Qty</th>
@@ -806,8 +809,8 @@ export function CheckoutScreen({
                 )}
               </div>
 
-              {/* Bottom Sticky Total & Checkout Action */}
-              <div className="border-t border-amber-200 bg-amber-50/60 p-4 space-y-3">
+              {/* 3. Total Amount & Payment Action Button (Bottom - Placed directly UNDER Current Transaction) */}
+              <div className="w-full border-t border-amber-200 bg-amber-50/60 p-4 space-y-3 block">
                 {effectiveExchangeCredit > 0 && (
                   <div className="flex justify-between items-center text-xs bg-amber-100 p-2 rounded-lg border border-amber-300">
                     <span className="font-bold text-amber-900">🔄 Return Credit:</span>
