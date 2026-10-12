@@ -100,7 +100,6 @@ interface CartLine {
   unitPrice: number;
 }
 
-// Full 37 Categories extracted from Inventory_Main.csv
 const DEFAULT_CATEGORIES = [
   'BAKING PANS',
   'BALL TOPPERS',
@@ -211,8 +210,8 @@ export function CheckoutScreen({
 
   const [scaleReading, setScaleReading] = useState<CheckoutScaleReading | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [orderModeModalOpen, setOrderModeModalOpen] = useState(false);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [orderModeModalOpen, setOrderModeModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<CheckoutOrderPayment['method']>('cash');
   const [splitPayments, setSplitPayments] = useState<CheckoutOrderPayment[]>([]);
   const [cashReceived, setCashReceived] = useState('');
@@ -252,20 +251,6 @@ export function CheckoutScreen({
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
-  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
-  const customerDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target as Node)) {
-        setCustomerDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   useEffect(() => {
     localStorage.setItem('bakealley_pos_cart', JSON.stringify(cart));
@@ -448,7 +433,8 @@ export function CheckoutScreen({
       return;
     }
     if (!customerId) {
-      setMessage('A customer profile is required for reservations. Please select or add a customer in the top-right menu.');
+      setMessage('A customer profile is required for reservations. Please select or add a customer.');
+      setCustomerModalOpen(true);
       return;
     }
     setBusy(true);
@@ -660,10 +646,10 @@ export function CheckoutScreen({
           </div>
         )}
 
-        {/* MAIN POS 2-COLUMN LAYOUT */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+        {/* UNCONDITIONAL 2-COLUMN UNFORCED SIDE-BY-SIDE POS LAYOUT */}
+        <div className="grid grid-cols-12 gap-4 items-start">
           {/* LEFT COLUMN: Quick Action Bar, Cart Table & Payment Bar (~38% width = 5 cols) */}
-          <div className="col-span-12 md:col-span-5 space-y-4">
+          <div className="col-span-5 space-y-4">
             {/* Horizontal Action Tab Bar (Customer, Order Mode, Clear) */}
             <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm">
               <button
@@ -808,7 +794,7 @@ export function CheckoutScreen({
           </div>
 
           {/* RIGHT COLUMN: Search Input & 37-Category / Item Catalog Grid (~62% width = 7 cols) */}
-          <div className="col-span-12 md:col-span-7 space-y-4">
+          <div className="col-span-7 space-y-4">
             {/* Top Barcode & SKU Search Bar */}
             <div className="relative">
               <input
@@ -866,8 +852,8 @@ export function CheckoutScreen({
               </div>
 
               {!selectedCategory ? (
-                /* 37 CATEGORY TILE GRID */
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                /* UNCONDITIONAL 4-COLUMN CATEGORY TILE GRID */
+                <div className="grid grid-cols-4 gap-2">
                   {DEFAULT_CATEGORIES.map((catName) => (
                     <button
                       key={catName}
@@ -880,7 +866,7 @@ export function CheckoutScreen({
                   ))}
                 </div>
               ) : (
-                /* CATEGORY ITEM COVER VIEW */
+                /* UNCONDITIONAL 3-COLUMN CATEGORY ITEM COVER VIEW */
                 <div>
                   {categoryLoading ? (
                     <p className="py-16 text-center text-xs font-semibold text-amber-700">Loading products for {selectedCategory.name}...</p>
@@ -896,7 +882,7 @@ export function CheckoutScreen({
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-3 gap-2.5">
                       {categoryProducts.map((product) => {
                         const unitPrice = resolvePrice(product, pricingTierId, 1);
                         return (
