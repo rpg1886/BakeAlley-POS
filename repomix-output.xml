@@ -6744,6 +6744,98 @@ const checkoutBridge: BakeAlleyCheckoutBridge = {
 contextBridge.exposeInMainWorld('bakeAlleyCheckout', checkoutBridge);
 </file>
 
+<file path="web/cloudApi.ts">
+import { CloudApiClient, type CloudEmployee, type CloudProduct, type CloudShift } from './apiClient';
+
+export interface CloudCategory {
+  categoryId: string;
+  name: string;
+}
+
+export interface CloudSession {
+  token: string;
+  user: { userId: string; username: string; displayName: string; role: 'admin' | 'cashier' };
+}
+
+export class CloudPosApi extends CloudApiClient {
+  public async login(username: string, password: string): Promise<CloudSession> {
+    const response = await fetch(this.apiUrl('/api/v1/auth/login'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error ?? 'Login failed');
+    return response.json() as Promise<CloudSession>;
+  }
+
+  public async categories(): Promise<CloudCategory[]> {
+    const token = this.options.getToken();
+    const response = await fetch(this.apiUrl('/api/v1/categories'), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to fetch categories');
+    }
+    return response.json() as Promise<CloudCategory[]>;
+  }
+
+  public override async searchProducts(query: string): Promise<CloudProduct[]> {
+    const token = this.options.getToken();
+    const endpoint = query.startsWith('?')
+      ? `/api/v1/products/search${query}`
+      : `/api/v1/products/search?q=${encodeURIComponent(query)}`;
+
+    const response = await fetch(this.apiUrl(endpoint), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Product search failed');
+    }
+    return response.json() as Promise<CloudProduct[]>;
+  }
+
+  public override async employees(date?: string): Promise<CloudEmployee[]> {
+    const token = this.options.getToken();
+    const path = date ? `/api/v1/employees?date=${encodeURIComponent(date)}` : '/api/v1/employees';
+    const response = await fetch(this.apiUrl(path), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to fetch employees');
+    }
+    return response.json() as Promise<CloudEmployee[]>;
+  }
+
+  public override async shifts(date?: string): Promise<CloudShift[]> {
+    const token = this.options.getToken();
+    const path = date ? `/api/v1/employees/shifts?date=${encodeURIComponent(date)}` : '/api/v1/employees/shifts';
+    const response = await fetch(this.apiUrl(path), {
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to fetch shifts');
+    }
+    return response.json() as Promise<CloudShift[]>;
+  }
+}
+</file>
+
 <file path="web/index.html">
 <!doctype html>
 <html lang="en">
@@ -7001,6 +7093,195 @@ The beforeunload handler ensures that:
 git checkout CloudBase-POS
 git commit --allow-empty -m "Update frontend build target to Railway API"
 git push origin CloudBase-POS
+</file>
+
+<file path="import-log.txt">
+Starting import process...
+CSV Path: c:\Users\Ryan\Projects\BakeAlley-POS\BakeAlley-POS\Inventory_Main.csv
+Default Markup: 20%
+
+Step 1: Running database migration...
+(node:16372) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-01 20:12:19 [[32minfo[39m]: Database migration completed successfully {"service":"bake-alley-cloud-pos"}
+Step 1: Γ£ô Migration complete
+
+Step 2: Reading CSV file...
+Step 2: Γ£ô Read 1383 rows from CSV
+
+Step 3: Merging duplicate rows...
+Step 3: Γ£ô Merged to 1372 unique products (1 skipped)
+
+Step 4: Starting database transaction...
+Step 4: Γ£ô Transaction started
+
+Step 5: Ensuring Piece UOM exists...
+Step 5: Γ£ô Using UOM ID: a43f5fae-2e95-478e-b806-a7079b6a3d95
+
+Step 6: Ensuring Retail Tier exists...
+Step 6: Γ£ô Retail tier ready
+
+Step 7: Loading existing SKUs...
+Step 7: Γ£ô Found 0 existing SKUs
+
+Step 8: Processing inventory rows...
+  Processing row 10/1372...
+  Processing row 20/1372...
+  Processing row 30/1372...
+  Processing row 40/1372...
+  Processing row 50/1372...
+  Processing row 60/1372...
+  Processing row 70/1372...
+  Processing row 80/1372...
+  Processing row 90/1372...
+  Processing row 100/1372...
+  Processing row 110/1372...
+  Processing row 120/1372...
+  Processing row 130/1372...
+  Processing row 140/1372...
+  Processing row 150/1372...
+  Processing row 160/1372...
+  Processing row 170/1372...
+  Processing row 180/1372...
+  Processing row 190/1372...
+  Processing row 200/1372...
+  Processing row 210/1372...
+  Processing row 220/1372...
+  Processing row 230/1372...
+  Processing row 240/1372...
+  Processing row 250/1372...
+  Processing row 260/1372...
+  Processing row 270/1372...
+  Processing row 280/1372...
+  Processing row 290/1372...
+  Processing row 300/1372...
+  Processing row 310/1372...
+  Processing row 320/1372...
+  Processing row 330/1372...
+  Processing row 340/1372...
+  Processing row 350/1372...
+  Processing row 360/1372...
+  Processing row 370/1372...
+  Processing row 380/1372...
+  Processing row 390/1372...
+  Processing row 400/1372...
+  Processing row 410/1372...
+  Processing row 420/1372...
+  Processing row 430/1372...
+  Processing row 440/1372...
+  Processing row 450/1372...
+  Processing row 460/1372...
+  Processing row 470/1372...
+  Processing row 480/1372...
+  Processing row 490/1372...
+  Processing row 500/1372...
+  Processing row 510/1372...
+  Processing row 520/1372...
+  Processing row 530/1372...
+  Processing row 540/1372...
+  Processing row 550/1372...
+  Processing row 560/1372...
+  Processing row 570/1372...
+  Processing row 580/1372...
+  Processing row 590/1372...
+  Processing row 600/1372...
+  Processing row 610/1372...
+  Processing row 620/1372...
+  Processing row 630/1372...
+  Processing row 640/1372...
+  Processing row 650/1372...
+  Processing row 660/1372...
+  Processing row 670/1372...
+  Processing row 680/1372...
+  Processing row 690/1372...
+  Processing row 700/1372...
+  Processing row 710/1372...
+  Processing row 720/1372...
+  Processing row 730/1372...
+  Processing row 740/1372...
+  Processing row 750/1372...
+  Processing row 760/1372...
+  Processing row 770/1372...
+  Processing row 780/1372...
+  Processing row 790/1372...
+  Processing row 800/1372...
+  Processing row 810/1372...
+  Processing row 820/1372...
+  Processing row 830/1372...
+  Processing row 840/1372...
+  Processing row 850/1372...
+  Processing row 860/1372...
+  Processing row 870/1372...
+  Processing row 880/1372...
+  Processing row 890/1372...
+  Processing row 900/1372...
+  Processing row 910/1372...
+  Processing row 920/1372...
+  Processing row 930/1372...
+  Processing row 940/1372...
+  Processing row 950/1372...
+  Processing row 960/1372...
+  Processing row 970/1372...
+  Processing row 980/1372...
+  Processing row 990/1372...
+  Processing row 1000/1372...
+  Processing row 1010/1372...
+  Processing row 1020/1372...
+  Processing row 1030/1372...
+  Processing row 1040/1372...
+  Processing row 1050/1372...
+  Processing row 1060/1372...
+  Processing row 1070/1372...
+  Processing row 1080/1372...
+  Processing row 1090/1372...
+  Processing row 1100/1372...
+  Processing row 1110/1372...
+  Processing row 1120/1372...
+  Processing row 1130/1372...
+  Processing row 1140/1372...
+  Processing row 1150/1372...
+  Processing row 1160/1372...
+  Processing row 1170/1372...
+  Processing row 1180/1372...
+  Processing row 1190/1372...
+  Processing row 1200/1372...
+  Processing row 1210/1372...
+  Processing row 1220/1372...
+  Processing row 1230/1372...
+  Processing row 1240/1372...
+  Processing row 1250/1372...
+  Processing row 1260/1372...
+  Processing row 1270/1372...
+  Processing row 1280/1372...
+  Processing row 1290/1372...
+  Processing row 1300/1372...
+  Processing row 1310/1372...
+  Processing row 1320/1372...
+  Processing row 1330/1372...
+  Processing row 1340/1372...
+  Processing row 1350/1372...
+  Processing row 1360/1372...
+  Processing row 1370/1372...
+Step 8: Γ£ô Processed 1372 rows
+
+Step 9: Committing transaction...
+Step 9: Γ£ô Transaction committed
+
+Imported 1383 rows from c:\Users\Ryan\Projects\BakeAlley-POS\BakeAlley-POS\Inventory_Main.csv (1 skipped).
+{"createdCategories":37,"createdProducts":1372,"updatedProducts":0,"createdLots":1372,"updatedLots":0}
+2026-10-01 21:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
+2026-10-01 22:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
+2026-10-01 23:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
+2026-10-02 00:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
+2026-10-02 01:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
+2026-10-02 02:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
 </file>
 
 <file path="index.html">
@@ -16116,98 +16397,6 @@ export function CheckoutScreen({
 }
 </file>
 
-<file path="web/cloudApi.ts">
-import { CloudApiClient, type CloudEmployee, type CloudProduct, type CloudShift } from './apiClient';
-
-export interface CloudCategory {
-  categoryId: string;
-  name: string;
-}
-
-export interface CloudSession {
-  token: string;
-  user: { userId: string; username: string; displayName: string; role: 'admin' | 'cashier' };
-}
-
-export class CloudPosApi extends CloudApiClient {
-  public async login(username: string, password: string): Promise<CloudSession> {
-    const response = await fetch(this.apiUrl('/api/v1/auth/login'), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error ?? 'Login failed');
-    return response.json() as Promise<CloudSession>;
-  }
-
-  public async categories(): Promise<CloudCategory[]> {
-    const token = this.options.getToken();
-    const response = await fetch(this.apiUrl('/api/v1/categories'), {
-      headers: {
-        'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to fetch categories');
-    }
-    return response.json() as Promise<CloudCategory[]>;
-  }
-
-  public override async searchProducts(query: string): Promise<CloudProduct[]> {
-    const token = this.options.getToken();
-    const endpoint = query.startsWith('?')
-      ? `/api/v1/products/search${query}`
-      : `/api/v1/products/search?q=${encodeURIComponent(query)}`;
-
-    const response = await fetch(this.apiUrl(endpoint), {
-      headers: {
-        'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Product search failed');
-    }
-    return response.json() as Promise<CloudProduct[]>;
-  }
-
-  public override async employees(date?: string): Promise<CloudEmployee[]> {
-    const token = this.options.getToken();
-    const path = date ? `/api/v1/employees?date=${encodeURIComponent(date)}` : '/api/v1/employees';
-    const response = await fetch(this.apiUrl(path), {
-      headers: {
-        'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to fetch employees');
-    }
-    return response.json() as Promise<CloudEmployee[]>;
-  }
-
-  public override async shifts(date?: string): Promise<CloudShift[]> {
-    const token = this.options.getToken();
-    const path = date ? `/api/v1/employees/shifts?date=${encodeURIComponent(date)}` : '/api/v1/employees/shifts';
-    const response = await fetch(this.apiUrl(path), {
-      headers: {
-        'content-type': 'application/json',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to fetch shifts');
-    }
-    return response.json() as Promise<CloudShift[]>;
-  }
-}
-</file>
-
 <file path="DEPLOYMENT_READY.md">
 # ✅ DEPLOYMENT READY - Build & Syntax Errors FIXED
 
@@ -16437,195 +16626,6 @@ All identified issues have been remediated through recent commits. No blocking i
 **Report Generated:** 2026-10-03 15:48  
 **Deployment Status:** ✅ APPROVED FOR DEPLOYMENT  
 **Validated By:** Automated Analysis + Binary Inspection
-</file>
-
-<file path="import-log.txt">
-Starting import process...
-CSV Path: c:\Users\Ryan\Projects\BakeAlley-POS\BakeAlley-POS\Inventory_Main.csv
-Default Markup: 20%
-
-Step 1: Running database migration...
-(node:16372) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
-In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
-
-To prepare for this change:
-- If you want the current behavior, explicitly use 'sslmode=verify-full'
-- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
-
-See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
-(Use `node --trace-warnings ...` to show where the warning was created)
-2026-10-01 20:12:19 [[32minfo[39m]: Database migration completed successfully {"service":"bake-alley-cloud-pos"}
-Step 1: Γ£ô Migration complete
-
-Step 2: Reading CSV file...
-Step 2: Γ£ô Read 1383 rows from CSV
-
-Step 3: Merging duplicate rows...
-Step 3: Γ£ô Merged to 1372 unique products (1 skipped)
-
-Step 4: Starting database transaction...
-Step 4: Γ£ô Transaction started
-
-Step 5: Ensuring Piece UOM exists...
-Step 5: Γ£ô Using UOM ID: a43f5fae-2e95-478e-b806-a7079b6a3d95
-
-Step 6: Ensuring Retail Tier exists...
-Step 6: Γ£ô Retail tier ready
-
-Step 7: Loading existing SKUs...
-Step 7: Γ£ô Found 0 existing SKUs
-
-Step 8: Processing inventory rows...
-  Processing row 10/1372...
-  Processing row 20/1372...
-  Processing row 30/1372...
-  Processing row 40/1372...
-  Processing row 50/1372...
-  Processing row 60/1372...
-  Processing row 70/1372...
-  Processing row 80/1372...
-  Processing row 90/1372...
-  Processing row 100/1372...
-  Processing row 110/1372...
-  Processing row 120/1372...
-  Processing row 130/1372...
-  Processing row 140/1372...
-  Processing row 150/1372...
-  Processing row 160/1372...
-  Processing row 170/1372...
-  Processing row 180/1372...
-  Processing row 190/1372...
-  Processing row 200/1372...
-  Processing row 210/1372...
-  Processing row 220/1372...
-  Processing row 230/1372...
-  Processing row 240/1372...
-  Processing row 250/1372...
-  Processing row 260/1372...
-  Processing row 270/1372...
-  Processing row 280/1372...
-  Processing row 290/1372...
-  Processing row 300/1372...
-  Processing row 310/1372...
-  Processing row 320/1372...
-  Processing row 330/1372...
-  Processing row 340/1372...
-  Processing row 350/1372...
-  Processing row 360/1372...
-  Processing row 370/1372...
-  Processing row 380/1372...
-  Processing row 390/1372...
-  Processing row 400/1372...
-  Processing row 410/1372...
-  Processing row 420/1372...
-  Processing row 430/1372...
-  Processing row 440/1372...
-  Processing row 450/1372...
-  Processing row 460/1372...
-  Processing row 470/1372...
-  Processing row 480/1372...
-  Processing row 490/1372...
-  Processing row 500/1372...
-  Processing row 510/1372...
-  Processing row 520/1372...
-  Processing row 530/1372...
-  Processing row 540/1372...
-  Processing row 550/1372...
-  Processing row 560/1372...
-  Processing row 570/1372...
-  Processing row 580/1372...
-  Processing row 590/1372...
-  Processing row 600/1372...
-  Processing row 610/1372...
-  Processing row 620/1372...
-  Processing row 630/1372...
-  Processing row 640/1372...
-  Processing row 650/1372...
-  Processing row 660/1372...
-  Processing row 670/1372...
-  Processing row 680/1372...
-  Processing row 690/1372...
-  Processing row 700/1372...
-  Processing row 710/1372...
-  Processing row 720/1372...
-  Processing row 730/1372...
-  Processing row 740/1372...
-  Processing row 750/1372...
-  Processing row 760/1372...
-  Processing row 770/1372...
-  Processing row 780/1372...
-  Processing row 790/1372...
-  Processing row 800/1372...
-  Processing row 810/1372...
-  Processing row 820/1372...
-  Processing row 830/1372...
-  Processing row 840/1372...
-  Processing row 850/1372...
-  Processing row 860/1372...
-  Processing row 870/1372...
-  Processing row 880/1372...
-  Processing row 890/1372...
-  Processing row 900/1372...
-  Processing row 910/1372...
-  Processing row 920/1372...
-  Processing row 930/1372...
-  Processing row 940/1372...
-  Processing row 950/1372...
-  Processing row 960/1372...
-  Processing row 970/1372...
-  Processing row 980/1372...
-  Processing row 990/1372...
-  Processing row 1000/1372...
-  Processing row 1010/1372...
-  Processing row 1020/1372...
-  Processing row 1030/1372...
-  Processing row 1040/1372...
-  Processing row 1050/1372...
-  Processing row 1060/1372...
-  Processing row 1070/1372...
-  Processing row 1080/1372...
-  Processing row 1090/1372...
-  Processing row 1100/1372...
-  Processing row 1110/1372...
-  Processing row 1120/1372...
-  Processing row 1130/1372...
-  Processing row 1140/1372...
-  Processing row 1150/1372...
-  Processing row 1160/1372...
-  Processing row 1170/1372...
-  Processing row 1180/1372...
-  Processing row 1190/1372...
-  Processing row 1200/1372...
-  Processing row 1210/1372...
-  Processing row 1220/1372...
-  Processing row 1230/1372...
-  Processing row 1240/1372...
-  Processing row 1250/1372...
-  Processing row 1260/1372...
-  Processing row 1270/1372...
-  Processing row 1280/1372...
-  Processing row 1290/1372...
-  Processing row 1300/1372...
-  Processing row 1310/1372...
-  Processing row 1320/1372...
-  Processing row 1330/1372...
-  Processing row 1340/1372...
-  Processing row 1350/1372...
-  Processing row 1360/1372...
-  Processing row 1370/1372...
-Step 8: Γ£ô Processed 1372 rows
-
-Step 9: Committing transaction...
-Step 9: Γ£ô Transaction committed
-
-Imported 1383 rows from c:\Users\Ryan\Projects\BakeAlley-POS\BakeAlley-POS\Inventory_Main.csv (1 skipped).
-{"createdCategories":37,"createdProducts":1372,"updatedProducts":0,"createdLots":1372,"updatedLots":0}
-2026-10-01 21:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
-2026-10-01 22:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
-2026-10-01 23:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
-2026-10-02 00:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
-2026-10-02 01:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
-2026-10-02 02:12:19 [[31merror[39m]: Failed to cleanup expired sessions {"service":"bake-alley-cloud-pos","error":"Cannot use a pool after calling end on the pool"}
 </file>
 
 <file path="README.md">
@@ -17847,6 +17847,40 @@ const dateSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
 });
 
+// Add Category Validation Schemas (Insert before validate helper around Line 110)
+const categorySchema = z.object({
+  name: z.string().min(1, 'Category name is required').max(100),
+});
+
+const categoryReassignSchema = z.object({
+  productIds: z.array(z.string().uuid('Invalid product ID')),
+  categoryId: z.string().uuid('Invalid category ID').nullable(),
+});
+
+// Update validation helper & module.exports (Lines 112 - 131)
+function validate(schema, data) {
+  try {
+    return { success: true, data: schema.parse(data) };
+  } catch (error) {
+    return { success: false, errors: error.errors };
+  }
+}
+
+module.exports = {
+  loginSchema,
+  customerSchema,
+  employeeSchema,
+  inventoryAdjustSchema,
+  inventoryProductSchema,
+  inventoryUpdateSchema,
+  orderPayloadSchema,
+  searchSchema,
+  dateSchema,
+  categorySchema,
+  categoryReassignSchema,
+  validate,
+};
+
 // Validation helper
 function validate(schema, data) {
   try {
@@ -17868,6 +17902,107 @@ module.exports = {
   dateSchema,
   validate,
 };
+</file>
+
+<file path="server/auth.js">
+const crypto = require('node:crypto');
+const logger = require('./logger');
+
+function verifyPassword(password, salt, expectedHash) {
+  const actual = crypto.scryptSync(password, salt, 64);
+  const expected = Buffer.from(expectedHash, 'hex');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+async function requireSession(request, response, next) { 
+  const token = request.headers.authorization?.replace(/^Bearer\s+/i, ''); 
+  if (!token) return response.status(401).json({ error: 
+    'AUTHENTICATION_REQUIRED' }); 
+    
+  try { 
+    const pool = request.pool; 
+    const result = await pool.query( 
+      'SELECT u.user_id, u.username, u.display_name, u.role FROM sessions s JOIN app_users u ON u.user_id = s.user_id WHERE s.token = $1 AND s.expires_at > NOW() AND u.active = TRUE', 
+      [token] 
+    );
+    if (!result.rows[0]) {
+      logger.warn('Session lookup failed or expired', { token: token.substring(0, 8) + '...' });
+      return response.status(401).json({ error: 'AUTHENTICATION_REQUIRED' });
+    }
+    const user = result.rows[0];
+    request.user = { userId: user.user_id, username: user.username, displayName: user.display_name, role: user.role };
+    request.sessionToken = token;
+    return next();
+  } catch (error) {
+    logger.error('Session verification error', { error: error.message });
+    return next(error);
+  }
+}
+
+function requireAdmin(request, response, next) {
+  if (request.user?.role !== 'admin') return response.status(403).json({ error: 'ADMIN_REQUIRED' });
+  return next();
+}
+
+function createAuthRouter(express, pool) {
+  const router = express.Router();
+  
+  router.post('/auth/login', async (request, response, next) => {
+    try {
+      const username = String(request.body?.username ?? '').trim().toLowerCase();
+      const password = String(request.body?.password ?? '');
+      
+      if (!username || !password) {
+        return response.status(400).json({ error: 'INVALID_CREDENTIALS' });
+      }
+      
+      const result = await pool.query(
+        'SELECT user_id, username, display_name, role, password_salt, password_hash FROM app_users WHERE username = $1 AND active = TRUE',
+        [username]
+      );
+      
+      const row = result.rows[0];
+      if (!row || !verifyPassword(password, row.password_salt, row.password_hash)) {
+        logger.warn('Failed login attempt', { username });
+        return response.status(401).json({ error: 'INVALID_CREDENTIALS' });
+      }
+      
+      // Create session token with 24-hour expiry
+      const token = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      
+      await pool.query(
+        'INSERT INTO sessions (session_id, user_id, token, expires_at) VALUES (gen_random_uuid(), $1, $2, $3)',
+        [row.user_id, token, expiresAt.toISOString()]
+      );
+      
+      const user = { userId: row.user_id, username: row.username, displayName: row.display_name, role: row.role };
+      logger.info('User logged in', { username });
+      return response.json({ token, user });
+    } catch (error) { 
+      logger.error('Login error', { error: error.message });
+      return next(error); 
+    }
+  });
+  
+  router.post('/auth/logout', async (request, response, next) => {
+    try {
+      const token = request.headers.authorization?.replace(/^Bearer\s+/i, '');
+      if (token) {
+        await pool.query('DELETE FROM sessions WHERE token = $1', [token]);
+      }
+      logger.info('User logged out');
+      return response.status(204).end();
+    } catch (error) {
+      logger.error('Logout error', { error: error.message });
+      return next(error);
+    }
+  });
+  
+  return { router, requireSession, requireAdmin };
+}
+
+module.exports = { createAuthRouter };
 </file>
 
 <file path="web/apiClient.ts">
@@ -18001,6 +18136,31 @@ export class CloudApiClient {
     return this.request(`/api/v1/products/search?q=${encodeURIComponent(query)}`);
   }
 
+  // ADD Category & Product Reassignment API Methods to CloudApiClient:
+
+  public async categories(): Promise<Array<{ categoryId: string; name: string; productCount?: number }>> {
+    return this.request('/api/v1/categories');
+  }
+
+  public async createCategory(name: string): Promise<{ categoryId: string; name: string }> {
+    return this.request('/api/v1/categories', { method: 'POST', body: JSON.stringify({ name }) });
+  }
+
+  public async updateCategory(categoryId: string, name: string): Promise<{ categoryId: string; name: string }> {
+    return this.request(`/api/v1/categories/${encodeURIComponent(categoryId)}`, { method: 'PUT', body: JSON.stringify({ name }) });
+  }
+
+  public async deleteCategory(categoryId: string): Promise<void> {
+    await this.request(`/api/v1/categories/${encodeURIComponent(categoryId)}`, { method: 'DELETE' });
+  }
+
+  public async reassignProductCategory(productIds: string[], categoryId: string | null): Promise<{ updatedCount: number; categoryId: string | null }> {
+    return this.request('/api/v1/inventory/products/reassign-category', {
+      method: 'PUT',
+      body: JSON.stringify({ productIds, categoryId }),
+    });
+  }
+
   public async customers(): Promise<CloudCustomer[]> {
     return this.request('/api/v1/customers');
   }
@@ -18095,107 +18255,6 @@ export class CloudApiClient {
     return response.status === 204 ? undefined : response.json();
   }
 }
-</file>
-
-<file path="server/auth.js">
-const crypto = require('node:crypto');
-const logger = require('./logger');
-
-function verifyPassword(password, salt, expectedHash) {
-  const actual = crypto.scryptSync(password, salt, 64);
-  const expected = Buffer.from(expectedHash, 'hex');
-  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
-}
-
-async function requireSession(request, response, next) { 
-  const token = request.headers.authorization?.replace(/^Bearer\s+/i, ''); 
-  if (!token) return response.status(401).json({ error: 
-    'AUTHENTICATION_REQUIRED' }); 
-    
-  try { 
-    const pool = request.pool; 
-    const result = await pool.query( 
-      'SELECT u.user_id, u.username, u.display_name, u.role FROM sessions s JOIN app_users u ON u.user_id = s.user_id WHERE s.token = $1 AND s.expires_at > NOW() AND u.active = TRUE', 
-      [token] 
-    );
-    if (!result.rows[0]) {
-      logger.warn('Session lookup failed or expired', { token: token.substring(0, 8) + '...' });
-      return response.status(401).json({ error: 'AUTHENTICATION_REQUIRED' });
-    }
-    const user = result.rows[0];
-    request.user = { userId: user.user_id, username: user.username, displayName: user.display_name, role: user.role };
-    request.sessionToken = token;
-    return next();
-  } catch (error) {
-    logger.error('Session verification error', { error: error.message });
-    return next(error);
-  }
-}
-
-function requireAdmin(request, response, next) {
-  if (request.user?.role !== 'admin') return response.status(403).json({ error: 'ADMIN_REQUIRED' });
-  return next();
-}
-
-function createAuthRouter(express, pool) {
-  const router = express.Router();
-  
-  router.post('/auth/login', async (request, response, next) => {
-    try {
-      const username = String(request.body?.username ?? '').trim().toLowerCase();
-      const password = String(request.body?.password ?? '');
-      
-      if (!username || !password) {
-        return response.status(400).json({ error: 'INVALID_CREDENTIALS' });
-      }
-      
-      const result = await pool.query(
-        'SELECT user_id, username, display_name, role, password_salt, password_hash FROM app_users WHERE username = $1 AND active = TRUE',
-        [username]
-      );
-      
-      const row = result.rows[0];
-      if (!row || !verifyPassword(password, row.password_salt, row.password_hash)) {
-        logger.warn('Failed login attempt', { username });
-        return response.status(401).json({ error: 'INVALID_CREDENTIALS' });
-      }
-      
-      // Create session token with 24-hour expiry
-      const token = crypto.randomUUID();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      
-      await pool.query(
-        'INSERT INTO sessions (session_id, user_id, token, expires_at) VALUES (gen_random_uuid(), $1, $2, $3)',
-        [row.user_id, token, expiresAt.toISOString()]
-      );
-      
-      const user = { userId: row.user_id, username: row.username, displayName: row.display_name, role: row.role };
-      logger.info('User logged in', { username });
-      return response.json({ token, user });
-    } catch (error) { 
-      logger.error('Login error', { error: error.message });
-      return next(error); 
-    }
-  });
-  
-  router.post('/auth/logout', async (request, response, next) => {
-    try {
-      const token = request.headers.authorization?.replace(/^Bearer\s+/i, '');
-      if (token) {
-        await pool.query('DELETE FROM sessions WHERE token = $1', [token]);
-      }
-      logger.info('User logged out');
-      return response.status(204).end();
-    } catch (error) {
-      logger.error('Logout error', { error: error.message });
-      return next(error);
-    }
-  });
-  
-  return { router, requireSession, requireAdmin };
-}
-
-module.exports = { createAuthRouter };
 </file>
 
 <file path="src/renderer/LoginScreen.tsx">
@@ -18537,14 +18596,22 @@ export function CheckoutScreen({
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Advance Order / Reservation States
-  const [orderMode, setOrderMode] = useState<'immediate' | 'reservation'>('immediate');
+  const [orderMode, setOrderMode] = useState<'immediate' | 'reservation'>(() => {
+    return (localStorage.getItem('bakealley_pos_order_mode') as 'immediate' | 'reservation') || 'immediate';
+  });
   const [fulfillmentDate, setFulfillmentDate] = useState<string>(() => {
+    const savedDate = localStorage.getItem('bakealley_pos_fulfillment_date');
+    if (savedDate) return savedDate;
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     return tomorrow.toISOString().slice(0, 10);
   });
-  const [depositPreset, setDepositPreset] = useState<'zero' | '50' | '100' | 'custom'>('zero');
-  const [customDeposit, setCustomDeposit] = useState<string>('');
+  const [depositPreset, setDepositPreset] = useState<'zero' | '50' | '100' | 'custom'>(() => {
+    return (localStorage.getItem('bakealley_pos_deposit_preset') as 'zero' | '50' | '100' | 'custom') || 'zero';
+  });
+  const [customDeposit, setCustomDeposit] = useState<string>(() => {
+    return localStorage.getItem('bakealley_pos_custom_deposit') || '';
+  });
 
   const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
   const taxAmount = subtotal * taxRate;
@@ -18594,6 +18661,22 @@ export function CheckoutScreen({
       localStorage.removeItem('bakealley_pos_customer_id');
     }
   }, [customerId]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_order_mode', orderMode);
+  }, [orderMode]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_fulfillment_date', fulfillmentDate);
+  }, [fulfillmentDate]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_deposit_preset', depositPreset);
+  }, [depositPreset]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_custom_deposit', customDeposit);
+  }, [customDeposit]);
 
   useEffect(() => {
     if (dataSource.categories) {
@@ -18790,8 +18873,15 @@ export function CheckoutScreen({
 
       setCart([]);
       setCustomerId(null);
+      setOrderMode('immediate');
+      setDepositPreset('zero');
+      setCustomDeposit('');
       localStorage.removeItem('bakealley_pos_cart');
       localStorage.removeItem('bakealley_pos_customer_id');
+      localStorage.removeItem('bakealley_pos_order_mode');
+      localStorage.removeItem('bakealley_pos_fulfillment_date');
+      localStorage.removeItem('bakealley_pos_deposit_preset');
+      localStorage.removeItem('bakealley_pos_custom_deposit');
 
       setMessage(`Advance Order Reservation created successfully for ${fulfillmentDate}! Balance Due on pickup: ${money.format(totalAmount)}`);
     } catch (error) {
@@ -18895,8 +18985,15 @@ export function CheckoutScreen({
 
       setCart([]);
       setCustomerId(null);
+      setOrderMode('immediate');
+      setDepositPreset('zero');
+      setCustomDeposit('');
       localStorage.removeItem('bakealley_pos_cart');
       localStorage.removeItem('bakealley_pos_customer_id');
+      localStorage.removeItem('bakealley_pos_order_mode');
+      localStorage.removeItem('bakealley_pos_fulfillment_date');
+      localStorage.removeItem('bakealley_pos_deposit_preset');
+      localStorage.removeItem('bakealley_pos_custom_deposit');
 
       setCashReceived('');
       setSplitPayments([]);
@@ -18976,18 +19073,17 @@ export function CheckoutScreen({
           </div>
         )}
 
-        {/* MAIN POS 2-COLUMN LAYOUT */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+        <div className="grid grid-cols-12 gap-5 items-start w-full">
           {/* LEFT COLUMN: Quick Action Bar, Cart Table & Payment Bar (~38% width = 5 cols) */}
-          <div className="col-span-12 md:col-span-5 space-y-4">
+          <div className="col-span-12 md:col-span-5 space-y-4 w-full">
             {/* Horizontal Action Tab Bar (Customer, Order Mode, Clear) */}
-            <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm">
+            <div className="flex flex-row items-center justify-between gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm w-full">
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
-                className={`rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${selectedCustomer
-                    ? 'bg-emerald-700 text-white shadow-sm'
-                    : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
+                className={`flex-1 rounded-lg py-2.5 px-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${selectedCustomer
+                  ? 'bg-emerald-700 text-white shadow-sm'
+                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
                 <span>👤</span>
@@ -18997,41 +19093,53 @@ export function CheckoutScreen({
               <button
                 type="button"
                 onClick={() => setOrderModeModalOpen(true)}
-                className={`rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${orderMode === 'reservation'
-                    ? 'bg-amber-800 text-white shadow-sm'
-                    : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
+                className={`flex-1 rounded-lg py-2.5 px-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${orderMode === 'reservation'
+                  ? 'bg-amber-800 text-white shadow-sm'
+                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
                 <span>⚙️</span>
-                <span>{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
+                <span className="truncate">{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setCart([])}
+                onClick={() => {
+                  setCart([]);
+                  setOrderMode('immediate');
+                  setDepositPreset('zero');
+                  setCustomDeposit('');
+                  localStorage.removeItem('bakealley_pos_cart');
+                  localStorage.removeItem('bakealley_pos_order_mode');
+                  localStorage.removeItem('bakealley_pos_fulfillment_date');
+                  localStorage.removeItem('bakealley_pos_deposit_preset');
+                  localStorage.removeItem('bakealley_pos_custom_deposit');
+                }}
                 disabled={cart.length === 0}
-                className="rounded-lg bg-red-50 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex items-center justify-center gap-1.5"
+                className="flex-1 rounded-lg bg-red-50 py-2.5 px-2 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex items-center justify-center gap-1.5"
               >
                 <span>🗑️</span>
                 <span>Clear</span>
               </button>
             </div>
 
-            {/* Cart Table Container */}
-            <div className="rounded-xl border border-amber-200/80 bg-white shadow-sm overflow-hidden flex flex-col min-h-[420px] justify-between">
-              <div className="border-b border-amber-100 px-4 py-3 bg-amber-50/40 flex justify-between items-center">
+            {/* Cart Table Container - Unconditional Vertical Stack */}
+            <div className="block w-full rounded-xl border border-amber-200/80 bg-white shadow-sm overflow-hidden">
+              {/* 1. Header (Top) */}
+              <div className="w-full border-b border-amber-100 px-4 py-3 bg-amber-50/40 flex justify-between items-center">
                 <h2 className="font-bold text-xs uppercase tracking-wider text-amber-900">Current Transaction</h2>
                 <span className="text-[11px] font-bold text-amber-700">{cart.length} item(s)</span>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              {/* 2. Items List Table / Empty State (Middle - Full Width) */}
+              <div className="w-full min-h-[260px] max-h-[420px] overflow-y-auto block">
                 {cart.length === 0 ? (
-                  <div className="flex h-64 items-center justify-center text-center p-6">
+                  <div className="flex h-52 items-center justify-center text-center p-6 w-full">
                     <p className="text-sm font-semibold text-slate-400">No Records</p>
                   </div>
                 ) : (
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-amber-50/80 text-[11px] font-semibold text-amber-800 uppercase border-b border-amber-100">
+                    <thead className="bg-amber-50/80 text-[11px] font-semibold text-amber-800 uppercase border-b border-amber-100 sticky top-0 z-10">
                       <tr>
                         <th className="p-2.5">Item</th>
                         <th className="p-2.5 text-center">Qty</th>
@@ -19075,8 +19183,8 @@ export function CheckoutScreen({
                 )}
               </div>
 
-              {/* Bottom Sticky Total & Checkout Action */}
-              <div className="border-t border-amber-200 bg-amber-50/60 p-4 space-y-3">
+              {/* 3. Total Amount & Payment Action Button (Bottom - Placed directly UNDER Current Transaction) */}
+              <div className="w-full border-t border-amber-200 bg-amber-50/60 p-4 space-y-3 block">
                 {effectiveExchangeCredit > 0 && (
                   <div className="flex justify-between items-center text-xs bg-amber-100 p-2 rounded-lg border border-amber-300">
                     <span className="font-bold text-amber-900">🔄 Return Credit:</span>
@@ -19124,7 +19232,7 @@ export function CheckoutScreen({
           </div>
 
           {/* RIGHT COLUMN: Search Input & 37-Category / Item Catalog Grid (~62% width = 7 cols) */}
-          <div className="col-span-12 md:col-span-7 space-y-4">
+          <div className="col-span-12 md:col-span-7 space-y-4 w-full">
             {/* Top Barcode & SKU Search Bar */}
             <div className="relative">
               <input
@@ -19283,8 +19391,8 @@ export function CheckoutScreen({
                   setCustomerModalOpen(false);
                 }}
                 className={`w-full text-left rounded-xl p-3 text-xs font-bold transition border ${!selectedCustomer
-                    ? 'bg-amber-800 text-white border-amber-800 shadow-sm'
-                    : 'bg-amber-50/50 border-amber-200 text-amber-900 hover:bg-amber-100'
+                  ? 'bg-amber-800 text-white border-amber-800 shadow-sm'
+                  : 'bg-amber-50/50 border-amber-200 text-amber-900 hover:bg-amber-100'
                   }`}
               >
                 <div className="flex items-center justify-between">
@@ -19309,8 +19417,8 @@ export function CheckoutScreen({
                         setCustomerModalOpen(false);
                       }}
                       className={`flex w-full items-center justify-between rounded-xl p-3 text-xs transition border ${isSelected
-                          ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm font-bold'
-                          : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-50'
+                        ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm font-bold'
+                        : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-50'
                         }`}
                     >
                       <div className="flex items-center gap-2">
@@ -19319,10 +19427,10 @@ export function CheckoutScreen({
                       </div>
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${isSelected
-                            ? 'bg-white/20 text-white'
-                            : isWholesale
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-white/20 text-white'
+                          : isWholesale
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-emerald-100 text-emerald-800'
                           }`}
                       >
                         {isWholesale ? 'Wholesale Tier' : 'Return Client'}
@@ -19657,7 +19765,7 @@ require('dotenv').config();
 const { pool, migrate } = require('./db');
 const { createAuthRouter } = require('./auth');
 const logger = require('./logger');
-const { validate, customerSchema, employeeSchema, inventoryAdjustSchema, inventoryProductSchema, inventoryUpdateSchema, orderPayloadSchema } = require('./validation');
+const { validate, customerSchema, employeeSchema, inventoryAdjustSchema, inventoryProductSchema, inventoryUpdateSchema, orderPayloadSchema, categorySchema, categoryReassignSchema } = require('./validation');
 
 const app = express();
 
@@ -19727,12 +19835,81 @@ app.get('/api/v1/version', (_request, response) => {
 });
 
 // Category List Endpoint
+// GET Category List with Product Count
 app.get('/api/v1/categories', auth.requireSession, async (_request, response, next) => {
   try {
-    const result = await pool.query('SELECT category_id AS "categoryId", name FROM categories ORDER BY name');
+    const result = await pool.query(`
+      SELECT c.category_id AS "categoryId", c.name, COUNT(p.product_id)::int AS "productCount"
+      FROM categories c
+      LEFT JOIN products p ON p.category_id = c.category_id
+      GROUP BY c.category_id, c.name
+      ORDER BY c.name
+    `);
     response.json(result.rows);
   } catch (error) {
     logger.error('Categories list failed', { error: error.message });
+    next(error);
+  }
+});
+
+// POST Create Category (Admin Only)
+app.post('/api/v1/categories', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const validation = validate(categorySchema, request.body);
+    if (!validation.success) {
+      return response.status(400).json({ error: 'INVALID_CATEGORY', details: validation.errors });
+    }
+    const name = validation.data.name.trim();
+    const existing = await pool.query('SELECT category_id FROM categories WHERE lower(name) = lower($1)', [name]);
+    if (existing.rowCount > 0) {
+      return response.status(409).json({ error: 'CATEGORY_EXISTS', message: 'A category with this name already exists' });
+    }
+    const result = await pool.query(
+      'INSERT INTO categories (category_id, name) VALUES (gen_random_uuid(), $1) RETURNING category_id AS "categoryId", name',
+      [name]
+    );
+    response.status(201).json(result.rows[0]);
+  } catch (error) {
+    logger.error('Category creation failed', { error: error.message });
+    next(error);
+  }
+});
+
+// PUT Rename Category (Admin Only)
+app.put('/api/v1/categories/:categoryId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const { categoryId } = request.params;
+    const validation = validate(categorySchema, request.body);
+    if (!validation.success) {
+      return response.status(400).json({ error: 'INVALID_CATEGORY', details: validation.errors });
+    }
+    const name = validation.data.name.trim();
+    const result = await pool.query(
+      'UPDATE categories SET name = $1 WHERE category_id = $2 RETURNING category_id AS "categoryId", name',
+      [name, categoryId]
+    );
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: 'CATEGORY_NOT_FOUND', message: 'Category not found' });
+    }
+    response.json(result.rows[0]);
+  } catch (error) {
+    logger.error('Category rename failed', { error: error.message });
+    next(error);
+  }
+});
+
+// DELETE Category (Admin Only - unlinks products)
+app.delete('/api/v1/categories/:categoryId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const { categoryId } = request.params;
+    await pool.query('UPDATE products SET category_id = NULL WHERE category_id = $1', [categoryId]);
+    const result = await pool.query('DELETE FROM categories WHERE category_id = $1 RETURNING category_id', [categoryId]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: 'CATEGORY_NOT_FOUND', message: 'Category not found' });
+    }
+    response.json({ categoryId, deleted: true });
+  } catch (error) {
+    logger.error('Category deletion failed', { error: error.message });
     next(error);
   }
 });
@@ -20057,6 +20234,27 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
           );
         }
       }
+
+      app.put('/api/v1/inventory/products/reassign-category', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+        try {
+          const validation = validate(categoryReassignSchema, request.body);
+          if (!validation.success) {
+            return response.status(400).json({ error: 'INVALID_REASSIGNMENT', details: validation.errors });
+          }
+          const { productIds, categoryId } = validation.data;
+          if (productIds.length === 0) {
+            return response.status(400).json({ error: 'NO_PRODUCTS_SELECTED', message: 'At least one product must be selected' });
+          }
+          const result = await pool.query(
+            'UPDATE products SET category_id = $1 WHERE product_id = ANY($2::uuid[]) RETURNING product_id',
+            [categoryId, productIds]
+          );
+          response.json({ updatedCount: result.rowCount, categoryId });
+        } catch (error) {
+          logger.error('Product category reassignment failed', { error: error.message });
+          next(error);
+        }
+      });
 
       // Update lot if lotNumber or expirationDate provided
       if (body.lotNumber || body.expirationDate !== undefined) {
@@ -21042,7 +21240,7 @@ const CARD_FEE_RATE = 0.025; // 2.5% estimated card fee
 const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 
-type Tab = 'checkout' | 'reservations' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees';
+type Tab = 'checkout' | 'reservations' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees' | 'settings';
 type VelocityTimeframe = 'monthly' | 'yearly';
 
 async function clockInWithFloat(openingFloat: number, notes?: string): Promise<CloudShift> {
@@ -21117,10 +21315,15 @@ function clearSessionStorage(): void {
   localStorage.removeItem('bakealley_pos_crm_form');
   localStorage.removeItem('bakealley_pos_emp_form');
   localStorage.removeItem('bakealley_pos_exchange_state');
+  localStorage.removeItem('bakealley_pos_order_mode');
+  localStorage.removeItem('bakealley_pos_fulfillment_date');
+  localStorage.removeItem('bakealley_pos_deposit_preset');
+  localStorage.removeItem('bakealley_pos_custom_deposit');
   sessionStorage.removeItem('bakealley_cloud_token');
   sessionStorage.removeItem('bakealley_cloud_user');
   sessionStorage.removeItem('bakealley_cloud_last_active');
 }
+
 
 function ActionButton({ children, disabled, onClick }: { children: ReactNode; disabled?: boolean; onClick: () => void }): JSX.Element {
   return (
@@ -24371,6 +24574,317 @@ function ReservationsView({
   );
 }
 
+function SettingsView({ session }: { session: CloudSession }): JSX.Element {
+  const [categories, setCategories] = useState<Array<{ categoryId: string; name: string; productCount?: number }>>([]);
+  const [products, setProducts] = useState<CloudInventoryRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // New Category State
+  const [newCatName, setNewCatName] = useState('');
+  const [creatingCat, setCreatingCat] = useState(false);
+
+  // Edit Category Modal State
+  const [editCat, setEditCat] = useState<{ categoryId: string; name: string } | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+
+  // Reassignment Filter & Selection State
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all');
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [targetCategoryId, setTargetCategoryId] = useState<string>('');
+  const [reassigning, setReassigning] = useState(false);
+
+  const refreshData = async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [cats, inv] = await Promise.all([
+        api.categories(),
+        api.inventory(),
+      ]);
+      setCategories(cats);
+      setProducts(inv);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load settings data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshData();
+  }, []);
+
+  const handleCreateCategory = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    setCreatingCat(true);
+    setMessage(null);
+    setError(null);
+    try {
+      await api.createCategory(newCatName.trim());
+      setNewCatName('');
+      setMessage(`Category "${newCatName.trim()}" created successfully.`);
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create category');
+    } finally {
+      setCreatingCat(false);
+    }
+  };
+
+  const handleUpdateCategory = async (): Promise<void> => {
+    if (!editCat || !editCatName.trim()) return;
+    setMessage(null);
+    setError(null);
+    try {
+      await api.updateCategory(editCat.categoryId, editCatName.trim());
+      setMessage(`Category updated to "${editCatName.trim()}".`);
+      setEditCat(null);
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update category');
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string, name: string): Promise<void> => {
+    if (!window.confirm(`Are you sure you want to delete category "${name}"? Linked items will be unassigned.`)) return;
+    setMessage(null);
+    setError(null);
+    try {
+      await api.deleteCategory(categoryId);
+      setMessage(`Category "${name}" deleted successfully.`);
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete category');
+    }
+  };
+
+  const handleBatchReassign = async (): Promise<void> => {
+    if (selectedProductIds.length === 0) return;
+    setReassigning(true);
+    setMessage(null);
+    setError(null);
+    try {
+      await api.reassignProductCategory(selectedProductIds, targetCategoryId || null);
+      setMessage(`Successfully reassigned ${selectedProductIds.length} item(s).`);
+      setSelectedProductIds([]);
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reassign items');
+    } finally {
+      setReassigning(false);
+    }
+  };
+
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch = !productSearch || p.variantName.toLowerCase().includes(productSearch.toLowerCase()) || p.sku.toLowerCase().includes(productSearch.toLowerCase());
+    return matchesSearch;
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between border-b border-amber-200/80 pb-4">
+        <div>
+          <h1 className="font-bakery text-2xl font-bold text-amber-950">⚙️ Store & POS Settings</h1>
+          <p className="text-xs text-amber-800 mt-1">Manage product taxonomy, category organization, and batch inventory assignments.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void refreshData()}
+          className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 shadow-sm transition"
+        >
+          {loading ? 'Refreshing...' : '🔄 Refresh Settings'}
+        </button>
+      </div>
+
+      {message && <div className="rounded-xl bg-emerald-800 p-4 text-xs font-bold text-white shadow-md">{message}</div>}
+      {error && <div className="rounded-xl bg-red-800 p-4 text-xs font-bold text-white shadow-md">{error}</div>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* PANEL 1: CATEGORY MANAGEMENT (5 Cols) */}
+        <div className="col-span-12 lg:col-span-5 space-y-4">
+          <Panel title="🏷️ Category Taxonomy Manager">
+            {/* Create Category Form */}
+            <form onSubmit={(e) => void handleCreateCategory(e)} className="flex gap-2 mb-4">
+              <input
+                type="text"
+                placeholder="New Category Name..."
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                className="flex-1 rounded-xl border border-amber-300 px-3.5 py-2 text-xs font-bold outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+              />
+              <button
+                type="submit"
+                disabled={creatingCat || !newCatName.trim()}
+                className="rounded-xl bg-amber-800 px-4 py-2 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 transition shadow-sm"
+              >
+                {creatingCat ? 'Adding...' : '+ Add'}
+              </button>
+            </form>
+
+            {/* Category List */}
+            <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1">
+              {categories.map((cat) => (
+                <div key={cat.categoryId} className="flex items-center justify-between bg-amber-50/50 p-3 rounded-xl border border-amber-200/80 text-xs">
+                  <div>
+                    <span className="font-bold text-amber-950 block">{cat.name}</span>
+                    <span className="text-[10px] text-amber-700 font-semibold">
+                      {cat.productCount ?? 0} item(s) assigned
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setEditCat(cat); setEditCatName(cat.name); }}
+                      className="rounded-lg bg-amber-200/80 px-2.5 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-300"
+                    >
+                      Rename ✎
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteCategory(cat.categoryId, cat.name)}
+                      className="rounded-lg bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-800 hover:bg-red-200"
+                    >
+                      Delete 🗑️
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        </div>
+
+        {/* PANEL 2: ITEM REASSIGNMENT TOOL (7 Cols) */}
+        <div className="col-span-12 lg:col-span-7 space-y-4">
+          <Panel title="📦 Inventory Item Categorization Tool">
+            <div className="space-y-3">
+              {/* Batch Action Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-100/60 p-3 rounded-xl border border-amber-200/80">
+                <span className="text-xs font-bold text-amber-950">
+                  Selected Items: <strong className="text-amber-800">{selectedProductIds.length}</strong>
+                </span>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={targetCategoryId}
+                    onChange={(e) => setTargetCategoryId(e.target.value)}
+                    className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold outline-none"
+                  >
+                    <option value="">-- Select Target Category --</option>
+                    {categories.map((c) => (
+                      <option key={c.categoryId} value={c.categoryId}>{c.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={reassigning || selectedProductIds.length === 0}
+                    onClick={() => void handleBatchReassign()}
+                    className="rounded-xl bg-amber-800 px-4 py-1.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 transition shadow-sm"
+                  >
+                    {reassigning ? 'Moving...' : 'Move Selected'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Search Filter Bar */}
+              <input
+                type="text"
+                placeholder="Filter product name or SKU..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                className="w-full rounded-xl border border-amber-300 px-3.5 py-2 text-xs outline-none focus:border-amber-500"
+              />
+
+              {/* Product Table */}
+              <div className="max-h-[400px] overflow-y-auto rounded-xl border border-amber-200/80 bg-white">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-amber-50/80 text-amber-900 border-b border-amber-100 uppercase text-[10px] font-extrabold">
+                    <tr>
+                      <th className="p-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedProductIds(filteredProducts.map((p) => p.variantId));
+                            } else {
+                              setSelectedProductIds([]);
+                            }
+                          }}
+                          checked={selectedProductIds.length > 0 && selectedProductIds.length === filteredProducts.length}
+                        />
+                      </th>
+                      <th className="p-2.5">Product Name</th>
+                      <th className="p-2.5">SKU</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100">
+                    {filteredProducts.map((p) => {
+                      const isSelected = selectedProductIds.includes(p.variantId);
+                      return (
+                        <tr key={p.variantId} className="hover:bg-amber-50/40 transition">
+                          <td className="p-2.5 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedProductIds((prev) => [...prev, p.variantId]);
+                                } else {
+                                  setSelectedProductIds((prev) => prev.filter((id) => id !== p.variantId));
+                                }
+                              }}
+                            />
+                          </td>
+                          <td className="p-2.5 font-bold text-amber-950">{p.variantName}</td>
+                          <td className="p-2.5 font-mono text-[10px] text-amber-700">{p.sku}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Panel>
+        </div>
+      </div>
+
+      {/* RENAME CATEGORY MODAL */}
+      {editCat && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h3 className="font-bakery text-base font-bold text-amber-950">Rename Category</h3>
+            <input
+              type="text"
+              value={editCatName}
+              onChange={(e) => setEditCatName(e.target.value)}
+              className="w-full rounded-xl border border-amber-300 p-2.5 text-xs font-bold outline-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditCat(null)}
+                className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleUpdateCategory()}
+                className="rounded-xl bg-amber-800 px-4 py-2 text-xs font-bold text-white hover:bg-amber-900"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CloudApp(): JSX.Element {
   const [session, setSession] = useState<CloudSession | null>(() => {
     const token = localStorage.getItem('bakealley_cloud_token');
@@ -24390,7 +24904,7 @@ export function CloudApp(): JSX.Element {
 
   const [tab, setTab] = useState<Tab>(() => {
     const savedTab = localStorage.getItem('bakealley_cloud_tab') as Tab;
-    return savedTab && ['checkout', 'sales', 'financials', 'bi', 'inventory', 'crm', 'employees'].includes(savedTab)
+    return savedTab && ['checkout', 'reservations', 'sales', 'financials', 'bi', 'inventory', 'crm', 'employees', 'settings'].includes(savedTab)
       ? savedTab
       : 'checkout';
   });
@@ -24597,7 +25111,9 @@ export function CloudApp(): JSX.Element {
     ['inventory', 'Inventory'],
     ['crm', 'CRM'],
     ['employees', 'Employees'],
+    ...(isAdmin ? ([['settings', 'Settings']] as Array<[Tab, string]>) : []),
   ];
+
 
   return (
     <div className="min-h-screen bg-[#FAF6F0]">
@@ -24686,6 +25202,7 @@ export function CloudApp(): JSX.Element {
           {tab === 'inventory' && <InventoryView isAdmin={isAdmin} />}
           {tab === 'crm' && <CrmView session={session} customers={customers} refresh={refreshCustomers} />}
           {tab === 'employees' && <EmployeesView session={session} onShiftChange={refreshShifts} onSelfClockOut={() => setSession(null)} />}
+          {tab === 'settings' && isAdmin && <SettingsView session={session} />}
         </main>
       )}
 
