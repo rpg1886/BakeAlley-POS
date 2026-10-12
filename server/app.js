@@ -6,7 +6,7 @@ require('dotenv').config();
 const { pool, migrate } = require('./db');
 const { createAuthRouter } = require('./auth');
 const logger = require('./logger');
-const { validate, customerSchema, employeeSchema, inventoryAdjustSchema, inventoryProductSchema, inventoryUpdateSchema, orderPayloadSchema } = require('./validation');
+const { validate, customerSchema, employeeSchema, inventoryAdjustSchema, inventoryProductSchema, inventoryUpdateSchema, orderPayloadSchema, categorySchema, categoryReassignSchema } = require('./validation');
 
 const app = express();
 
@@ -76,12 +76,81 @@ app.get('/api/v1/version', (_request, response) => {
 });
 
 // Category List Endpoint
+// GET Category List with Product Count
 app.get('/api/v1/categories', auth.requireSession, async (_request, response, next) => {
   try {
-    const result = await pool.query('SELECT category_id AS "categoryId", name FROM categories ORDER BY name');
+    const result = await pool.query(`
+      SELECT c.category_id AS "categoryId", c.name, COUNT(p.product_id)::int AS "productCount"
+      FROM categories c
+      LEFT JOIN products p ON p.category_id = c.category_id
+      GROUP BY c.category_id, c.name
+      ORDER BY c.name
+    `);
     response.json(result.rows);
   } catch (error) {
     logger.error('Categories list failed', { error: error.message });
+    next(error);
+  }
+});
+
+// POST Create Category (Admin Only)
+app.post('/api/v1/categories', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const validation = validate(categorySchema, request.body);
+    if (!validation.success) {
+      return response.status(400).json({ error: 'INVALID_CATEGORY', details: validation.errors });
+    }
+    const name = validation.data.name.trim();
+    const existing = await pool.query('SELECT category_id FROM categories WHERE lower(name) = lower($1)', [name]);
+    if (existing.rowCount > 0) {
+      return response.status(409).json({ error: 'CATEGORY_EXISTS', message: 'A category with this name already exists' });
+    }
+    const result = await pool.query(
+      'INSERT INTO categories (category_id, name) VALUES (gen_random_uuid(), $1) RETURNING category_id AS "categoryId", name',
+      [name]
+    );
+    response.status(201).json(result.rows[0]);
+  } catch (error) {
+    logger.error('Category creation failed', { error: error.message });
+    next(error);
+  }
+});
+
+// PUT Rename Category (Admin Only)
+app.put('/api/v1/categories/:categoryId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const { categoryId } = request.params;
+    const validation = validate(categorySchema, request.body);
+    if (!validation.success) {
+      return response.status(400).json({ error: 'INVALID_CATEGORY', details: validation.errors });
+    }
+    const name = validation.data.name.trim();
+    const result = await pool.query(
+      'UPDATE categories SET name = $1 WHERE category_id = $2 RETURNING category_id AS "categoryId", name',
+      [name, categoryId]
+    );
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: 'CATEGORY_NOT_FOUND', message: 'Category not found' });
+    }
+    response.json(result.rows[0]);
+  } catch (error) {
+    logger.error('Category rename failed', { error: error.message });
+    next(error);
+  }
+});
+
+// DELETE Category (Admin Only - unlinks products)
+app.delete('/api/v1/categories/:categoryId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const { categoryId } = request.params;
+    await pool.query('UPDATE products SET category_id = NULL WHERE category_id = $1', [categoryId]);
+    const result = await pool.query('DELETE FROM categories WHERE category_id = $1 RETURNING category_id', [categoryId]);
+    if (result.rowCount === 0) {
+      return response.status(404).json({ error: 'CATEGORY_NOT_FOUND', message: 'Category not found' });
+    }
+    response.json({ categoryId, deleted: true });
+  } catch (error) {
+    logger.error('Category deletion failed', { error: error.message });
     next(error);
   }
 });
@@ -406,6 +475,27 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
           );
         }
       }
+
+      app.put('/api/v1/inventory/products/reassign-category', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+        try {
+          const validation = validate(categoryReassignSchema, request.body);
+          if (!validation.success) {
+            return response.status(400).json({ error: 'INVALID_REASSIGNMENT', details: validation.errors });
+          }
+          const { productIds, categoryId } = validation.data;
+          if (productIds.length === 0) {
+            return response.status(400).json({ error: 'NO_PRODUCTS_SELECTED', message: 'At least one product must be selected' });
+          }
+          const result = await pool.query(
+            'UPDATE products SET category_id = $1 WHERE product_id = ANY($2::uuid[]) RETURNING product_id',
+            [categoryId, productIds]
+          );
+          response.json({ updatedCount: result.rowCount, categoryId });
+        } catch (error) {
+          logger.error('Product category reassignment failed', { error: error.message });
+          next(error);
+        }
+      });
 
       // Update lot if lotNumber or expirationDate provided
       if (body.lotNumber || body.expirationDate !== undefined) {

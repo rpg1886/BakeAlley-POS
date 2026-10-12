@@ -21,7 +21,7 @@ const CARD_FEE_RATE = 0.025; // 2.5% estimated card fee
 const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 
-type Tab = 'checkout' | 'reservations' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees';
+type Tab = 'checkout' | 'reservations' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees' | 'settings';
 type VelocityTimeframe = 'monthly' | 'yearly';
 
 async function clockInWithFloat(openingFloat: number, notes?: string): Promise<CloudShift> {
@@ -3355,6 +3355,317 @@ function ReservationsView({
   );
 }
 
+function SettingsView({ session }: { session: CloudSession }): JSX.Element {
+  const [categories, setCategories] = useState<Array<{ categoryId: string; name: string; productCount?: number }>>([]);
+  const [products, setProducts] = useState<CloudInventoryRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // New Category State
+  const [newCatName, setNewCatName] = useState('');
+  const [creatingCat, setCreatingCat] = useState(false);
+
+  // Edit Category Modal State
+  const [editCat, setEditCat] = useState<{ categoryId: string; name: string } | null>(null);
+  const [editCatName, setEditCatName] = useState('');
+
+  // Reassignment Filter & Selection State
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all');
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [targetCategoryId, setTargetCategoryId] = useState<string>('');
+  const [reassigning, setReassigning] = useState(false);
+
+  const refreshData = async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [cats, inv] = await Promise.all([
+        api.categories(),
+        api.inventory(),
+      ]);
+      setCategories(cats);
+      setProducts(inv);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load settings data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshData();
+  }, []);
+
+  const handleCreateCategory = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    setCreatingCat(true);
+    setMessage(null);
+    setError(null);
+    try {
+      await api.createCategory(newCatName.trim());
+      setNewCatName('');
+      setMessage(`Category "${newCatName.trim()}" created successfully.`);
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create category');
+    } finally {
+      setCreatingCat(false);
+    }
+  };
+
+  const handleUpdateCategory = async (): Promise<void> => {
+    if (!editCat || !editCatName.trim()) return;
+    setMessage(null);
+    setError(null);
+    try {
+      await api.updateCategory(editCat.categoryId, editCatName.trim());
+      setMessage(`Category updated to "${editCatName.trim()}".`);
+      setEditCat(null);
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update category');
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string, name: string): Promise<void> => {
+    if (!window.confirm(`Are you sure you want to delete category "${name}"? Linked items will be unassigned.`)) return;
+    setMessage(null);
+    setError(null);
+    try {
+      await api.deleteCategory(categoryId);
+      setMessage(`Category "${name}" deleted successfully.`);
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete category');
+    }
+  };
+
+  const handleBatchReassign = async (): Promise<void> => {
+    if (selectedProductIds.length === 0) return;
+    setReassigning(true);
+    setMessage(null);
+    setError(null);
+    try {
+      await api.reassignProductCategory(selectedProductIds, targetCategoryId || null);
+      setMessage(`Successfully reassigned ${selectedProductIds.length} item(s).`);
+      setSelectedProductIds([]);
+      await refreshData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reassign items');
+    } finally {
+      setReassigning(false);
+    }
+  };
+
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch = !productSearch || p.variantName.toLowerCase().includes(productSearch.toLowerCase()) || p.sku.toLowerCase().includes(productSearch.toLowerCase());
+    return matchesSearch;
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between border-b border-amber-200/80 pb-4">
+        <div>
+          <h1 className="font-bakery text-2xl font-bold text-amber-950">⚙️ Store & POS Settings</h1>
+          <p className="text-xs text-amber-800 mt-1">Manage product taxonomy, category organization, and batch inventory assignments.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void refreshData()}
+          className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 shadow-sm transition"
+        >
+          {loading ? 'Refreshing...' : '🔄 Refresh Settings'}
+        </button>
+      </div>
+
+      {message && <div className="rounded-xl bg-emerald-800 p-4 text-xs font-bold text-white shadow-md">{message}</div>}
+      {error && <div className="rounded-xl bg-red-800 p-4 text-xs font-bold text-white shadow-md">{error}</div>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* PANEL 1: CATEGORY MANAGEMENT (5 Cols) */}
+        <div className="col-span-12 lg:col-span-5 space-y-4">
+          <Panel title="🏷️ Category Taxonomy Manager">
+            {/* Create Category Form */}
+            <form onSubmit={(e) => void handleCreateCategory(e)} className="flex gap-2 mb-4">
+              <input
+                type="text"
+                placeholder="New Category Name..."
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                className="flex-1 rounded-xl border border-amber-300 px-3.5 py-2 text-xs font-bold outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+              />
+              <button
+                type="submit"
+                disabled={creatingCat || !newCatName.trim()}
+                className="rounded-xl bg-amber-800 px-4 py-2 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 transition shadow-sm"
+              >
+                {creatingCat ? 'Adding...' : '+ Add'}
+              </button>
+            </form>
+
+            {/* Category List */}
+            <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1">
+              {categories.map((cat) => (
+                <div key={cat.categoryId} className="flex items-center justify-between bg-amber-50/50 p-3 rounded-xl border border-amber-200/80 text-xs">
+                  <div>
+                    <span className="font-bold text-amber-950 block">{cat.name}</span>
+                    <span className="text-[10px] text-amber-700 font-semibold">
+                      {cat.productCount ?? 0} item(s) assigned
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { setEditCat(cat); setEditCatName(cat.name); }}
+                      className="rounded-lg bg-amber-200/80 px-2.5 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-300"
+                    >
+                      Rename ✎
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteCategory(cat.categoryId, cat.name)}
+                      className="rounded-lg bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-800 hover:bg-red-200"
+                    >
+                      Delete 🗑️
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        </div>
+
+        {/* PANEL 2: ITEM REASSIGNMENT TOOL (7 Cols) */}
+        <div className="col-span-12 lg:col-span-7 space-y-4">
+          <Panel title="📦 Inventory Item Categorization Tool">
+            <div className="space-y-3">
+              {/* Batch Action Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-100/60 p-3 rounded-xl border border-amber-200/80">
+                <span className="text-xs font-bold text-amber-950">
+                  Selected Items: <strong className="text-amber-800">{selectedProductIds.length}</strong>
+                </span>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={targetCategoryId}
+                    onChange={(e) => setTargetCategoryId(e.target.value)}
+                    className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold outline-none"
+                  >
+                    <option value="">-- Select Target Category --</option>
+                    {categories.map((c) => (
+                      <option key={c.categoryId} value={c.categoryId}>{c.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={reassigning || selectedProductIds.length === 0}
+                    onClick={() => void handleBatchReassign()}
+                    className="rounded-xl bg-amber-800 px-4 py-1.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 transition shadow-sm"
+                  >
+                    {reassigning ? 'Moving...' : 'Move Selected'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Search Filter Bar */}
+              <input
+                type="text"
+                placeholder="Filter product name or SKU..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                className="w-full rounded-xl border border-amber-300 px-3.5 py-2 text-xs outline-none focus:border-amber-500"
+              />
+
+              {/* Product Table */}
+              <div className="max-h-[400px] overflow-y-auto rounded-xl border border-amber-200/80 bg-white">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-amber-50/80 text-amber-900 border-b border-amber-100 uppercase text-[10px] font-extrabold">
+                    <tr>
+                      <th className="p-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedProductIds(filteredProducts.map((p) => p.variantId));
+                            } else {
+                              setSelectedProductIds([]);
+                            }
+                          }}
+                          checked={selectedProductIds.length > 0 && selectedProductIds.length === filteredProducts.length}
+                        />
+                      </th>
+                      <th className="p-2.5">Product Name</th>
+                      <th className="p-2.5">SKU</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100">
+                    {filteredProducts.map((p) => {
+                      const isSelected = selectedProductIds.includes(p.variantId);
+                      return (
+                        <tr key={p.variantId} className="hover:bg-amber-50/40 transition">
+                          <td className="p-2.5 text-center">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedProductIds((prev) => [...prev, p.variantId]);
+                                } else {
+                                  setSelectedProductIds((prev) => prev.filter((id) => id !== p.variantId));
+                                }
+                              }}
+                            />
+                          </td>
+                          <td className="p-2.5 font-bold text-amber-950">{p.variantName}</td>
+                          <td className="p-2.5 font-mono text-[10px] text-amber-700">{p.sku}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Panel>
+        </div>
+      </div>
+
+      {/* RENAME CATEGORY MODAL */}
+      {editCat && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h3 className="font-bakery text-base font-bold text-amber-950">Rename Category</h3>
+            <input
+              type="text"
+              value={editCatName}
+              onChange={(e) => setEditCatName(e.target.value)}
+              className="w-full rounded-xl border border-amber-300 p-2.5 text-xs font-bold outline-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEditCat(null)}
+                className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleUpdateCategory()}
+                className="rounded-xl bg-amber-800 px-4 py-2 text-xs font-bold text-white hover:bg-amber-900"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CloudApp(): JSX.Element {
   const [session, setSession] = useState<CloudSession | null>(() => {
     const token = localStorage.getItem('bakealley_cloud_token');
@@ -3374,7 +3685,7 @@ export function CloudApp(): JSX.Element {
 
   const [tab, setTab] = useState<Tab>(() => {
     const savedTab = localStorage.getItem('bakealley_cloud_tab') as Tab;
-    return savedTab && ['checkout', 'reservations', 'sales', 'financials', 'bi', 'inventory', 'crm', 'employees'].includes(savedTab)
+    return savedTab && ['checkout', 'reservations', 'sales', 'financials', 'bi', 'inventory', 'crm', 'employees', 'settings'].includes(savedTab)
       ? savedTab
       : 'checkout';
   });
@@ -3581,7 +3892,9 @@ export function CloudApp(): JSX.Element {
     ['inventory', 'Inventory'],
     ['crm', 'CRM'],
     ['employees', 'Employees'],
+    ...(isAdmin ? ([['settings', 'Settings']] as Array<[Tab, string]>) : []),
   ];
+
 
   return (
     <div className="min-h-screen bg-[#FAF6F0]">
@@ -3670,6 +3983,7 @@ export function CloudApp(): JSX.Element {
           {tab === 'inventory' && <InventoryView isAdmin={isAdmin} />}
           {tab === 'crm' && <CrmView session={session} customers={customers} refresh={refreshCustomers} />}
           {tab === 'employees' && <EmployeesView session={session} onShiftChange={refreshShifts} onSelfClockOut={() => setSession(null)} />}
+          {tab === 'settings' && isAdmin && <SettingsView session={session} />}
         </main>
       )}
 

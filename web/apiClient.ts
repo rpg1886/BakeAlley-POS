@@ -128,6 +128,31 @@ export class CloudApiClient {
     return this.request(`/api/v1/products/search?q=${encodeURIComponent(query)}`);
   }
 
+  // ADD Category & Product Reassignment API Methods to CloudApiClient:
+
+  public async categories(): Promise<Array<{ categoryId: string; name: string; productCount?: number }>> {
+    return this.request('/api/v1/categories');
+  }
+
+  public async createCategory(name: string): Promise<{ categoryId: string; name: string }> {
+    return this.request('/api/v1/categories', { method: 'POST', body: JSON.stringify({ name }) });
+  }
+
+  public async updateCategory(categoryId: string, name: string): Promise<{ categoryId: string; name: string }> {
+    return this.request(`/api/v1/categories/${encodeURIComponent(categoryId)}`, { method: 'PUT', body: JSON.stringify({ name }) });
+  }
+
+  public async deleteCategory(categoryId: string): Promise<void> {
+    await this.request(`/api/v1/categories/${encodeURIComponent(categoryId)}`, { method: 'DELETE' });
+  }
+
+  public async reassignProductCategory(productIds: string[], categoryId: string | null): Promise<{ updatedCount: number; categoryId: string | null }> {
+    return this.request('/api/v1/inventory/products/reassign-category', {
+      method: 'PUT',
+      body: JSON.stringify({ productIds, categoryId }),
+    });
+  }
+
   public async customers(): Promise<CloudCustomer[]> {
     return this.request('/api/v1/customers');
   }
