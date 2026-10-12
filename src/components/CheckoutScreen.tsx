@@ -212,6 +212,7 @@ export function CheckoutScreen({
   const [scaleReading, setScaleReading] = useState<CheckoutScaleReading | null>(null);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [orderModeModalOpen, setOrderModeModalOpen] = useState(false);
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<CheckoutOrderPayment['method']>('cash');
   const [splitPayments, setSplitPayments] = useState<CheckoutOrderPayment[]>([]);
   const [cashReceived, setCashReceived] = useState('');
@@ -631,86 +632,23 @@ export function CheckoutScreen({
             </div>
           </div>
 
-          {/* Customer Search Dropdown - Retained in Header */}
-          <div ref={customerDropdownRef} className="relative w-full sm:w-80">
-            <label className="block text-xs font-bold text-amber-900 mb-1">
-              Customer Profile
-            </label>
-            <div
-              className="flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50/30 px-3 py-1.5 text-xs shadow-sm cursor-pointer hover:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/40"
-              onClick={() => setCustomerDropdownOpen((prev) => !prev)}
+          {/* Active Customer Profile Badge */}
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-3.5 py-2 text-xs shadow-sm">
+            <span className="font-bold text-amber-700">Active Profile:</span>
+            <span className="font-extrabold text-amber-950">
+              {!selectedCustomer
+                ? "👤 Retail Walk-in"
+                : isWholesaleCustomer
+                  ? "🏢 " + selectedCustomer.displayName + " (Wholesale)"
+                  : "🔁 " + selectedCustomer.displayName + " (Return Client)"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCustomerModalOpen(true)}
+              className="ml-2 rounded-md bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-900 hover:bg-amber-300 transition"
             >
-              <span className="truncate font-bold text-amber-950">
-                {!selectedCustomer
-                  ? "👤 Retail Walk-in (New Client)"
-                  : isWholesaleCustomer
-                    ? "🏢 " + selectedCustomer.displayName + " (Wholesale)"
-                    : "🔁 " + selectedCustomer.displayName + " (Return Client)"}
-              </span>
-              <span className="ml-2 text-xs text-amber-600 font-bold">
-                {customerDropdownOpen ? '▲' : '▼'}
-              </span>
-            </div>
-
-            {customerDropdownOpen && (
-              <div className="absolute right-0 z-40 mt-1 w-full rounded-xl border border-amber-200 bg-white p-2 shadow-2xl">
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="Search customer name..."
-                  value={customerSearchTerm}
-                  onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                  className="w-full rounded-lg border border-amber-200 px-3 py-1.5 text-xs outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <div className="mt-2 max-h-56 overflow-y-auto space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomerId(null);
-                      setCustomerSearchTerm('');
-                      setCustomerDropdownOpen(false);
-                    }}
-                    className={`w-full text-left rounded-lg px-3 py-2 text-xs font-semibold transition ${!selectedCustomer ? 'bg-amber-100 font-bold text-amber-950' : 'hover:bg-amber-50 text-amber-900'
-                      }`}
-                  >
-                    👤 Retail Walk-in (New Client)
-                  </button>
-
-                  {filteredCustomers.length === 0 ? (
-                    <p className="py-3 text-center text-xs text-amber-600">No matching customers found.</p>
-                  ) : (
-                    filteredCustomers.map((customer) => {
-                      const isSelected = customer.customerId === customerId;
-                      const isWholesale = customer.tierId !== retailTierId;
-                      return (
-                        <button
-                          key={customer.customerId}
-                          type="button"
-                          onClick={() => {
-                            setCustomerId(customer.customerId);
-                            setCustomerSearchTerm('');
-                            setCustomerDropdownOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs transition ${isSelected ? 'bg-emerald-50 font-bold text-emerald-950' : 'hover:bg-amber-50/80 text-amber-900'
-                            }`}
-                        >
-                          <span className="truncate">
-                            {isWholesale ? "🏢" : "🔁"} {customer.displayName}
-                          </span>
-                          <span
-                            className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold ${isWholesale ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'
-                              }`}
-                          >
-                            {isWholesale ? 'Wholesale' : 'Return Client'}
-                          </span>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
+              Change ✎
+            </button>
           </div>
         </header>
 
@@ -726,34 +664,40 @@ export function CheckoutScreen({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* LEFT COLUMN: Quick Action Bar, Cart Table & Payment Bar (~38% width = 5 cols) */}
           <div className="lg:col-span-5 space-y-4">
-            {/* Top Quick Action Header Buttons */}
-            <div className="grid grid-cols-5 gap-1.5 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm">
-              <button type="button" className="rounded-lg bg-amber-100/70 py-2 text-[11px] font-bold text-amber-900 hover:bg-amber-200 transition">
-                🗄️ Drawer
+            {/* Horizontal Action Tab Bar (Customer, Order Mode, Clear) */}
+            <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setCustomerModalOpen(true)}
+                className={`rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${selectedCustomer
+                    ? 'bg-emerald-700 text-white shadow-sm'
+                    : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
+                  }`}
+              >
+                <span>👤</span>
+                <span className="truncate">{selectedCustomer ? selectedCustomer.displayName : 'Customer'}</span>
               </button>
-              <button type="button" className="rounded-lg bg-amber-100/70 py-2 text-[11px] font-bold text-amber-900 hover:bg-amber-200 transition">
-                📌 Keep
-              </button>
-              <button type="button" className="rounded-lg bg-amber-100/70 py-2 text-[11px] font-bold text-amber-900 hover:bg-amber-200 transition">
-                📦 Stock
-              </button>
+
               <button
                 type="button"
                 onClick={() => setOrderModeModalOpen(true)}
-                className={`rounded-lg py-2 text-[11px] font-bold transition ${orderMode === 'reservation'
+                className={`rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${orderMode === 'reservation'
                     ? 'bg-amber-800 text-white shadow-sm'
                     : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
-                {orderMode === 'reservation' ? '📅 Advance' : '⚙️ Order Mode'}
+                <span>⚙️</span>
+                <span>{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
               </button>
+
               <button
                 type="button"
                 onClick={() => setCart([])}
                 disabled={cart.length === 0}
-                className="rounded-lg bg-red-50 py-2 text-[11px] font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40"
+                className="rounded-lg bg-red-50 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex items-center justify-center gap-1.5"
               >
-                🗑️ Clear
+                <span>🗑️</span>
+                <span>Clear</span>
               </button>
             </div>
 
@@ -982,6 +926,110 @@ export function CheckoutScreen({
         </div>
       </div>
 
+      {/* CUSTOMER PROFILE SELECTION MODAL WINDOW */}
+      {customerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between border-b border-amber-100 pb-3">
+              <div>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">👤 Select Customer Profile</h3>
+                <p className="text-xs text-amber-700 mt-0.5">Search customer accounts to apply wholesale tiers or return history.</p>
+              </div>
+              <button
+                type="button"
+                className="text-xl font-bold text-amber-700 hover:text-amber-950"
+                onClick={() => setCustomerModalOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Customer Search Input */}
+            <div>
+              <label className="block text-xs font-bold text-amber-950 mb-1">Search Customer Name / Company</label>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Type customer name..."
+                value={customerSearchTerm}
+                onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                className="w-full rounded-xl border border-amber-300 px-3.5 py-2.5 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+              />
+            </div>
+
+            {/* Customer Profiles List */}
+            <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomerId(null);
+                  setCustomerSearchTerm('');
+                  setCustomerModalOpen(false);
+                }}
+                className={`w-full text-left rounded-xl p-3 text-xs font-bold transition border ${!selectedCustomer
+                    ? 'bg-amber-800 text-white border-amber-800 shadow-sm'
+                    : 'bg-amber-50/50 border-amber-200 text-amber-900 hover:bg-amber-100'
+                  }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span>👤 Retail Walk-in (Standard Retail Pricing)</span>
+                  {!selectedCustomer && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded">Active</span>}
+                </div>
+              </button>
+
+              {filteredCustomers.length === 0 ? (
+                <p className="py-6 text-center text-xs text-amber-600 font-semibold">No matching customer profiles found.</p>
+              ) : (
+                filteredCustomers.map((customer) => {
+                  const isSelected = customer.customerId === customerId;
+                  const isWholesale = customer.tierId !== retailTierId;
+                  return (
+                    <button
+                      key={customer.customerId}
+                      type="button"
+                      onClick={() => {
+                        setCustomerId(customer.customerId);
+                        setCustomerSearchTerm('');
+                        setCustomerModalOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-xl p-3 text-xs transition border ${isSelected
+                          ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm font-bold'
+                          : 'bg-white border-amber-200 text-amber-900 hover:bg-amber-50'
+                        }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{isWholesale ? "🏢" : "🔁"}</span>
+                        <span className="font-bold">{customer.displayName}</span>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${isSelected
+                            ? 'bg-white/20 text-white'
+                            : isWholesale
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                      >
+                        {isWholesale ? 'Wholesale Tier' : 'Return Client'}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-amber-100">
+              <button
+                type="button"
+                className="w-full rounded-xl bg-amber-800 py-2.5 text-xs font-bold text-white hover:bg-amber-900"
+                onClick={() => setCustomerModalOpen(false)}
+              >
+                Apply & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ORDER MODE SELECTION MODAL (Immediate vs Advance Order) */}
       {orderModeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
@@ -1196,8 +1244,8 @@ export function CheckoutScreen({
                         setCashReceived(remainingBalance > 0 ? remainingBalance.toFixed(2) : '');
                       }}
                       className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition ${paymentMethod === opt.id
-                          ? `${opt.color} ring-2 ring-amber-500/50 shadow-sm font-bold`
-                          : 'border-amber-200/80 text-amber-900 hover:bg-amber-50/50 font-semibold'
+                        ? `${opt.color} ring-2 ring-amber-500/50 shadow-sm font-bold`
+                        : 'border-amber-200/80 text-amber-900 hover:bg-amber-50/50 font-semibold'
                         }`}
                     >
                       <span className="text-xl">{opt.icon}</span>
