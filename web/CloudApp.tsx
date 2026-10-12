@@ -96,10 +96,15 @@ function clearSessionStorage(): void {
   localStorage.removeItem('bakealley_pos_crm_form');
   localStorage.removeItem('bakealley_pos_emp_form');
   localStorage.removeItem('bakealley_pos_exchange_state');
+  localStorage.removeItem('bakealley_pos_order_mode');
+  localStorage.removeItem('bakealley_pos_fulfillment_date');
+  localStorage.removeItem('bakealley_pos_deposit_preset');
+  localStorage.removeItem('bakealley_pos_custom_deposit');
   sessionStorage.removeItem('bakealley_cloud_token');
   sessionStorage.removeItem('bakealley_cloud_user');
   sessionStorage.removeItem('bakealley_cloud_last_active');
 }
+
 
 function ActionButton({ children, disabled, onClick }: { children: ReactNode; disabled?: boolean; onClick: () => void }): JSX.Element {
   return (
@@ -3369,7 +3374,7 @@ export function CloudApp(): JSX.Element {
 
   const [tab, setTab] = useState<Tab>(() => {
     const savedTab = localStorage.getItem('bakealley_cloud_tab') as Tab;
-    return savedTab && ['checkout', 'sales', 'financials', 'bi', 'inventory', 'crm', 'employees'].includes(savedTab)
+    return savedTab && ['checkout', 'reservations', 'sales', 'financials', 'bi', 'inventory', 'crm', 'employees'].includes(savedTab)
       ? savedTab
       : 'checkout';
   });

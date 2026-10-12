@@ -221,14 +221,22 @@ export function CheckoutScreen({
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Advance Order / Reservation States
-  const [orderMode, setOrderMode] = useState<'immediate' | 'reservation'>('immediate');
+  const [orderMode, setOrderMode] = useState<'immediate' | 'reservation'>(() => {
+    return (localStorage.getItem('bakealley_pos_order_mode') as 'immediate' | 'reservation') || 'immediate';
+  });
   const [fulfillmentDate, setFulfillmentDate] = useState<string>(() => {
+    const savedDate = localStorage.getItem('bakealley_pos_fulfillment_date');
+    if (savedDate) return savedDate;
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     return tomorrow.toISOString().slice(0, 10);
   });
-  const [depositPreset, setDepositPreset] = useState<'zero' | '50' | '100' | 'custom'>('zero');
-  const [customDeposit, setCustomDeposit] = useState<string>('');
+  const [depositPreset, setDepositPreset] = useState<'zero' | '50' | '100' | 'custom'>(() => {
+    return (localStorage.getItem('bakealley_pos_deposit_preset') as 'zero' | '50' | '100' | 'custom') || 'zero';
+  });
+  const [customDeposit, setCustomDeposit] = useState<string>(() => {
+    return localStorage.getItem('bakealley_pos_custom_deposit') || '';
+  });
 
   const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
   const taxAmount = subtotal * taxRate;
@@ -278,6 +286,22 @@ export function CheckoutScreen({
       localStorage.removeItem('bakealley_pos_customer_id');
     }
   }, [customerId]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_order_mode', orderMode);
+  }, [orderMode]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_fulfillment_date', fulfillmentDate);
+  }, [fulfillmentDate]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_deposit_preset', depositPreset);
+  }, [depositPreset]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_custom_deposit', customDeposit);
+  }, [customDeposit]);
 
   useEffect(() => {
     if (dataSource.categories) {
@@ -474,8 +498,15 @@ export function CheckoutScreen({
 
       setCart([]);
       setCustomerId(null);
+      setOrderMode('immediate');
+      setDepositPreset('zero');
+      setCustomDeposit('');
       localStorage.removeItem('bakealley_pos_cart');
       localStorage.removeItem('bakealley_pos_customer_id');
+      localStorage.removeItem('bakealley_pos_order_mode');
+      localStorage.removeItem('bakealley_pos_fulfillment_date');
+      localStorage.removeItem('bakealley_pos_deposit_preset');
+      localStorage.removeItem('bakealley_pos_custom_deposit');
 
       setMessage(`Advance Order Reservation created successfully for ${fulfillmentDate}! Balance Due on pickup: ${money.format(totalAmount)}`);
     } catch (error) {
@@ -579,8 +610,15 @@ export function CheckoutScreen({
 
       setCart([]);
       setCustomerId(null);
+      setOrderMode('immediate');
+      setDepositPreset('zero');
+      setCustomDeposit('');
       localStorage.removeItem('bakealley_pos_cart');
       localStorage.removeItem('bakealley_pos_customer_id');
+      localStorage.removeItem('bakealley_pos_order_mode');
+      localStorage.removeItem('bakealley_pos_fulfillment_date');
+      localStorage.removeItem('bakealley_pos_deposit_preset');
+      localStorage.removeItem('bakealley_pos_custom_deposit');
 
       setCashReceived('');
       setSplitPayments([]);
@@ -692,7 +730,16 @@ export function CheckoutScreen({
 
               <button
                 type="button"
-                onClick={() => setCart([])}
+                onClick={() => { setCart([]);
+                  setOrderMode('immediate');
+                  setDepositPreset('zero');
+                  setCustomDeposit('');
+                  localStorage.removeItem('bakealley_pos_cart');
+                  localStorage.removeItem('bakealley_pos_order_mode');
+                  localStorage.removeItem('bakealley_pos_fulfillment_date');
+                  localStorage.removeItem('bakealley_pos_deposit_preset');
+                  localStorage.removeItem('bakealley_pos_custom_deposit');
+                }}
                 disabled={cart.length === 0}
                 className="rounded-lg bg-red-50 py-2 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex items-center justify-center gap-1.5"
               >
