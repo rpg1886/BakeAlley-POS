@@ -701,16 +701,13 @@ export function CheckoutScreen({
         {/* MAIN POS 2-COLUMN LAYOUT */}
         <div className="grid grid-cols-12 gap-5 items-start w-full">
           {/* LEFT COLUMN: Quick Action Bar, Cart Table & Payment Bar (~38% width = 5 cols) */}
-          <div className="col-span-12 lg:col-span-5 space-y-4 w-full">
+          <div className="col-span-4 space-y-3 w-full">
             {/* Horizontal Action Tab Bar (Customer, Order Mode, Clear) */}
             <div className="flex flex-row items-center justify-between gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm w-full">
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
-                className={`flex-1 rounded-lg py-2.5 px-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${selectedCustomer
-                  ? 'bg-emerald-700 text-white shadow-sm'
-                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
-                  }`}
+                className={selectedCustomer ? "flex-1 rounded-lg py-2 px-1.5 text-[11px] font-bold transition flex items-center justify-center gap-1 bg-emerald-700 text-white shadow-sm" : "flex-1 rounded-lg py-2 px-1.5 text-[11px] font-bold transition flex items-center justify-center gap-1 bg-amber-100/70 text-amber-900 hover:bg-amber-200"}
               >
                 <span>👤</span>
                 <span className="truncate">{selectedCustomer ? selectedCustomer.displayName : 'Customer'}</span>
@@ -719,10 +716,7 @@ export function CheckoutScreen({
               <button
                 type="button"
                 onClick={() => setOrderModeModalOpen(true)}
-                className={`flex-1 rounded-lg py-2.5 px-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${orderMode === 'reservation'
-                  ? 'bg-amber-800 text-white shadow-sm'
-                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
-                  }`}
+                className={orderMode === "reservation" ? "flex-1 rounded-lg py-2 px-1.5 text-[11px] font-bold transition flex items-center justify-center gap-1 bg-amber-800 text-white shadow-sm" : "flex-1 rounded-lg py-2 px-1.5 text-[11px] font-bold transition flex items-center justify-center gap-1 bg-amber-100/70 text-amber-900 hover:bg-amber-200"}
               >
                 <span>⚙️</span>
                 <span className="truncate">{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
@@ -820,8 +814,8 @@ export function CheckoutScreen({
 
                 <div className="flex justify-between items-center text-xs font-semibold text-amber-900">
                   <span>Order Mode:</span>
-                  <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${orderMode === 'reservation' ? 'bg-amber-800 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
-                    {orderMode === 'reservation' ? `📅 Advance Order (${fulfillmentDate})` : '🛒 Immediate Sale'}
+                  <span className={orderMode === "reservation" ? "px-2 py-0.5 rounded-full font-bold text-[10px] bg-amber-800 text-white" : "px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800"}>
+                    {orderMode === "reservation" ? "📅 Advance Order (" + fulfillmentDate + ")" : "🛒 Immediate Sale"}
                   </span>
                 </div>
 
@@ -858,7 +852,7 @@ export function CheckoutScreen({
           </div>
 
           {/* RIGHT COLUMN: Search Input & 37-Category / Item Catalog Grid (~62% width = 7 cols) */}
-          <div className="lg:col-span-7 space-y-4">
+          <div className="col-span-8 space-y-3 w-full">
             {/* Top Barcode & SKU Search Bar */}
             <div className="relative">
               <input
@@ -917,7 +911,7 @@ export function CheckoutScreen({
 
               {!selectedCategory ? (
                 /* 37 CATEGORY TILE GRID */
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {DEFAULT_CATEGORIES.map((catName) => (
                     <button
                       key={catName}
