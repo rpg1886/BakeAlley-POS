@@ -100,6 +100,13 @@ function clearSessionStorage(): void {
   localStorage.removeItem('bakealley_pos_fulfillment_date');
   localStorage.removeItem('bakealley_pos_deposit_preset');
   localStorage.removeItem('bakealley_pos_custom_deposit');
+  localStorage.removeItem('bakealley_pos_cat_new_name');
+  localStorage.removeItem('bakealley_pos_cat_edit');
+  localStorage.removeItem('bakealley_pos_cat_edit_name');
+  localStorage.removeItem('bakealley_pos_cat_search');
+  localStorage.removeItem('bakealley_pos_cat_filter');
+  localStorage.removeItem('bakealley_pos_cat_selected_ids');
+  localStorage.removeItem('bakealley_pos_cat_target_id');
   sessionStorage.removeItem('bakealley_cloud_token');
   sessionStorage.removeItem('bakealley_cloud_user');
   sessionStorage.removeItem('bakealley_cloud_last_active');
@@ -3362,20 +3369,80 @@ function CategoriesView({ session }: { session: CloudSession }): JSX.Element {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // New Category State
-  const [newCatName, setNewCatName] = useState('');
+  // New Category State (Persisted)
+  const [newCatName, setNewCatName] = useState<string>(() => {
+    return localStorage.getItem('bakealley_pos_cat_new_name') || '';
+  });
   const [creatingCat, setCreatingCat] = useState(false);
 
-  // Edit Category Modal State
-  const [editCat, setEditCat] = useState<{ categoryId: string; name: string } | null>(null);
-  const [editCatName, setEditCatName] = useState('');
+  // Edit Category Modal State (Persisted)
+  const [editCat, setEditCat] = useState<{ categoryId: string; name: string } | null>(() => {
+    const saved = localStorage.getItem('bakealley_pos_cat_edit');
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return null;
+    }
+  });
+  const [editCatName, setEditCatName] = useState<string>(() => {
+    return localStorage.getItem('bakealley_pos_cat_edit_name') || '';
+  });
 
-  // Reassignment Filter & Selection State
-  const [productSearch, setProductSearch] = useState('');
-  const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all'); // 'all' | 'unassigned' | categoryId
-  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-  const [targetCategoryId, setTargetCategoryId] = useState<string>('');
+  // Reassignment Filter & Selection State (Persisted)
+  const [productSearch, setProductSearch] = useState<string>(() => {
+    return localStorage.getItem('bakealley_pos_cat_search') || '';
+  });
+  const [selectedCatFilter, setSelectedCatFilter] = useState<string>(() => {
+    return localStorage.getItem('bakealley_pos_cat_filter') || 'all';
+  });
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('bakealley_pos_cat_selected_ids');
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  const [targetCategoryId, setTargetCategoryId] = useState<string>(() => {
+    return localStorage.getItem('bakealley_pos_cat_target_id') || '';
+  });
   const [reassigning, setReassigning] = useState(false);
+
+  // Sync Draft States to localStorage
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_cat_new_name', newCatName);
+  }, [newCatName]);
+
+  useEffect(() => {
+    if (editCat) {
+      localStorage.setItem('bakealley_pos_cat_edit', JSON.stringify(editCat));
+    } else {
+      localStorage.removeItem('bakealley_pos_cat_edit');
+    }
+  }, [editCat]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_cat_edit_name', editCatName);
+  }, [editCatName]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_cat_search', productSearch);
+  }, [productSearch]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_cat_filter', selectedCatFilter);
+  }, [selectedCatFilter]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_cat_selected_ids', JSON.stringify(selectedProductIds));
+  }, [selectedProductIds]);
+
+  useEffect(() => {
+    localStorage.setItem('bakealley_pos_cat_target_id', targetCategoryId);
+  }, [targetCategoryId]);
 
   const refreshData = async (): Promise<void> => {
     setLoading(true);
@@ -3408,6 +3475,7 @@ function CategoriesView({ session }: { session: CloudSession }): JSX.Element {
       await api.createCategory(newCatName.trim());
       const catName = newCatName.trim();
       setNewCatName('');
+      localStorage.removeItem('bakealley_pos_cat_new_name');
       setMessage("Category \"" + catName + "\" created successfully.");
       await refreshData();
     } catch (err) {
@@ -3426,6 +3494,9 @@ function CategoriesView({ session }: { session: CloudSession }): JSX.Element {
       const updatedName = editCatName.trim();
       setMessage("Category updated to \"" + updatedName + "\".");
       setEditCat(null);
+      setEditCatName('');
+      localStorage.removeItem('bakealley_pos_cat_edit');
+      localStorage.removeItem('bakealley_pos_cat_edit_name');
       await refreshData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update category');
@@ -3454,6 +3525,9 @@ function CategoriesView({ session }: { session: CloudSession }): JSX.Element {
       await api.reassignProductCategory(selectedProductIds, targetCategoryId || null);
       setMessage("Successfully reassigned " + selectedProductIds.length + " item(s).");
       setSelectedProductIds([]);
+      setTargetCategoryId('');
+      localStorage.removeItem('bakealley_pos_cat_selected_ids');
+      localStorage.removeItem('bakealley_pos_cat_target_id');
       await refreshData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reassign items');
@@ -3720,7 +3794,12 @@ function CategoriesView({ session }: { session: CloudSession }): JSX.Element {
               <button
                 type="button"
                 className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100"
-                onClick={() => setEditCat(null)}
+                onClick={() => {
+                  setEditCat(null);
+                  setEditCatName('');
+                  localStorage.removeItem('bakealley_pos_cat_edit');
+                  localStorage.removeItem('bakealley_pos_cat_edit_name');
+                }}
               >
                 Cancel
               </button>
