@@ -749,68 +749,139 @@ export function CheckoutScreen({
               </button>
             </div>
 
-            {/* Cart Table Container - Unconditional Vertical Stack */}
-            <div className="block w-full rounded-xl border border-amber-200/80 bg-white shadow-sm overflow-hidden">
-              {/* 1. Header (Top) */}
-              <div className="w-full border-b border-amber-100 px-4 py-3 bg-amber-50/40 flex justify-between items-center">
-                <h2 className="font-bold text-xs uppercase tracking-wider text-amber-900">Current Transaction</h2>
-                <span className="text-[11px] font-bold text-amber-700">{cart.length} item(s)</span>
-              </div>
+            {/* Cart + Categories Parallel Container */}
+            <div className="grid grid-cols-2 gap-4 w-full">
+              {/* LEFT: Cart Table Container */}
+              <div className="col-span-1 rounded-xl border border-amber-200/80 bg-white shadow-sm overflow-hidden flex flex-col">
+                {/* 1. Header (Top) */}
+                <div className="w-full border-b border-amber-100 px-4 py-3 bg-amber-50/40 flex justify-between items-center">
+                  <h2 className="font-bold text-xs uppercase tracking-wider text-amber-900">Current Transaction</h2>
+                  <span className="text-[11px] font-bold text-amber-700">{cart.length} item(s)</span>
+                </div>
 
-              {/* 2. Items List Table / Empty State (Middle - Full Width) */}
-              <div className="w-full min-h-[260px] max-h-[420px] overflow-y-auto block">
-                {cart.length === 0 ? (
-                  <div className="flex h-52 items-center justify-center text-center p-6 w-full">
-                    <p className="text-sm font-semibold text-slate-400">No Records</p>
-                  </div>
-                ) : (
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-amber-50/80 text-[11px] font-semibold text-amber-800 uppercase border-b border-amber-100 sticky top-0 z-10">
-                      <tr>
-                        <th className="p-2.5">Item</th>
-                        <th className="p-2.5 text-center">Qty</th>
-                        <th className="p-2.5 text-right">Price</th>
-                        <th className="p-2.5 text-right">Total</th>
-                        <th className="p-2 text-center">✕</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-amber-100">
-                      {cart.map((line) => (
-                        <tr key={line.lineId} className="hover:bg-amber-50/30 transition">
-                          <td className="p-2.5 font-bold text-amber-950">
-                            <div>{line.product.name}</div>
-                            <div className="text-[10px] font-mono text-amber-700">{line.product.sku}</div>
-                          </td>
-                          <td className="p-2.5 text-center">
-                            <input
-                              type="number"
-                              min="0.0001"
-                              step="0.0001"
-                              className="w-16 rounded border border-amber-300 p-1 text-center font-bold text-xs text-amber-950 outline-none"
-                              value={line.quantity}
-                              onChange={(e) => updateQuantity(line.lineId, Number(e.target.value))}
-                            />
-                          </td>
-                          <td className="p-2.5 text-right font-medium tabular-nums">{money.format(line.unitPrice)}</td>
-                          <td className="p-2.5 text-right font-bold tabular-nums text-amber-950">{money.format(line.quantity * line.unitPrice)}</td>
-                          <td className="p-2 text-center">
-                            <button
-                              type="button"
-                              className="text-red-600 hover:text-red-800 font-bold px-1"
-                              onClick={() => setCart((c) => c.filter((i) => i.lineId !== line.lineId))}
-                            >
-                              ✕
-                            </button>
-                          </td>
+                {/* 2. Items List Table / Empty State (Middle - Full Width) */}
+                <div className="flex-1 w-full min-h-[260px] max-h-[420px] overflow-y-auto block">
+                  {cart.length === 0 ? (
+                    <div className="flex h-52 items-center justify-center text-center p-6 w-full">
+                      <p className="text-sm font-semibold text-slate-400">No Records</p>
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-amber-50/80 text-[11px] font-semibold text-amber-800 uppercase border-b border-amber-100 sticky top-0 z-10">
+                        <tr>
+                          <th className="p-2.5">Item</th>
+                          <th className="p-2.5 text-center">Qty</th>
+                          <th className="p-2.5 text-right">Price</th>
+                          <th className="p-2.5 text-right">Total</th>
+                          <th className="p-2 text-center">✕</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                      </thead>
+                      <tbody className="divide-y divide-amber-100">
+                        {cart.map((line) => (
+                          <tr key={line.lineId} className="hover:bg-amber-50/30 transition">
+                            <td className="p-2.5 font-bold text-amber-950">
+                              <div>{line.product.name}</div>
+                              <div className="text-[10px] font-mono text-amber-700">{line.product.sku}</div>
+                            </td>
+                            <td className="p-2.5 text-center">
+                              <input
+                                type="number"
+                                min="0.0001"
+                                step="0.0001"
+                                className="w-16 rounded border border-amber-300 p-1 text-center font-bold text-xs text-amber-950 outline-none"
+                                value={line.quantity}
+                                onChange={(e) => updateQuantity(line.lineId, Number(e.target.value))}
+                              />
+                            </td>
+                            <td className="p-2.5 text-right font-medium tabular-nums">{money.format(line.unitPrice)}</td>
+                            <td className="p-2.5 text-right font-bold tabular-nums text-amber-950">{money.format(line.quantity * line.unitPrice)}</td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                className="text-red-600 hover:text-red-800 font-bold px-1"
+                                onClick={() => setCart((c) => c.filter((i) => i.lineId !== line.lineId))}
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </div>
 
-              {/* 3. Total Amount & Payment Action Button (Bottom - Placed directly UNDER Current Transaction) */}
-              <div className="w-full border-t border-amber-200 bg-amber-50/60 p-4 space-y-3 block">
+              {/* RIGHT: Category Selector (37 Categories or Empty state) */}
+              <div className="col-span-1 rounded-xl border border-amber-200/80 bg-white shadow-sm overflow-hidden flex flex-col">
+                {/* Header */}
+                <div className="w-full border-b border-amber-100 px-4 py-3 bg-amber-50/40">
+                  <h2 className="font-bold text-xs uppercase tracking-wider text-amber-900">Product Categories</h2>
+                </div>
+
+                {/* Categories Grid */}
+                <div className="flex-1 w-full min-h-[260px] max-h-[420px] overflow-y-auto block p-3">
+                  {!selectedCategory ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {DEFAULT_CATEGORIES.map((catName) => (
+                        <button
+                          key={catName}
+                          type="button"
+                          onClick={() => void handleSelectCategory(catName)}
+                          className="flex h-16 flex-col items-center justify-center rounded-lg border border-amber-200 bg-amber-50/50 p-1.5 text-center transition hover:-translate-y-0.5 hover:border-amber-500 hover:bg-amber-100/80 hover:shadow-md"
+                        >
+                          <span className="font-bold text-[10px] text-amber-950 uppercase line-clamp-2">{catName}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory(null);
+                          setCategoryProducts([]);
+                        }}
+                        className="w-full rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-900 shadow-sm"
+                      >
+                        ← Back to Categories
+                      </button>
+                      {categoryLoading ? (
+                        <p className="py-8 text-center text-xs font-semibold text-amber-700">Loading...</p>
+                      ) : categoryProducts.length === 0 ? (
+                        <p className="py-8 text-center text-xs font-semibold text-amber-700">No items found.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 max-h-[340px] overflow-y-auto">
+                          {categoryProducts.map((product) => {
+                            const unitPrice = resolvePrice(product, pricingTierId, 1);
+                            return (
+                              <button
+                                key={product.variantId}
+                                type="button"
+                                onClick={() => addProduct(product)}
+                                className="flex flex-col justify-between rounded-lg border border-amber-200 bg-white p-2 text-left shadow-sm transition hover:border-amber-500 hover:shadow-md hover:bg-amber-50/30"
+                              >
+                                <div>
+                                  <h3 className="font-bold text-[10px] text-amber-950 line-clamp-2">{product.name}</h3>
+                                  <p className="mt-0.5 font-mono text-[9px] text-amber-700">{product.sku}</p>
+                                </div>
+                                <div className="mt-2 flex items-center justify-between border-t border-amber-100 pt-1">
+                                  <span className="font-bold text-[9px] text-amber-900 tabular-nums">{money.format(unitPrice)}</span>
+                                  <span className="rounded text-[8px] font-bold text-amber-700">+Add</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Total Amount & Payment Action Button (Bottom - Full Width Below Cart + Categories) */}
+            <div className="w-full border-t border-amber-200 bg-amber-50/60 p-4 space-y-3 block rounded-xl border border-amber-200/80 shadow-sm">
                 {effectiveExchangeCredit > 0 && (
                   <div className="flex justify-between items-center text-xs bg-amber-100 p-2 rounded-lg border border-amber-300">
                     <span className="font-bold text-amber-900">🔄 Return Credit:</span>
@@ -855,9 +926,8 @@ export function CheckoutScreen({
                 )}
               </div>
             </div>
-          </div>
 
-          {/* RIGHT COLUMN: Search Input & 37-Category / Item Catalog Grid (~62% width = 7 cols) */}
+          {/* RIGHT COLUMN: Search Input & Search Results (~62% width = 7 cols) */}
           <div className="lg:col-span-7 space-y-4">
             {/* Top Barcode & SKU Search Bar */}
             <div className="relative">
@@ -891,84 +961,6 @@ export function CheckoutScreen({
                       </div>
                     </button>
                   ))}
-                </div>
-              )}
-            </div>
-
-            {/* Catalog Grid Area (37 Categories or Category Items Cover View) */}
-            <div className="rounded-xl border border-amber-200/80 bg-white p-4 shadow-sm min-h-[500px]">
-              <div className="mb-3 flex items-center justify-between border-b border-amber-100 pb-2">
-                <h2 className="font-bakery text-sm font-bold text-amber-950 uppercase tracking-wide">
-                  {selectedCategory ? `Category: ${selectedCategory.name}` : 'Product Categories (37)'}
-                </h2>
-                {selectedCategory && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedCategory(null);
-                      setCategoryProducts([]);
-                    }}
-                    className="rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-900 shadow-sm"
-                  >
-                    ← Back to Categories
-                  </button>
-                )}
-              </div>
-
-              {!selectedCategory ? (
-                /* 37 CATEGORY TILE GRID */
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-                  {DEFAULT_CATEGORIES.map((catName) => (
-                    <button
-                      key={catName}
-                      type="button"
-                      onClick={() => void handleSelectCategory(catName)}
-                      className="flex h-20 flex-col items-center justify-center rounded-xl border border-amber-200 bg-amber-50/50 p-2 text-center transition hover:-translate-y-0.5 hover:border-amber-500 hover:bg-amber-100/80 hover:shadow-md"
-                    >
-                      <span className="font-bold text-xs text-amber-950 uppercase line-clamp-2">{catName}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                /* CATEGORY ITEM COVER VIEW */
-                <div>
-                  {categoryLoading ? (
-                    <p className="py-16 text-center text-xs font-semibold text-amber-700">Loading products for {selectedCategory.name}...</p>
-                  ) : categoryProducts.length === 0 ? (
-                    <div className="py-16 text-center">
-                      <p className="text-xs font-semibold text-amber-700">No items found under {selectedCategory.name}.</p>
-                      <button
-                        type="button"
-                        className="mt-3 rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-900"
-                        onClick={() => setSelectedCategory(null)}
-                      >
-                        Return to Category List
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {categoryProducts.map((product) => {
-                        const unitPrice = resolvePrice(product, pricingTierId, 1);
-                        return (
-                          <button
-                            key={product.variantId}
-                            type="button"
-                            onClick={() => addProduct(product)}
-                            className="flex flex-col justify-between rounded-xl border border-amber-200 bg-white p-3 text-left shadow-sm transition hover:border-amber-500 hover:shadow-md hover:bg-amber-50/30"
-                          >
-                            <div>
-                              <h3 className="font-bold text-xs text-amber-950 line-clamp-2">{product.name}</h3>
-                              <p className="mt-1 font-mono text-[10px] text-amber-700">{product.sku}</p>
-                            </div>
-                            <div className="mt-3 flex items-center justify-between border-t border-amber-100 pt-2">
-                              <span className="font-bold text-xs text-amber-900 tabular-nums">{money.format(unitPrice)}</span>
-                              <span className="rounded-md bg-amber-700 px-2 py-0.5 text-[10px] font-bold text-white">+ Add</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
