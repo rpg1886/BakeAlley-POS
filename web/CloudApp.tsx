@@ -107,6 +107,9 @@ function clearSessionStorage(): void {
   localStorage.removeItem('bakealley_pos_cat_filter');
   localStorage.removeItem('bakealley_pos_cat_selected_ids');
   localStorage.removeItem('bakealley_pos_cat_target_id');
+  localStorage.removeItem('bakealley_pos_financial_date');
+  localStorage.removeItem('bakealley_pos_sales_date');
+  localStorage.removeItem('bakealley_pos_emp_date');
   sessionStorage.removeItem('bakealley_cloud_token');
   sessionStorage.removeItem('bakealley_cloud_user');
   sessionStorage.removeItem('bakealley_cloud_last_active');
@@ -205,7 +208,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   });
 
   // Daily State
-  const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_financial_date') || today());
+  const [selectedDate, setSelectedDate] = useState<string>(() => today());
   const [report, setReport] = useState<CloudSalesReport | null>(null);
   const [dailyLoading, setDailyLoading] = useState(true);
   const [dailyError, setDailyError] = useState<string | null>(null);
@@ -220,10 +223,6 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
   useEffect(() => {
     localStorage.setItem('bakealley_pos_financial_view_mode', viewMode);
   }, [viewMode]);
-
-  useEffect(() => {
-    localStorage.setItem('bakealley_pos_financial_date', selectedDate);
-  }, [selectedDate]);
 
   const refreshDaily = async (): Promise<void> => {
     setDailyLoading(true);
@@ -1236,7 +1235,7 @@ interface GroupedTransaction {
    SALES VIEW (GROUPED TRANSACTIONS WITH EXPANDABLE RECEIPT & CASH DETAILS)
    ========================================================================== */
 function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExchange?: (data: any) => void }): JSX.Element {
-  const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_sales_date') || today());
+  const [selectedDate, setSelectedDate] = useState<string>(() => today());
   const [report, setReport] = useState<CloudSalesReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1410,10 +1409,6 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
     returnedItems,
   }); setExchangeModalTxState(null);
 };
-
-  useEffect(() => {
-    localStorage.setItem('bakealley_pos_sales_date', selectedDate);
-  }, [selectedDate]);
 
   const refresh = async (): Promise<void> => {
     setLoading(true);
@@ -2477,8 +2472,8 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
   const [employees, setEmployees] = useState<CloudEmployee[]>([]);
   const [shifts, setShifts] = useState<CloudShift[]>([]);
 
-  const [selectedDate, setSelectedDate] = useState<string>(() => localStorage.getItem('bakealley_pos_emp_date') || today());
-
+  const [selectedDate, setSelectedDate] = useState<string>(() => today());
+  
   const [form, setForm] = useState(() => {
     try {
       const saved = localStorage.getItem('bakealley_pos_emp_form');
@@ -2496,10 +2491,6 @@ function EmployeesView({ session, onShiftChange, onSelfClockOut }: { session: Cl
   const [resetModal, setResetConfirm] = useState<{ userId: string; displayName: string } | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resetting, setResetting] = useState(false);
-  
-  useEffect(() => {
-    localStorage.setItem('bakealley_pos_emp_date', selectedDate);
-  }, [selectedDate]);
 
   useEffect(() => {
     localStorage.setItem('bakealley_pos_emp_form', JSON.stringify(form));
