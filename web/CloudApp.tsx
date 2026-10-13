@@ -3834,12 +3834,11 @@ export function CloudApp(): JSX.Element {
   const isAdmin = session?.user.role === 'admin';
 
   useEffect(() => {
-    if (session && !isAdmin && (tab === 'financials' || tab === 'bi')) {
+    if (session && !isAdmin && (tab === 'financials' || tab === 'bi' || tab === 'categories' || (tab as string) === 'settings')) {
       setTab('checkout');
       localStorage.setItem('bakealley_cloud_tab', 'checkout');
     }
   }, [session, isAdmin, tab]);
-
   const changeTab = (newTab: Tab): void => {
     setTab(newTab);
     localStorage.setItem('bakealley_cloud_tab', newTab);
@@ -3962,9 +3961,8 @@ export function CloudApp(): JSX.Element {
     ['checkout', 'Checkout'],
     ['reservations', 'Reservations'],
     ['sales', 'Sales'],
-    ...(isAdmin ? ([['financials', 'Financials'], ['bi', 'Business Intelligence']] as Array<[Tab, string]>) : []),
+    ...(isAdmin ? ([['financials', 'Financials'], ['bi', 'Business Intelligence'], ['categories', 'Categories']] as Array<[Tab, string]>) : []),
     ['inventory', 'Inventory'],
-    ['categories', 'Categories'],
     ['crm', 'CRM'],
     ['employees', 'Employees'],
   ];
