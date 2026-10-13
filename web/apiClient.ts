@@ -72,6 +72,8 @@ export interface CloudInventoryRow {
   quantityOnHand: number;
   initialCapital: number;
   retailPrice: number;
+  categoryId?: string | null;
+  categoryName?: string;
 }
 
 export interface CloudUnitOfMeasure {

@@ -21,7 +21,7 @@ const CARD_FEE_RATE = 0.025; // 2.5% estimated card fee
 const money = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
 
-type Tab = 'checkout' | 'reservations' | 'sales' | 'financials' | 'bi' | 'inventory' | 'crm' | 'employees' | 'settings';
+type Tab = 'checkout' | 'reservations' | 'sales' | 'financials' | 'bi' | 'inventory' | 'categories' | 'crm' | 'employees';
 type VelocityTimeframe = 'monthly' | 'yearly';
 
 async function clockInWithFloat(openingFloat: number, notes?: string): Promise<CloudShift> {
@@ -3355,7 +3355,7 @@ function ReservationsView({
   );
 }
 
-function SettingsView({ session }: { session: CloudSession }): JSX.Element {
+function CategoriesView({ session }: { session: CloudSession }): JSX.Element {
   const [categories, setCategories] = useState<Array<{ categoryId: string; name: string; productCount?: number }>>([]);
   const [products, setProducts] = useState<CloudInventoryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -3372,7 +3372,7 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
 
   // Reassignment Filter & Selection State
   const [productSearch, setProductSearch] = useState('');
-  const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all');
+  const [selectedCatFilter, setSelectedCatFilter] = useState<string>('all'); // 'all' | 'unassigned' | categoryId
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [targetCategoryId, setTargetCategoryId] = useState<string>('');
   const [reassigning, setReassigning] = useState(false);
@@ -3388,7 +3388,7 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
       setCategories(cats);
       setProducts(inv);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load settings data');
+      setError(err instanceof Error ? err.message : 'Failed to load category data');
     } finally {
       setLoading(false);
     }
@@ -3406,8 +3406,9 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
     setError(null);
     try {
       await api.createCategory(newCatName.trim());
+      const catName = newCatName.trim();
       setNewCatName('');
-      setMessage(`Category "${newCatName.trim()}" created successfully.`);
+      setMessage("Category \"" + catName + "\" created successfully.");
       await refreshData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create category');
@@ -3422,7 +3423,8 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
     setError(null);
     try {
       await api.updateCategory(editCat.categoryId, editCatName.trim());
-      setMessage(`Category updated to "${editCatName.trim()}".`);
+      const updatedName = editCatName.trim();
+      setMessage("Category updated to \"" + updatedName + "\".");
       setEditCat(null);
       await refreshData();
     } catch (err) {
@@ -3431,12 +3433,12 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
   };
 
   const handleDeleteCategory = async (categoryId: string, name: string): Promise<void> => {
-    if (!window.confirm(`Are you sure you want to delete category "${name}"? Linked items will be unassigned.`)) return;
+    if (!window.confirm("Are you sure you want to delete category \"" + name + "\"? Linked items will be unassigned.")) return;
     setMessage(null);
     setError(null);
     try {
       await api.deleteCategory(categoryId);
-      setMessage(`Category "${name}" deleted successfully.`);
+      setMessage("Category \"" + name + "\" deleted successfully.");
       await refreshData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete category');
@@ -3450,7 +3452,7 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
     setError(null);
     try {
       await api.reassignProductCategory(selectedProductIds, targetCategoryId || null);
-      setMessage(`Successfully reassigned ${selectedProductIds.length} item(s).`);
+      setMessage("Successfully reassigned " + selectedProductIds.length + " item(s).");
       setSelectedProductIds([]);
       await refreshData();
     } catch (err) {
@@ -3460,24 +3462,35 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
     }
   };
 
+  // Filtered Products Logic
+  const unassignedCount = products.filter((p) => !p.categoryId || p.categoryName === 'Unassigned').length;
+
   const filteredProducts = products.filter((p) => {
     const matchesSearch = !productSearch || p.variantName.toLowerCase().includes(productSearch.toLowerCase()) || p.sku.toLowerCase().includes(productSearch.toLowerCase());
-    return matchesSearch;
+
+    let matchesCategory = true;
+    if (selectedCatFilter === 'unassigned') {
+      matchesCategory = !p.categoryId || p.categoryName === 'Unassigned';
+    } else if (selectedCatFilter !== 'all') {
+      matchesCategory = p.categoryId === selectedCatFilter;
+    }
+
+    return matchesSearch && matchesCategory;
   });
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between border-b border-amber-200/80 pb-4">
         <div>
-          <h1 className="font-bakery text-2xl font-bold text-amber-950">⚙️ Store & POS Settings</h1>
-          <p className="text-xs text-amber-800 mt-1">Manage product taxonomy, category organization, and batch inventory assignments.</p>
+          <h1 className="font-bakery text-2xl font-bold text-amber-950">🏷️ Category Management & Inventory Categorization</h1>
+          <p className="text-xs text-amber-800 mt-1">Create or edit categories, view existing product assignments, and reassign items to target categories.</p>
         </div>
         <button
           type="button"
           onClick={() => void refreshData()}
           className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 shadow-sm transition"
         >
-          {loading ? 'Refreshing...' : '🔄 Refresh Settings'}
+          {loading ? 'Refreshing...' : '🔄 Refresh Categories'}
         </button>
       </div>
 
@@ -3538,20 +3551,59 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
           </Panel>
         </div>
 
-        {/* PANEL 2: ITEM REASSIGNMENT TOOL (7 Cols) */}
+        {/* PANEL 2: ITEM CATEGORIZATION TOOL (7 Cols) */}
         <div className="col-span-12 lg:col-span-7 space-y-4">
           <Panel title="📦 Inventory Item Categorization Tool">
             <div className="space-y-3">
+              {/* Filter Pills & Category Filter Selector */}
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-50/80 p-3 rounded-xl border border-amber-200">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-amber-950 mr-1">Filter View:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCatFilter('all')}
+                    className={"px-2.5 py-1 rounded-lg text-xs font-bold transition " + (selectedCatFilter === 'all' ? 'bg-amber-800 text-white shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200')}
+                  >
+                    All Items ({products.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCatFilter('unassigned')}
+                    className={"px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 " + (selectedCatFilter === 'unassigned' ? 'bg-amber-800 text-white shadow-sm' : 'bg-amber-200/80 text-amber-950 hover:bg-amber-300')}
+                  >
+                    <span>⚠️ Unassigned</span>
+                    <span className="rounded-full bg-amber-950 text-white text-[10px] px-1.5 py-0.2">{unassignedCount}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-900">Category:</span>
+                  <select
+                    value={selectedCatFilter}
+                    onChange={(e) => setSelectedCatFilter(e.target.value)}
+                    className="rounded-xl border border-amber-300 bg-white px-3 py-1 text-xs font-bold outline-none"
+                  >
+                    <option value="all">-- All Categories --</option>
+                    <option value="unassigned">⚠️ Unassigned / No Category ({unassignedCount})</option>
+                    {categories.map((c) => (
+                      <option key={c.categoryId} value={c.categoryId}>
+                        {c.name} ({c.productCount ?? 0})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Batch Action Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-100/60 p-3 rounded-xl border border-amber-200/80">
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-100/70 p-3 rounded-xl border border-amber-300/80">
                 <span className="text-xs font-bold text-amber-950">
-                  Selected Items: <strong className="text-amber-800">{selectedProductIds.length}</strong>
+                  Selected Items: <strong className="text-amber-800 font-extrabold">{selectedProductIds.length}</strong>
                 </span>
                 <div className="flex items-center gap-2">
                   <select
                     value={targetCategoryId}
                     onChange={(e) => setTargetCategoryId(e.target.value)}
-                    className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold outline-none"
+                    className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold outline-none focus:border-amber-500"
                   >
                     <option value="">-- Select Target Category --</option>
                     {categories.map((c) => (
@@ -3569,19 +3621,19 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
                 </div>
               </div>
 
-              {/* Search Filter Bar */}
+              {/* Search Filter Input */}
               <input
                 type="text"
                 placeholder="Filter product name or SKU..."
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
-                className="w-full rounded-xl border border-amber-300 px-3.5 py-2 text-xs outline-none focus:border-amber-500"
+                className="w-full rounded-xl border border-amber-300 px-3.5 py-2 text-xs outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
               />
 
-              {/* Product Table */}
+              {/* Product Table with Current Category Column */}
               <div className="max-h-[400px] overflow-y-auto rounded-xl border border-amber-200/80 bg-white">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-amber-50/80 text-amber-900 border-b border-amber-100 uppercase text-[10px] font-extrabold">
+                  <thead className="bg-amber-50/80 text-amber-900 border-b border-amber-100 uppercase text-[10px] font-extrabold sticky top-0 z-10">
                     <tr>
                       <th className="p-2.5 text-center">
                         <input
@@ -3593,36 +3645,57 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
                               setSelectedProductIds([]);
                             }
                           }}
-                          checked={selectedProductIds.length > 0 && selectedProductIds.length === filteredProducts.length}
+                          checked={filteredProducts.length > 0 && selectedProductIds.length === filteredProducts.length}
                         />
                       </th>
                       <th className="p-2.5">Product Name</th>
                       <th className="p-2.5">SKU</th>
+                      <th className="p-2.5">Current Category</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-amber-100">
-                    {filteredProducts.map((p) => {
-                      const isSelected = selectedProductIds.includes(p.variantId);
-                      return (
-                        <tr key={p.variantId} className="hover:bg-amber-50/40 transition">
-                          <td className="p-2.5 text-center">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedProductIds((prev) => [...prev, p.variantId]);
-                                } else {
-                                  setSelectedProductIds((prev) => prev.filter((id) => id !== p.variantId));
-                                }
-                              }}
-                            />
-                          </td>
-                          <td className="p-2.5 font-bold text-amber-950">{p.variantName}</td>
-                          <td className="p-2.5 font-mono text-[10px] text-amber-700">{p.sku}</td>
-                        </tr>
-                      );
-                    })}
+                    {filteredProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-xs text-amber-700 font-semibold">
+                          No matching inventory items found.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredProducts.map((p) => {
+                        const isSelected = selectedProductIds.includes(p.variantId);
+                        const isUnassigned = !p.categoryId || p.categoryName === 'Unassigned';
+                        return (
+                          <tr key={p.variantId} className={"hover:bg-amber-50/40 transition " + (isSelected ? 'bg-amber-100/50' : '')}>
+                            <td className="p-2.5 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedProductIds((prev) => [...prev, p.variantId]);
+                                  } else {
+                                    setSelectedProductIds((prev) => prev.filter((id) => id !== p.variantId));
+                                  }
+                                }}
+                              />
+                            </td>
+                            <td className="p-2.5 font-bold text-amber-950">{p.variantName}</td>
+                            <td className="p-2.5 font-mono text-[10px] text-amber-700">{p.sku}</td>
+                            <td className="p-2.5">
+                              {isUnassigned ? (
+                                <span className="inline-block rounded-full bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 text-[10px] font-bold">
+                                  ⚠️ Unassigned
+                                </span>
+                              ) : (
+                                <span className="inline-block rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-0.5 text-[10px] font-bold">
+                                  {p.categoryName}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -3646,15 +3719,16 @@ function SettingsView({ session }: { session: CloudSession }): JSX.Element {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
+                className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100"
                 onClick={() => setEditCat(null)}
-                className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                className="rounded-xl bg-amber-800 px-4 py-2 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50"
                 onClick={() => void handleUpdateCategory()}
-                className="rounded-xl bg-amber-800 px-4 py-2 text-xs font-bold text-white hover:bg-amber-900"
+                disabled={!editCatName.trim()}
               >
                 Save
               </button>
@@ -3685,7 +3759,7 @@ export function CloudApp(): JSX.Element {
 
   const [tab, setTab] = useState<Tab>(() => {
     const savedTab = localStorage.getItem('bakealley_cloud_tab') as Tab;
-    return savedTab && ['checkout', 'reservations', 'sales', 'financials', 'bi', 'inventory', 'crm', 'employees', 'settings'].includes(savedTab)
+    return savedTab && ['checkout', 'reservations', 'sales', 'financials', 'bi', 'inventory', 'categories', 'crm', 'employees'].includes(savedTab)
       ? savedTab
       : 'checkout';
   });
@@ -3890,10 +3964,11 @@ export function CloudApp(): JSX.Element {
     ['sales', 'Sales'],
     ...(isAdmin ? ([['financials', 'Financials'], ['bi', 'Business Intelligence']] as Array<[Tab, string]>) : []),
     ['inventory', 'Inventory'],
+    ['categories', 'Categories'],
     ['crm', 'CRM'],
     ['employees', 'Employees'],
-    ...(isAdmin ? ([['settings', 'Settings']] as Array<[Tab, string]>) : []),
   ];
+
 
 
   return (
@@ -3981,9 +4056,9 @@ export function CloudApp(): JSX.Element {
           {tab === 'financials' && isAdmin && <FinancialsView isAdmin={isAdmin} />}
           {tab === 'bi' && isAdmin && <BiView />}
           {tab === 'inventory' && <InventoryView isAdmin={isAdmin} />}
+          {(tab === 'categories' || (tab as string) === 'settings') && isAdmin && <CategoriesView session={session} />}
           {tab === 'crm' && <CrmView session={session} customers={customers} refresh={refreshCustomers} />}
           {tab === 'employees' && <EmployeesView session={session} onShiftChange={refreshShifts} onSelfClockOut={() => setSession(null)} />}
-          {tab === 'settings' && isAdmin && <SettingsView session={session} />}
         </main>
       )}
 

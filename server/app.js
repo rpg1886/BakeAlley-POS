@@ -284,24 +284,34 @@ app.delete('/api/v1/customers/:id', auth.requireSession, auth.requireAdmin, asyn
 });
 
 app.get('/api/v1/inventory', auth.requireSession, async (_request, response, next) => {
-  try { 
-    const result = await pool.query(
-      `SELECT v.variant_id AS "variantId", v.sku, v.variant_name AS "variantName", COALESCE(SUM(l.quantity_on_hand), 0) AS "quantityOnHand", MIN(l.expiration_date) AS "expirationDate", COALESCE(p.initial_cost, 0) AS "initialCapital", COALESCE((SELECT pp.price_per_unit FROM product_prices pp JOIN price_tiers pt ON pt.tier_id=pp.tier_id WHERE pp.variant_id=v.variant_id AND lower(pt.tier_name)='retail' ORDER BY pp.min_quantity LIMIT 1), 0) AS "retailPrice" 
-       FROM product_variants v 
-       JOIN products p ON p.product_id=v.product_id 
-       LEFT JOIN inventory_lots l ON l.variant_id=v.variant_id 
-       GROUP BY v.variant_id, v.sku, v.variant_name, p.initial_cost 
-       ORDER BY v.variant_name`
-    ); 
-    response.json(result.rows.map((row) => ({ 
-      ...row, 
-      quantityOnHand: Number(row.quantityOnHand) || 0, 
-      initialCapital: Number(row.initialCapital) || 0, 
-      retailPrice: Number(row.retailPrice) || 0 
-    }))); 
-  } catch (error) { 
+  try {
+    const result = await pool.query(`
+      SELECT 
+        v.variant_id AS "variantId", 
+        v.sku, 
+        v.variant_name AS "variantName", 
+        p.category_id AS "categoryId",
+        COALESCE(c.name, 'Unassigned') AS "categoryName",
+        COALESCE(SUM(l.quantity_on_hand), 0) AS "quantityOnHand", 
+        MIN(l.expiration_date) AS "expirationDate", 
+        COALESCE(p.initial_cost, 0) AS "initialCapital", 
+        COALESCE((SELECT pp.price_per_unit FROM product_prices pp JOIN price_tiers pt ON pt.tier_id=pp.tier_id WHERE pp.variant_id=v.variant_id AND lower(pt.tier_name)='retail' ORDER BY pp.min_quantity LIMIT 1), 0) AS "retailPrice" 
+      FROM product_variants v 
+      JOIN products p ON p.product_id=v.product_id 
+      LEFT JOIN categories c ON c.category_id=p.category_id
+      LEFT JOIN inventory_lots l ON l.variant_id=v.variant_id 
+      GROUP BY v.variant_id, v.sku, v.variant_name, p.category_id, c.name, p.initial_cost 
+      ORDER BY v.variant_name
+    `);
+    response.json(result.rows.map((row) => ({
+      ...row,
+      quantityOnHand: Number(row.quantityOnHand) || 0,
+      initialCapital: Number(row.initialCapital) || 0,
+      retailPrice: Number(row.retailPrice) || 0
+    })));
+  } catch (error) {
     logger.error('Inventory list failed', { error: error.message });
-    next(error); 
+    next(error);
   }
 });
 
@@ -400,6 +410,33 @@ app.post('/api/v1/inventory/products', auth.requireSession, auth.requireAdmin, a
   }
 });
 
+app.put('/api/v1/inventory/products/reassign-category', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const validation = validate(categoryReassignSchema, request.body);
+    if (!validation.success) {
+      return response.status(400).json({ error: 'INVALID_REASSIGNMENT', details: validation.errors });
+    }
+    const { productIds, categoryId } = validation.data;
+    if (productIds.length === 0) {
+      return response.status(400).json({ error: 'NO_PRODUCTS_SELECTED', message: 'At least one product must be selected' });
+    }
+    const result = await pool.query(
+      `UPDATE products 
+       SET category_id = $1, updated_at = now() 
+       WHERE product_id IN (
+         SELECT product_id FROM product_variants WHERE variant_id = ANY($2::uuid[])
+         UNION
+         SELECT product_id FROM products WHERE product_id = ANY($2::uuid[])
+       ) RETURNING product_id`,
+      [categoryId, productIds]
+    );
+    response.json({ updatedCount: result.rowCount, categoryId });
+  } catch (error) {
+    logger.error('Product category reassignment failed', { error: error.message });
+    next(error);
+  }
+});
+
 app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
   try {
     const { variantId } = request.params;
@@ -475,27 +512,6 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
           );
         }
       }
-
-      app.put('/api/v1/inventory/products/reassign-category', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
-        try {
-          const validation = validate(categoryReassignSchema, request.body);
-          if (!validation.success) {
-            return response.status(400).json({ error: 'INVALID_REASSIGNMENT', details: validation.errors });
-          }
-          const { productIds, categoryId } = validation.data;
-          if (productIds.length === 0) {
-            return response.status(400).json({ error: 'NO_PRODUCTS_SELECTED', message: 'At least one product must be selected' });
-          }
-          const result = await pool.query(
-            'UPDATE products SET category_id = $1 WHERE product_id = ANY($2::uuid[]) RETURNING product_id',
-            [categoryId, productIds]
-          );
-          response.json({ updatedCount: result.rowCount, categoryId });
-        } catch (error) {
-          logger.error('Product category reassignment failed', { error: error.message });
-          next(error);
-        }
-      });
 
       // Update lot if lotNumber or expirationDate provided
       if (body.lotNumber || body.expirationDate !== undefined) {

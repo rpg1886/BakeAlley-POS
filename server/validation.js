@@ -108,7 +108,7 @@ const dateSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format').optional(),
 });
 
-// Add Category Validation Schemas (Insert before validate helper around Line 110)
+// Add Category Validation Schemas
 const categorySchema = z.object({
   name: z.string().min(1, 'Category name is required').max(100),
 });
@@ -117,30 +117,6 @@ const categoryReassignSchema = z.object({
   productIds: z.array(z.string().uuid('Invalid product ID')),
   categoryId: z.string().uuid('Invalid category ID').nullable(),
 });
-
-// Update validation helper & module.exports (Lines 112 - 131)
-function validate(schema, data) {
-  try {
-    return { success: true, data: schema.parse(data) };
-  } catch (error) {
-    return { success: false, errors: error.errors };
-  }
-}
-
-module.exports = {
-  loginSchema,
-  customerSchema,
-  employeeSchema,
-  inventoryAdjustSchema,
-  inventoryProductSchema,
-  inventoryUpdateSchema,
-  orderPayloadSchema,
-  searchSchema,
-  dateSchema,
-  categorySchema,
-  categoryReassignSchema,
-  validate,
-};
 
 // Validation helper
 function validate(schema, data) {
@@ -161,5 +137,7 @@ module.exports = {
   orderPayloadSchema,
   searchSchema,
   dateSchema,
+  categorySchema,
+  categoryReassignSchema,
   validate,
 };
