@@ -1539,7 +1539,7 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
       {error && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700" role="alert">{error}</p>}
       {report && !loading && (
         <>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <div className="rounded-xl bg-amber-950 p-4 text-white">
               <p className="text-sm text-amber-200/80">Daily gross</p>
               <strong className="text-2xl">{money.format(Number(report.dayGrossTotal) || 0)}</strong>
@@ -1549,6 +1549,12 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
               <p className="text-sm text-emerald-100">Daily net</p>
               <strong className="text-2xl">{money.format(Number(report.dayNetTotal) || 0)}</strong>
             </div>
+            {Number(report.dayDiscountTotal) > 0 && (
+              <div className="rounded-xl bg-emerald-800 p-4 text-white border border-emerald-600 shadow-sm">
+                <p className="text-sm text-emerald-200">Total Discounts</p>
+                <strong className="text-2xl">-{money.format(Number(report.dayDiscountTotal))}</strong>
+              </div>
+            )}
             <div className="rounded-xl bg-amber-50 p-4">
               <p className="text-sm text-amber-700">Items sold</p>
               <strong className="text-2xl text-amber-950">{report.items.reduce((total, item) => total + (Number(item.quantity) || 0), 0).toFixed(4)}</strong>
@@ -1611,8 +1617,16 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
                         <td className="py-3 px-3 font-medium text-amber-900">
                           {tx.items.length} {tx.items.length === 1 ? 'item' : 'items'}
                         </td>
-                        <td className="py-3 px-3 font-bold text-amber-950 tabular-nums">
-                          {money.format(tx.totalAmount)}
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-amber-950 tabular-nums">
+                            {money.format(tx.totalAmount)}
+                          </div>
+                          {tx.discountAmount > 0 && (
+                            <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
+                              <span>🏷️ -{money.format(tx.discountAmount)}</span>
+                              <span>({tx.discountType === 'percentage' ? `${tx.discountRate}%` : 'Fixed'})</span>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-3">{paymentBadge}</td>
                         <td className="py-3 px-3 text-right">
@@ -1693,23 +1707,36 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
                                     </>
                                   )}
                                 </div>
-                                <div className="text-right mt-2 sm:mt-0 space-y-2">
+                                <div className="text-right mt-2 sm:mt-0 space-y-1.5">
+                                  {tx.discountAmount > 0 && (
+                                    <>
+                                      <div className="text-xs text-amber-800">
+                                        <span>Items Subtotal: </span>
+                                        <span className="tabular-nums font-semibold">{money.format(tx.items.reduce((sum, i) => sum + i.amount, 0))}</span>
+                                      </div>
+                                      <div className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-1 rounded border border-emerald-300 inline-block my-0.5">
+                                        <span>🏷️ Discount ({tx.discountType === 'percentage' ? `${tx.discountRate}% OFF` : 'Fixed'}): </span>
+                                        <strong className="text-emerald-950">-{money.format(tx.discountAmount)}</strong>
+                                        {tx.discountReason && <span className="block text-[10px] font-normal italic text-emerald-900">Reason: {tx.discountReason}</span>}
+                                      </div>
+                                    </>
+                                  )}
                                   <div>
-                                  <span className="text-amber-800 font-semibold block">Total Transaction Amount</span>
-                                  <strong className="text-base text-amber-950 tabular-nums">{money.format(tx.totalAmount)}</strong>
-                                </div>
-                                  <div className="flex flex-wrap gap-2 justify-end">
-                                <button
-                                  type="button"
+                                    <span className="text-amber-800 font-semibold block">Total Transaction Amount</span>
+                                    <strong className="text-base text-amber-950 tabular-nums">{money.format(tx.totalAmount)}</strong>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 justify-end pt-1">
+                                    <button
+                                      type="button"
                                       className="rounded-lg bg-amber-100 border border-amber-300 px-3 py-1.5 text-xs font-bold text-amber-900 transition hover:bg-amber-200 shadow-sm"
                                       onClick={() => printReceipt(tx)} > 🖨️ Print Receipt
-                                </button>
-                                <button 
-                                type="button"
+                                    </button>
+                                    <button
+                                      type="button"
                                       className="rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-amber-900 shadow-sm"
                                       onClick={() => openExchangeModal(tx)} > 🔄 Return / Exchange Items
-                                </button>
-                                </div>
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </div>

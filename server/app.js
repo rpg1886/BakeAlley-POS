@@ -1261,16 +1261,32 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
         ]) 
       : [null, null, null];
     
-    response.json({ 
-      selectedDate: date, 
-      items, 
-      dayGrossTotal: items.reduce((total, item) => total + item.amount, 0), 
-      dayNetTotal: items.reduce((total, item) => total + item.amount, 0), 
-      dayOrderCount: new Set(items.map((item) => item.orderId)).size, 
-      week: week && { ...week, startDate: weekStart, endDate: weekEnd }, 
-      month: month && { ...month, startDate: monthStart, endDate: dateString(nextMonth) }, 
-      year: year && { ...year, startDate: yearStart, endDate: dateString(nextYear) }, 
-      timezone: 'Asia/Manila' 
+    // Calculate daily totals based on unique completed orders
+    const uniqueOrdersMap = new Map();
+    for (const item of items) {
+      if (!uniqueOrdersMap.has(item.orderId)) {
+        uniqueOrdersMap.set(item.orderId, {
+          totalAmount: Number(item.totalAmount) || 0,
+          discountAmount: Number(item.discountAmount) || 0
+        });
+      }
+    }
+    const uniqueOrders = Array.from(uniqueOrdersMap.values());
+    const dayNetTotal = uniqueOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+    const dayGrossTotal = dayNetTotal; // Discount total is applied so Daily Gross reflects actual net revenue
+    const dayDiscountTotal = uniqueOrders.reduce((sum, o) => sum + o.discountAmount, 0);
+
+    response.json({
+      selectedDate: date,
+      items,
+      dayGrossTotal,
+      dayNetTotal,
+      dayDiscountTotal,
+      dayOrderCount: uniqueOrders.length,
+      week: week && { ...week, startDate: weekStart, endDate: weekEnd },
+      month: month && { ...month, startDate: monthStart, endDate: dateString(nextMonth) },
+      year: year && { ...year, startDate: yearStart, endDate: dateString(nextYear) },
+      timezone: 'Asia/Manila'
     });
   } catch (error) { 
     logger.error('Sales report failed', { error: error.message });

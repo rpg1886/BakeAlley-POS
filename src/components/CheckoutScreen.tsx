@@ -735,23 +735,12 @@ export function CheckoutScreen({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start w-full">
           {/* LEFT COLUMN: Quick Actions, Current Transaction & Payment Bar */}
           <div className="md:col-span-5 xl:col-span-4 min-w-0 space-y-3 md:sticky md:top-2">
-            {/* Horizontal Action Tab Bar (Customer, Order Mode, Clear) */}
-            <button
-              type="button"
-              onClick={() => setDiscountModalOpen(true)}
-              className={`flex-1 min-w-0 rounded-lg py-2.5 px-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${appliedDiscount && discountAmount > 0
-                ? 'bg-amber-800 text-white shadow-sm'
-                : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
-                }`}
-            >
-              <span>🏷️</span>
-              <span className="truncate">{appliedDiscount && discountAmount > 0 ? `-${money.format(discountAmount)}` : 'Discount'}</span>
-            </button>
-            <div className="flex flex-row items-center justify-between gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm w-full">
+            {/* Horizontal Action Tab Bar (Customer, Order Mode, Discount, Clear) */}
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm w-full">
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
-                className={`flex-1 min-w-0 rounded-lg py-2.5 px-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${selectedCustomer
+                className={`w-full min-w-0 rounded-lg py-2.5 px-1.5 text-xs font-bold transition flex items-center justify-center gap-1 ${selectedCustomer
                   ? 'bg-emerald-700 text-white shadow-sm'
                   : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
@@ -763,13 +752,29 @@ export function CheckoutScreen({
               <button
                 type="button"
                 onClick={() => setOrderModeModalOpen(true)}
-                className={`flex-1 min-w-0 rounded-lg py-2.5 px-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${orderMode === 'reservation'
+                className={`w-full min-w-0 rounded-lg py-2.5 px-1.5 text-xs font-bold transition flex items-center justify-center gap-1 ${orderMode === 'reservation'
                   ? 'bg-amber-800 text-white shadow-sm'
                   : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
                 <span>⚙️</span>
                 <span className="truncate">{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDiscountModalOpen(true)}
+                className={`w-full min-w-0 rounded-lg py-2.5 px-1.5 text-xs font-bold transition flex items-center justify-center gap-1 ${appliedDiscount && discountAmount > 0
+                  ? 'bg-emerald-700 text-white font-extrabold shadow-md ring-2 ring-emerald-500/50'
+                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
+                  }`}
+              >
+                <span>🏷️</span>
+                <span className="truncate">
+                  {appliedDiscount && discountAmount > 0
+                    ? `${appliedDiscount.type === 'percentage' ? `${appliedDiscount.rate}% OFF` : `-${money.format(discountAmount)}`} ✓`
+                    : 'Discount'}
+                </span>
               </button>
 
               <button
@@ -786,7 +791,7 @@ export function CheckoutScreen({
                   localStorage.removeItem('bakealley_pos_custom_deposit');
                 }}
                 disabled={cart.length === 0}
-                className="flex-1 min-w-0 rounded-lg bg-red-50 py-2.5 px-2 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex items-center justify-center gap-1.5"
+                className="w-full min-w-0 rounded-lg bg-red-50 py-2.5 px-1.5 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex items-center justify-center gap-1"
               >
                 <span>🗑️</span>
                 <span>Clear</span>
@@ -868,17 +873,18 @@ export function CheckoutScreen({
                 </div>
                
                 {discountAmount > 0 && (
-                  <div className="flex justify-between items-center text-xs bg-amber-100/80 p-2 rounded-lg border border-amber-300">
-                    <div className="flex items-center gap-1 font-bold text-amber-900">
-                      <span>🏷️ Discount ({appliedDiscount?.type === 'percentage' ? `${appliedDiscount.rate}%` : 'Fixed'}):</span>
-                      {appliedDiscount?.reason && <span className="text-[10px] text-amber-700 italic">({appliedDiscount.reason})</span>}
+                  <div className="flex justify-between items-center text-xs bg-emerald-100/90 text-emerald-950 p-2.5 rounded-xl border border-emerald-300 shadow-sm">
+                    <div className="flex items-center gap-1.5 font-extrabold">
+                      <span className="text-sm">🏷️</span>
+                      <span>DISCOUNT APPLIED ({appliedDiscount?.type === 'percentage' ? `${appliedDiscount.rate}% OFF` : 'Fixed'}):</span>
+                      {appliedDiscount?.reason && <span className="text-[11px] text-emerald-800 font-semibold italic">({appliedDiscount.reason})</span>}
                     </div>
                     <div className="flex items-center gap-2">
-                      <strong className="text-red-700 font-bold">-{money.format(discountAmount)}</strong>
+                      <strong className="text-emerald-950 font-black text-sm">-{money.format(discountAmount)}</strong>
                       <button
                         type="button"
                         onClick={() => { setAppliedDiscount(null); setDiscountValueInput('0'); setDiscountReason(''); }}
-                        className="text-red-600 hover:text-red-800 font-bold text-xs"
+                        className="text-red-600 hover:text-red-800 font-extrabold text-xs px-1 bg-white/70 rounded transition hover:bg-white"
                         title="Remove Discount"
                       >
                         ✕

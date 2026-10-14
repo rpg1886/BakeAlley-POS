@@ -114,9 +114,25 @@ export interface CloudSalesPeriod {
 
 export interface CloudSalesReport {
   selectedDate: string;
-  items: Array<{ orderId: string; soldAt: string; customerName: string; cashierName?: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: string; discountType?: 'percentage' | 'fixed' | null; discountRate?: number; discountAmount?: number; discountReason?: string | null; payments?: Array<{ method: string; amount: number; cashReceived?: number }> }>;
+  items: Array<{
+    orderId: string;
+    soldAt: string;
+    customerName: string;
+    cashierName?: string;
+    sku: string;
+    itemName: string;
+    quantity: number;
+    amount: number;
+    paymentMethod: string;
+    payments?: Array<{ method: string; amount: number; cashReceived?: number }>;
+    discountType?: 'percentage' | 'fixed' | null;
+    discountRate?: number;
+    discountAmount?: number;
+    discountReason?: string | null;
+  }>;
   dayGrossTotal: number;
   dayNetTotal: number;
+  dayDiscountTotal?: number;
   dayOrderCount: number;
   week?: CloudSalesPeriod;
   month?: CloudSalesPeriod;
