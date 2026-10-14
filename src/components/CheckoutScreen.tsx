@@ -736,41 +736,41 @@ export function CheckoutScreen({
           {/* LEFT COLUMN: Quick Actions, Current Transaction & Payment Bar */}
           <div className="md:col-span-5 xl:col-span-4 min-w-0 space-y-3 md:sticky md:top-2">
             {/* Horizontal Action Tab Bar (Customer, Order Mode, Discount, Clear) */}
-            <div className="grid grid-cols-4 gap-1.5 sm:gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm w-full">
+            <div className="grid grid-cols-4 gap-1 bg-white p-1.5 rounded-xl border border-amber-200/80 shadow-sm w-full items-center">
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
-                className={`w-full min-w-0 rounded-lg py-2.5 px-1.5 text-xs font-bold transition flex items-center justify-center gap-1 ${selectedCustomer
+                className={`w-full min-w-0 rounded-lg py-2 px-1 text-[11px] sm:text-xs font-bold transition flex flex-row items-center justify-center gap-0.5 ${selectedCustomer
                   ? 'bg-emerald-700 text-white shadow-sm'
                   : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
                 <span>👤</span>
-                <span className="truncate">{selectedCustomer ? selectedCustomer.displayName : 'Customer'}</span>
+                <span className="truncate min-w-0">{selectedCustomer ? selectedCustomer.displayName : 'Customer'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setOrderModeModalOpen(true)}
-                className={`w-full min-w-0 rounded-lg py-2.5 px-1.5 text-xs font-bold transition flex items-center justify-center gap-1 ${orderMode === 'reservation'
+                className={`w-full min-w-0 rounded-lg py-2 px-1 text-[11px] sm:text-xs font-bold transition flex flex-row items-center justify-center gap-0.5 ${orderMode === 'reservation'
                   ? 'bg-amber-800 text-white shadow-sm'
                   : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
                 <span>⚙️</span>
-                <span className="truncate">{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
+                <span className="truncate min-w-0">{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setDiscountModalOpen(true)}
-                className={`w-full min-w-0 rounded-lg py-2.5 px-1.5 text-xs font-bold transition flex items-center justify-center gap-1 ${appliedDiscount && discountAmount > 0
-                  ? 'bg-emerald-700 text-white font-extrabold shadow-md ring-2 ring-emerald-500/50'
+                className={`w-full min-w-0 rounded-lg py-2 px-1 text-[11px] sm:text-xs font-extrabold transition flex flex-row items-center justify-center gap-0.5 ${appliedDiscount && discountAmount > 0
+                  ? 'bg-emerald-700 text-white font-black shadow-md ring-2 ring-emerald-500/80 ring-offset-1'
                   : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
                   }`}
               >
                 <span>🏷️</span>
-                <span className="truncate">
+                <span className="truncate min-w-0">
                   {appliedDiscount && discountAmount > 0
                     ? `${appliedDiscount.type === 'percentage' ? `${appliedDiscount.rate}% OFF` : `-${money.format(discountAmount)}`} ✓`
                     : 'Discount'}
@@ -791,7 +791,7 @@ export function CheckoutScreen({
                   localStorage.removeItem('bakealley_pos_custom_deposit');
                 }}
                 disabled={cart.length === 0}
-                className="w-full min-w-0 rounded-lg bg-red-50 py-2.5 px-1.5 text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex items-center justify-center gap-1"
+                className="w-full min-w-0 rounded-lg bg-red-50 py-2 px-1 text-[11px] sm:text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex flex-row items-center justify-center gap-0.5"
               >
                 <span>🗑️</span>
                 <span>Clear</span>
@@ -804,6 +804,31 @@ export function CheckoutScreen({
                 <h2 className="font-bold text-xs uppercase tracking-wider text-amber-900">Current Transaction</h2>
                 <span className="text-[11px] font-bold text-amber-700">{cart.length} item(s)</span>
               </div>
+
+              {/* Active Discount Banner Alert */}
+              {appliedDiscount && discountAmount > 0 && (
+                <div className="bg-emerald-800 text-white px-3.5 py-2 text-xs font-bold flex items-center justify-between shadow-inner border-b border-emerald-900">
+                  <div className="flex items-center gap-1.5 min-w-0 truncate">
+                    <span className="text-amber-300 font-black text-[11px] uppercase tracking-wider">🟢 DISCOUNT APPLIED:</span>
+                    <span className="bg-emerald-950 px-1.5 py-0.5 rounded text-[11px] font-black text-amber-300 border border-emerald-600">
+                      {appliedDiscount.type === 'percentage' ? `${appliedDiscount.rate}% OFF` : money.format(discountAmount)}
+                    </span>
+                    {appliedDiscount.reason && <span className="truncate text-emerald-100 text-[10px] italic">({appliedDiscount.reason})</span>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppliedDiscount(null);
+                      setDiscountValueInput('0');
+                      setDiscountReason('');
+                    }}
+                    className="ml-2 rounded bg-emerald-950 px-2 py-0.5 text-[10px] font-extrabold text-amber-200 hover:bg-black hover:text-white transition flex-shrink-0"
+                    title="Clear Discount"
+                  >
+                    Clear ✕
+                  </button>
+                </div>
+              )}
 
               <div className="min-h-[240px] max-h-[calc(100vh-460px)] overflow-y-auto">
                 {cart.length === 0 ? (
