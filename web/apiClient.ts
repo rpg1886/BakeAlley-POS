@@ -244,8 +244,9 @@ export class CloudApiClient {
     });
   }
 
-  public async salesReport(date: string): Promise<CloudSalesReport> {
-    return this.request(`/api/v1/sales/report?date=${encodeURIComponent(date)}`);
+  public async salesReport(date: string, range?: string): Promise<CloudSalesReport> {
+    const rangeParam = range ? `&range=${encodeURIComponent(range)}` : '';
+    return this.request(`/api/v1/sales/report?date=${encodeURIComponent(date)}${rangeParam}`);
   }
 
   public async getUnitsOfMeasure(): Promise<CloudUnitOfMeasure[]> {

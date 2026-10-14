@@ -975,6 +975,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
    ========================================================================== */
 function BiView(): JSX.Element {
   const [timeframe, setTimeframe] = useState<VelocityTimeframe>('monthly');
+  const [channelTimeframe, setChannelTimeframe] = useState<'month' | 'last30'>('month');
   const [selectedDate] = useState<string>(today());
   const [report, setReport] = useState<CloudSalesReport | null>(null);
   const [inventory, setInventory] = useState<CloudInventoryRow[]>([]);
@@ -983,7 +984,10 @@ function BiView(): JSX.Element {
   const loadData = async (): Promise<void> => {
     setLoading(true);
     try {
-      const [salesData, invData] = await Promise.all([api.salesReport(selectedDate), api.inventory()]);
+      const [salesData, invData] = await Promise.all([
+        api.salesReport(selectedDate, channelTimeframe),
+        api.inventory()
+      ]);
       setReport(salesData);
       setInventory(invData);
     } catch (err) {
@@ -995,7 +999,7 @@ function BiView(): JSX.Element {
 
   useEffect(() => {
     void loadData();
-  }, [selectedDate]);
+  }, [selectedDate, channelTimeframe]);
 
   const productSalesMap = new Map<string, { sku: string; name: string; quantity: number; amount: number }>();
   let walkInGross = 0;
@@ -1147,9 +1151,35 @@ function BiView(): JSX.Element {
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
-            <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
-              <h3 className="font-bakery text-base font-bold text-amber-950 mb-1">{"\u{1F3AF}"} Customer Channel Revenue Split</h3>
-              <p className="text-xs text-amber-700 mb-4">Walk-in retail vs. Return CRM clients vs. Wholesale accounts.</p>
+              <div className="rounded-xl border border-amber-200/80 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <div>
+                    <h3 className="font-bakery text-base font-bold text-amber-950">{"\u{1F3AF}"} Customer Channel Revenue Split</h3>
+                    <p className="text-xs text-amber-700">Walk-in retail vs. Return CRM clients vs. Wholesale accounts.</p>
+                  </div>
+                  <div className="flex gap-1 rounded-lg bg-amber-100/60 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setChannelTimeframe('month')}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${channelTimeframe === 'month'
+                          ? 'bg-amber-800 text-white shadow-sm'
+                          : 'text-amber-900 hover:bg-white/60'
+                        }`}
+                    >
+                      Current Month
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChannelTimeframe('last30')}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${channelTimeframe === 'last30'
+                          ? 'bg-amber-800 text-white shadow-sm'
+                          : 'text-amber-900 hover:bg-white/60'
+                        }`}
+                    >
+                      Last 30 Days
+                    </button>
+                  </div>
+                </div>
               <div className="space-y-3">
                 <div>
                   <div className="flex justify-between text-xs font-semibold mb-1">

@@ -1206,9 +1206,26 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
     const match = rawDate.match(/^(\d{4}-\d{2}-\d{2})/);
     const date = match ? match[1] : new Date().toISOString().slice(0, 10);
 
+    const range = String(request.query.range ?? '').trim().toLowerCase();
+    const selected = new Date(`${date}T00:00:00Z`);
     const start = `${date}T00:00:00+08:00`;
+    
+    let whereClause = "o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < ($1::timestamptz + interval '1 day')";
+    let queryParams = [start];
+
+    if (range === 'month' || range === 'monthly') {
+      const monthStartStr = `${selected.getUTCFullYear()}-${String(selected.getUTCMonth() + 1).padStart(2, '0')}-01T00:00:00+08:00`;
+      const nextMonthObj = new Date(Date.UTC(selected.getUTCFullYear(), selected.getUTCMonth() + 1, 1));
+      const nextMonthStr = `${nextMonthObj.getUTCFullYear()}-${String(nextMonthObj.getUTCMonth() + 1).padStart(2, '0')}-01T00:00:00+08:00`;
+      whereClause = "o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < $2::timestamptz";
+      queryParams = [monthStartStr, nextMonthStr];
+    } else if (range === 'last30' || range === '30days' || range === '30') {
+      whereClause = "o.status='completed' AND o.created_at >= ($1::timestamptz - interval '29 days') AND o.created_at < ($1::timestamptz + interval '1 day')";
+      queryParams = [start];
+    }
+
     const result = await pool.query(
-    `SELECT oi.order_item_id AS "orderItemId", v.variant_id AS "variantId", oi.lot_id AS "lotId", oi.unit_price AS "unitPrice", COALESCE(oi.returned_quantity, 0) AS "returnedQuantity", o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", COALESCE(u.display_name, u.username, 'System') AS "cashierName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType",
+      `SELECT oi.order_item_id AS "orderItemId", v.variant_id AS "variantId", oi.lot_id AS "lotId", oi.unit_price AS "unitPrice", COALESCE(oi.returned_quantity, 0) AS "returnedQuantity", o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", COALESCE(u.display_name, u.username, 'System') AS "cashierName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType",
     o.payments AS "payments", o.discount_type AS "discountType", o.discount_rate AS "discountRate", o.discount_amount AS "discountAmount", o.discount_reason AS "discountReason"
        FROM order_items oi
        JOIN orders o ON o.order_id=oi.order_id
@@ -1216,9 +1233,9 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
        JOIN products p ON p.product_id=v.product_id
        LEFT JOIN customers c ON c.customer_id=o.customer_id
        LEFT JOIN app_users u ON u.user_id=o.employee_id
-       WHERE o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < ($1::timestamptz + interval '1 day')
+       WHERE ${whereClause}
        ORDER BY o.created_at DESC, o.order_id, oi.order_item_id`,
-      [start]
+      queryParams
     );
     
     const items = result.rows.map((row) => ({
@@ -1237,7 +1254,6 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
       return { grossTotal: Number(period.rows[0].gross) || 0, netTotal: Number(period.rows[0].gross) || 0, orderCount: period.rows[0].orders };
     };
     
-    const selected = new Date(`${date}T00:00:00Z`);
     const monday = new Date(selected);
     const day = monday.getUTCDay();
     monday.setUTCDate(monday.getUTCDate() - (day === 0 ? 6 : day - 1));
