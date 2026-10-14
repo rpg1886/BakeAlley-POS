@@ -284,6 +284,7 @@ export function CheckoutScreen({
   const targetPaymentTotal = orderMode === 'reservation' && calculatedDeposit > 0 ? calculatedDeposit : totalAmount;
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const latestSearchQueryRef = useRef('');
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const customerDropdownRef = useRef<HTMLDivElement>(null);
@@ -424,15 +425,29 @@ export function CheckoutScreen({
   }, [activeWeightLine?.lineId, activeWeightLine?.product.unit, pricingTierId, scaleReading?.grams]);
 
   const search = async (searchQuery: string): Promise<void> => {
+    latestSearchQueryRef.current = searchQuery;
     setQuery(searchQuery);
     if (searchQuery.trim().length < 1) {
       setResults([]);
       return;
     }
-    setResults(await dataSource.searchProducts(searchQuery.trim()));
+    try {
+      const items = await dataSource.searchProducts(searchQuery.trim());
+      // Prevent stale async responses from populating search results after search is cleared
+      if (latestSearchQueryRef.current.trim() === searchQuery.trim() && searchQuery.trim().length >= 1) {
+        setResults(items);
+      }
+    } catch {
+      if (latestSearchQueryRef.current.trim() === searchQuery.trim()) {
+        setResults([]);
+      }
+    }
   };
 
   const handleSelectCategory = async (categoryName: string, categoryId?: string): Promise<void> => {
+    latestSearchQueryRef.current = '';
+    setQuery('');
+    setResults([]);
     setSelectedCategory({ categoryId, name: categoryName });
     setCategoryLoading(true);
     try {
@@ -450,6 +465,7 @@ export function CheckoutScreen({
 
   const addProduct = (product: CheckoutProduct): void => {
     setMessage(null);
+    latestSearchQueryRef.current = '';
     setResults([]);
     setQuery('');
     setCart((currentCart) => {
@@ -943,6 +959,9 @@ export function CheckoutScreen({
                       onClick={() => {
                         setSelectedCategory(null);
                         setCategoryProducts([]);
+                        latestSearchQueryRef.current = '';
+                        setQuery('');
+                        setResults([]);
                       }}
                       className="shrink-0 rounded-lg bg-amber-800 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-900 shadow-sm"
                     >
@@ -964,13 +983,32 @@ export function CheckoutScreen({
                     value={query}
                     onChange={(e) => void search(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && results.length > 0) {
+                      if (e.key === 'Escape') {
+                        latestSearchQueryRef.current = '';
+                        setQuery('');
+                        setResults([]);
+                      } else if (e.key === 'Enter' && results.length > 0) {
                         addProduct(results[0]);
                       }
                     }}
-                    className="w-full rounded-xl border border-amber-300 bg-white px-3.5 py-2 text-sm font-bold shadow-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
+                    className="w-full rounded-xl border border-amber-300 bg-white pl-3.5 pr-8 py-2 text-sm font-bold shadow-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/40"
                   />
-                  {results.length > 0 && (
+                  {query && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        latestSearchQueryRef.current = '';
+                        setQuery('');
+                        setResults([]);
+                        searchInputRef.current?.focus();
+                      }}
+                      className="absolute right-2.5 top-2.5 text-amber-500 hover:text-amber-800 font-bold text-xs"
+                      title="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  {query.trim().length > 0 && results.length > 0 && (
                     <div className="absolute right-0 top-full z-30 mt-1 grid w-[min(34rem,90vw)] gap-2 rounded-xl border border-amber-200 bg-white p-2 shadow-2xl sm:grid-cols-2">
                       {results.slice(0, 8).map((product) => (
                         <button
