@@ -906,23 +906,28 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
 
     const orderStatus = orderMode === 'reservation' ? 'open' : 'completed';
 
+    const discountType = validatedPayload.discountType ?? null;
+    const discountRate = Number(validatedPayload.discountRate) || 0;
+    const discountAmount = Number(validatedPayload.discountAmount) || 0;
+    const discountReason = validatedPayload.discountReason ?? null;
+
     const inserted = await client.query(
       `INSERT INTO orders (order_id, customer_id, pricing_tier_id, employee_id, order_type, status, subtotal, tax_amount, 
-      total_amount, payment_method, cash_received, change_due, payments, created_at,order_mode, fulfillment_date, deposit_amount, balance_due, reservation_status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-       ON CONFLICT (order_id) DO NOTHING RETURNING order_id`, 
+      total_amount, payment_method, cash_received, change_due, payments, created_at, order_mode, fulfillment_date, deposit_amount, balance_due, reservation_status, discount_type, discount_rate, discount_amount, discount_reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+       ON CONFLICT (order_id) DO NOTHING RETURNING order_id`,
       [
-        validatedPayload.orderId, 
-        validatedPayload.customerId ?? null, 
-        validatedPayload.pricingTierId, 
-        request.user.userId, 
-        validatedPayload.orderType === 'commercial' ? 'commercial' : 'retail', 
+        validatedPayload.orderId,
+        validatedPayload.customerId ?? null,
+        validatedPayload.pricingTierId,
+        request.user.userId,
+        validatedPayload.orderType === 'commercial' ? 'commercial' : 'retail',
         orderStatus,
-        validatedPayload.subtotal, 
-        validatedPayload.taxAmount ?? 0, 
-        totalAmount, 
-        validatedPayload.paymentMethod, 
-        totalCashReceived, 
+        validatedPayload.subtotal,
+        validatedPayload.taxAmount ?? 0,
+        totalAmount,
+        validatedPayload.paymentMethod,
+        totalCashReceived,
         changeDue,
         validatedPayload.payments ? JSON.stringify(validatedPayload.payments) : null,
         validatedPayload.createdAt ?? new Date().toISOString(),
@@ -930,7 +935,11 @@ app.post('/api/v1/orders', auth.requireSession, async (request, response, next) 
         validatedPayload.fulfillmentDate ?? null,
         depositAmount,
         balanceDue,
-        reservationStatus ?? null
+        reservationStatus ?? null,
+        discountType,
+        discountRate,
+        discountAmount,
+        discountReason
       ]
     );
     
@@ -1199,25 +1208,27 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
 
     const start = `${date}T00:00:00+08:00`;
     const result = await pool.query(
-    `SELECT oi.order_item_id AS "orderItemId", v.variant_id AS "variantId", oi.lot_id AS "lotId", oi.unit_price AS "unitPrice", COALESCE(oi.returned_quantity, 0) AS "returnedQuantity", o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", COALESCE(u.display_name, u.username, 'System') AS "cashierName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType", 
-    o.payments AS "payments"
-       FROM order_items oi 
-       JOIN orders o ON o.order_id=oi.order_id 
-       JOIN product_variants v ON v.variant_id=oi.variant_id 
-       JOIN products p ON p.product_id=v.product_id 
-       LEFT JOIN customers c ON c.customer_id=o.customer_id 
-       LEFT JOIN app_users u ON u.user_id=o.employee_id 
-       WHERE o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < ($1::timestamptz + interval '1 day') 
-       ORDER BY o.created_at DESC, o.order_id, oi.order_item_id`, 
+    `SELECT oi.order_item_id AS "orderItemId", v.variant_id AS "variantId", oi.lot_id AS "lotId", oi.unit_price AS "unitPrice", COALESCE(oi.returned_quantity, 0) AS "returnedQuantity", o.order_id AS "orderId", o.created_at AS "soldAt", COALESCE(c.company_name || ' - ', '') || COALESCE(c.contact_name, 'Walk-in') AS "customerName", COALESCE(u.display_name, u.username, 'System') AS "cashierName", v.sku, v.variant_name AS "itemName", oi.quantity, oi.total_price AS amount, o.payment_method AS "paymentMethod", o.cash_received AS "cashReceived", o.change_due AS "changeDue", o.total_amount AS "totalAmount", COALESCE(p.initial_cost, 0) AS "initialCost", o.order_type AS "orderType",
+    o.payments AS "payments", o.discount_type AS "discountType", o.discount_rate AS "discountRate", o.discount_amount AS "discountAmount", o.discount_reason AS "discountReason"
+       FROM order_items oi
+       JOIN orders o ON o.order_id=oi.order_id
+       JOIN product_variants v ON v.variant_id=oi.variant_id
+       JOIN products p ON p.product_id=v.product_id
+       LEFT JOIN customers c ON c.customer_id=o.customer_id
+       LEFT JOIN app_users u ON u.user_id=o.employee_id
+       WHERE o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < ($1::timestamptz + interval '1 day')
+       ORDER BY o.created_at DESC, o.order_id, oi.order_item_id`,
       [start]
     );
     
-    const items = result.rows.map((row) => ({ 
-      ...row, 
-      quantity: Number(row.quantity) || 0, 
+    const items = result.rows.map((row) => ({
+      ...row,
+      quantity: Number(row.quantity) || 0,
       returnedQuantity: Number(row.returnedQuantity) || 0,
       amount: Number(row.amount) || 0,
       unitPrice: Number(row.unitPrice) || 0,
+      discountRate: Number(row.discountRate) || 0,
+      discountAmount: Number(row.discountAmount) || 0,
       payments: row.payments ? (typeof row.payments === 'string' ? JSON.parse(row.payments) : row.payments) : undefined
     }));
     
@@ -1427,6 +1438,10 @@ async function ensureShiftColumns() {
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS notes TEXT;
       ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_method_check;
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS payments JSONB;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_type TEXT;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_rate NUMERIC(12,2) DEFAULT 0.00;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(12,2) DEFAULT 0.00;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_reason TEXT;
     `);
     logger.info('Employee shift audit and split payment schema ensured');
   } catch (error) {

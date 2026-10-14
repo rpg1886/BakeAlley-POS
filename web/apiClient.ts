@@ -24,12 +24,16 @@ export interface CloudOrderPayload {
   paymentMethod: 'cash' | 'card' | 'gcash' | 'account' | 'split' | 'exchange';
   cashReceived: number;
   changeDue: number;
-  returnedItems?: Array <{ orderItemId: string; variantId: string; lotId ?: string; quantity: number; restock: boolean }>;
+  returnedItems?: Array<{ orderItemId: string; variantId: string; lotId?: string; quantity: number; restock: boolean }>;
   orderMode?: 'immediate' | 'reservation';
   fulfillmentDate?: string | null;
   depositAmount?: number;
   balanceDue?: number;
   reservationStatus?: 'unpaid' | 'partially_paid' | 'fully_prepaid' | 'completed' | 'expired' | 'cancelled' | null;
+  discountType?: 'percentage' | 'fixed' | null;
+  discountRate?: number;
+  discountAmount?: number;
+  discountReason?: string | null;
 }
 
 export interface CloudReservation {
@@ -110,7 +114,7 @@ export interface CloudSalesPeriod {
 
 export interface CloudSalesReport {
   selectedDate: string;
-  items: Array<{ orderId: string; soldAt: string; customerName: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: string; payments?: Array <{ method: string; amount: number; cashReceived?: number }> }>;
+  items: Array<{ orderId: string; soldAt: string; customerName: string; cashierName?: string; sku: string; itemName: string; quantity: number; amount: number; paymentMethod: string; discountType?: 'percentage' | 'fixed' | null; discountRate?: number; discountAmount?: number; discountReason?: string | null; payments?: Array<{ method: string; amount: number; cashReceived?: number }> }>;
   dayGrossTotal: number;
   dayNetTotal: number;
   dayOrderCount: number;

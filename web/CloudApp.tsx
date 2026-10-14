@@ -1212,6 +1212,10 @@ interface GroupedTransaction {
   totalAmount: number;
   cashReceived: number;
   changeDue: number;
+  discountType: string | null;
+  discountRate: number;
+  discountAmount: number;
+  discountReason: string | null;
   payments?: Array<{ method: string; amount: number }>;
   items: Array<{
     orderItemId?: string;
@@ -1326,6 +1330,17 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
               </tbody>
               </table>
               <div class="divider"></div>
+              ${tx.discountAmount > 0 ? `
+              <div style="display: flex; justify-content: space-between;">
+              <span>Subtotal:</span>
+              <span>PHP ${(tx.totalAmount + tx.discountAmount).toFixed(2)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; color: #b91c1c;">
+              <span>Discount (${tx.discountType === 'percentage' ? tx.discountRate + '%' : 'Fixed'}${tx.discountReason ? ' - ' + tx.discountReason : ''}):</span>
+              <span>-PHP ${tx.discountAmount.toFixed(2)}</span>
+              </div>
+              <div class="divider"></div>
+              ` : ''}
               <div style="display: flex; justify-content: space-between;" class="bold">
               <span> TOTAL AMOUNT:</span>
               <span>PHP ${tx.totalAmount.toFixed(2)}</span>
@@ -1441,6 +1456,10 @@ function SalesView({ isAdmin, onStartExchange }: { isAdmin: boolean; onStartExch
           totalAmount: Number((item as { totalAmount?: number }).totalAmount) || 0,
           cashReceived: Number((item as { cashReceived?: number }).cashReceived) || 0,
           changeDue: Number((item as { changeDue?: number }).changeDue) || 0,
+          discountType: (item as any).discountType || null,
+          discountRate: Number((item as any).discountRate) || 0,
+          discountAmount: Number((item as any).discountAmount) || 0,
+          discountReason: (item as any).discountReason || null,
           payments: Array.isArray(parsedPayments) ? parsedPayments : undefined,
           items: [],
         });
