@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type JSX, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
 import { CheckoutScreen, type CheckoutCustomer, type CheckoutOrderPayload, type CheckoutProduct } from '../src/components/CheckoutScreen';
 import { LoginScreen } from '../src/renderer/LoginScreen';
 import { CloudPosApi, type CloudSession } from './cloudApi';
@@ -3905,6 +3905,11 @@ export function CloudApp(): JSX.Element {
   const [clockInError, setClockInError] = useState<string | null>(null);
   const [idleWarningOpen, setIdleWarningOpen] = useState(false);
   const [idleCountdown, setIdleCountdown] = useState(60);
+  const idleWarningOpenRef = useRef(idleWarningOpen);
+
+  useEffect(() => {
+    idleWarningOpenRef.current = idleWarningOpen;
+  }, [idleWarningOpen]);
 
   const isAdmin = session?.user.role === 'admin';
 
@@ -3929,12 +3934,15 @@ export function CloudApp(): JSX.Element {
   useEffect(() => {
     if (!session) return;
 
-    let lastRecorded = Date.now();
-    localStorage.setItem('bakealley_cloud_last_active', String(lastRecorded));
+    // Preserve existing last_active timestamp if already present in localStorage
+    let lastRecorded = Number(localStorage.getItem('bakealley_cloud_last_active')) || Date.now();
+    if (!localStorage.getItem('bakealley_cloud_last_active')) {
+      localStorage.setItem('bakealley_cloud_last_active', String(lastRecorded));
+    }
 
     const handleUserActivity = (): void => {
       const now = Date.now();
-      if (idleWarningOpen) {
+      if (idleWarningOpenRef.current) {
         setIdleWarningOpen(false);
         setIdleCountdown(60);
       }
@@ -3963,9 +3971,11 @@ export function CloudApp(): JSX.Element {
       } else if (idleTime >= INACTIVITY_WARNING_MS) {
         const remainingSeconds = Math.max(0, Math.ceil((INACTIVITY_TIMEOUT_MS - idleTime) / 1000));
         setIdleCountdown(remainingSeconds);
-        setIdleWarningOpen(true);
+        if (!idleWarningOpenRef.current) {
+          setIdleWarningOpen(true);
+        }
       } else {
-        if (idleWarningOpen) {
+        if (idleWarningOpenRef.current) {
           setIdleWarningOpen(false);
           setIdleCountdown(60);
         }
@@ -3978,7 +3988,7 @@ export function CloudApp(): JSX.Element {
       });
       clearInterval(intervalId);
     };
-  }, [session, idleWarningOpen]);
+  }, [session]); // Dependent ONLY on session so timer is never reset by warning state toggles!
 
   const refreshCustomers = async (): Promise<void> => {
     try {
