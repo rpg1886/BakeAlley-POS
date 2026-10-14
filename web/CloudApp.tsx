@@ -13,7 +13,8 @@ const api = new CloudPosApi({
 const retailTierId = import.meta.env.VITE_RETAIL_TIER_ID ?? '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
 
 // Unified Inactivity Timeout - 5 minutes for all users
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;   // 15 Minutes of inactivity for all users
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;   // 15 Minutes total idle timeout
+const INACTIVITY_WARNING_MS = 14 * 60 * 1000;   // 14 Minutes (triggers 60-second warning)
 
 const LOW_STOCK_THRESHOLD = 10;
 const CARD_FEE_RATE = 0.025; // 2.5% estimated card fee
@@ -3908,6 +3909,8 @@ export function CloudApp(): JSX.Element {
   const [clockInNotes, setClockInNotes] = useState('');
   const [clockingIn, setClockingIn] = useState(false);
   const [clockInError, setClockInError] = useState<string | null>(null);
+  const [idleWarningOpen, setIdleWarningOpen] = useState(false);
+  const [idleCountdown, setIdleCountdown] = useState(60);
 
   const isAdmin = session?.user.role === 'admin';
 
@@ -3928,7 +3931,7 @@ export function CloudApp(): JSX.Element {
     }
   };
 
-  // Activity Listener & Automatic 15-Minute Inactivity Logout
+  // Activity Monitor & 15-Minute Inactivity Warning/Logout Manager
   useEffect(() => {
     if (!session) return;
 
@@ -3937,8 +3940,11 @@ export function CloudApp(): JSX.Element {
 
     const handleUserActivity = (): void => {
       const now = Date.now();
-      // Throttle localStorage updates to at most once every 3 seconds
-      if (now - lastRecorded > 3000) {
+      if (idleWarningOpen) {
+        setIdleWarningOpen(false);
+        setIdleCountdown(60);
+      }
+      if (now - lastRecorded > 2000) {
         lastRecorded = now;
         localStorage.setItem('bakealley_cloud_last_active', String(now));
       }
@@ -3955,12 +3961,22 @@ export function CloudApp(): JSX.Element {
       const idleTime = Date.now() - lastActiveTime;
 
       if (idleTime >= INACTIVITY_TIMEOUT_MS) {
-        console.warn('User idle time exceeded 15 minutes. Destroying token and logging out.');
+        console.warn('Inactivity limit of 15 minutes reached. Destroying session token.');
+        setIdleWarningOpen(false);
         void api.logout().catch(() => undefined);
         clearSessionStorage();
         setSession(null);
+      } else if (idleTime >= INACTIVITY_WARNING_MS) {
+        const remainingSeconds = Math.max(0, Math.ceil((INACTIVITY_TIMEOUT_MS - idleTime) / 1000));
+        setIdleCountdown(remainingSeconds);
+        setIdleWarningOpen(true);
+      } else {
+        if (idleWarningOpen) {
+          setIdleWarningOpen(false);
+          setIdleCountdown(60);
+        }
       }
-    }, 10000); // Check idle status every 10 seconds
+    }, 1000); // Check idle status & tick countdown every 1 second
 
     return () => {
       activityEvents.forEach((evt) => {
@@ -3968,7 +3984,7 @@ export function CloudApp(): JSX.Element {
       });
       clearInterval(intervalId);
     };
-  }, [session]);
+  }, [session, idleWarningOpen]);
 
   const refreshCustomers = async (): Promise<void> => {
     try {
@@ -4250,6 +4266,48 @@ export function CloudApp(): JSX.Element {
                 disabled={clockingIn || !openingFloat}
               >
                 {clockingIn ? 'Opening Shift...' : '🚀 Confirm & Open Shift'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Visual Inactivity Warning Modal (60-Second Countdown) */}
+      {idleWarningOpen && session && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/70 p-4 backdrop-blur-md" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 border-2 border-red-500 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-2xl text-red-600 shadow-inner">
+              ⚠️
+            </div>
+
+            <div>
+              <h3 className="font-bakery text-xl font-bold text-amber-950">Inactivity Warning</h3>
+              <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                You have been inactive for 14 minutes. For security, your session will automatically log out and destroy your token in:
+              </p>
+            </div>
+
+            {/* Countdown Badge */}
+            <div className="mx-auto w-32 rounded-2xl bg-red-50 py-3 border border-red-200 text-red-700 shadow-sm">
+              <span className="font-mono text-3xl font-extrabold tracking-wider">{idleCountdown}s</span>
+              <span className="block text-[10px] font-bold uppercase tracking-widest text-red-500 mt-0.5">Remaining</span>
+            </div>
+
+            <p className="text-[11px] text-amber-700 italic">
+              Click below or move your mouse to stay logged in and keep working.
+            </p>
+
+            <div className="pt-2 border-t border-amber-100">
+              <button
+                type="button"
+                className="w-full rounded-xl bg-amber-800 px-5 py-3 text-sm font-bold text-white hover:bg-amber-900 shadow-lg transition active:scale-95"
+                onClick={() => {
+                  const now = Date.now();
+                  localStorage.setItem('bakealley_cloud_last_active', String(now));
+                  setIdleWarningOpen(false);
+                  setIdleCountdown(60);
+                }}
+              >
+                👋 I'm Still Here — Stay Logged In
               </button>
             </div>
           </div>
