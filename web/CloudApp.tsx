@@ -13,7 +13,7 @@ const api = new CloudPosApi({
 const retailTierId = import.meta.env.VITE_RETAIL_TIER_ID ?? '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
 
 // Unified Inactivity Timeout - 5 minutes for all users
-const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;   // 5 Minutes of inactivity for all users
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;   // 15 Minutes of inactivity for all users
 
 const LOW_STOCK_THRESHOLD = 10;
 const CARD_FEE_RATE = 0.025; // 2.5% estimated card fee
@@ -69,7 +69,7 @@ async function clockOutWithCount(closingCashCount: number | null, notes?: string
 
 
 function getInactivityTimeout(): number {
-  return INACTIVITY_TIMEOUT_MS;  // 5 minutes for all users
+  return INACTIVITY_TIMEOUT_MS;  // 15 minutes for all users
 }
 
 function errorText(error: unknown, fallback: string): string {
@@ -3811,11 +3811,19 @@ function CategoriesView({ session }: { session: CloudSession }): JSX.Element {
 }
 
 export function CloudApp(): JSX.Element {
-  const [session, setSession] = useState<CloudSession | null>(() => {
+  const[session, setSession] = useState<CloudSession | null>(() => {
     const token = localStorage.getItem('bakealley_cloud_token');
     const userJson = localStorage.getItem('bakealley_cloud_user');
+    const lastActive = localStorage.getItem('bakealley_cloud_last_active');
 
     if (token && userJson) {
+      if (lastActive) {
+        const elapsed = Date.now() - Number(lastActive);
+        if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+          clearSessionStorage();
+          return null;
+        }
+      }
       try {
         const user = JSON.parse(userJson);
         return { token, user };
@@ -3920,6 +3928,48 @@ export function CloudApp(): JSX.Element {
     }
   };
 
+  // Activity Listener & Automatic 15-Minute Inactivity Logout
+  useEffect(() => {
+    if (!session) return;
+
+    let lastRecorded = Date.now();
+    localStorage.setItem('bakealley_cloud_last_active', String(lastRecorded));
+
+    const handleUserActivity = (): void => {
+      const now = Date.now();
+      // Throttle localStorage updates to at most once every 3 seconds
+      if (now - lastRecorded > 3000) {
+        lastRecorded = now;
+        localStorage.setItem('bakealley_cloud_last_active', String(now));
+      }
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    activityEvents.forEach((evt) => {
+      window.addEventListener(evt, handleUserActivity, { passive: true });
+    });
+
+    const intervalId = setInterval(() => {
+      const savedLastActive = localStorage.getItem('bakealley_cloud_last_active');
+      const lastActiveTime = savedLastActive ? Number(savedLastActive) : lastRecorded;
+      const idleTime = Date.now() - lastActiveTime;
+
+      if (idleTime >= INACTIVITY_TIMEOUT_MS) {
+        console.warn('User idle time exceeded 15 minutes. Destroying token and logging out.');
+        void api.logout().catch(() => undefined);
+        clearSessionStorage();
+        setSession(null);
+      }
+    }, 10000); // Check idle status every 10 seconds
+
+    return () => {
+      activityEvents.forEach((evt) => {
+        window.removeEventListener(evt, handleUserActivity);
+      });
+      clearInterval(intervalId);
+    };
+  }, [session]);
+
   const refreshCustomers = async (): Promise<void> => {
     try {
       setCustomers(await api.customers());
@@ -3941,7 +3991,6 @@ export function CloudApp(): JSX.Element {
 
   useEffect(() => {
     if (session) {
-      updateLastActiveTime();
       void refreshCustomers();
       void refreshShifts();
     }
