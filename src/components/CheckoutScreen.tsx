@@ -735,27 +735,12 @@ export function CheckoutScreen({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start w-full">
           {/* LEFT COLUMN: Quick Actions, Current Transaction & Payment Bar */}
           <div className="md:col-span-5 xl:col-span-4 min-w-0 space-y-3 md:sticky md:top-2">
-            {/* Horizontal Action Tab Bar (Customer, Order Mode, Discount, Clear) */}
-            <div className="grid grid-cols-4 gap-1 bg-white p-1.5 rounded-xl border border-amber-200/80 shadow-sm w-full items-center">
-              <button
-                type="button"
-                onClick={() => setCustomerModalOpen(true)}
-                className={`w-full min-w-0 rounded-lg py-2 px-1 text-[11px] sm:text-xs font-bold transition flex flex-row items-center justify-center gap-0.5 ${selectedCustomer
-                  ? 'bg-emerald-700 text-white shadow-sm'
-                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
-                  }`}
-              >
-                <span>👤</span>
-                <span className="truncate min-w-0">{selectedCustomer ? selectedCustomer.displayName : 'Customer'}</span>
-              </button>
-
+            {/* Horizontal Action Tab Bar (Order Mode, Discount, Clear) */}
+            <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-xl border border-amber-200/80 shadow-sm w-full items-center">
               <button
                 type="button"
                 onClick={() => setOrderModeModalOpen(true)}
-                className={`w-full min-w-0 rounded-lg py-2 px-1 text-[11px] sm:text-xs font-bold transition flex flex-row items-center justify-center gap-0.5 ${orderMode === 'reservation'
-                  ? 'bg-amber-800 text-white shadow-sm'
-                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
-                  }`}
+                className={`w-full min-w-0 rounded-lg py-2.5 px-2 text-xs sm:text-sm font-bold transition flex flex-row items-center justify-center gap-1.5 ${orderMode === 'reservation' ? 'bg-amber-800 text-white shadow-sm' : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'}`}
               >
                 <span>⚙️</span>
                 <span className="truncate min-w-0">{orderMode === 'reservation' ? '📅 Advance' : 'Order Mode'}</span>
@@ -764,10 +749,7 @@ export function CheckoutScreen({
               <button
                 type="button"
                 onClick={() => setDiscountModalOpen(true)}
-                className={`w-full min-w-0 rounded-lg py-2 px-1 text-[11px] sm:text-xs font-extrabold transition flex flex-row items-center justify-center gap-0.5 ${appliedDiscount && discountAmount > 0
-                  ? 'bg-emerald-700 text-white font-black shadow-md ring-2 ring-emerald-500/80 ring-offset-1'
-                  : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'
-                  }`}
+                className={`w-full min-w-0 rounded-lg py-2.5 px-2 text-xs sm:text-sm font-extrabold transition flex flex-row items-center justify-center gap-1.5 ${appliedDiscount && discountAmount > 0 ? 'bg-emerald-700 text-white font-black shadow-md ring-2 ring-emerald-500/80 ring-offset-1' : 'bg-amber-100/70 text-amber-900 hover:bg-amber-200'}`}
               >
                 <span>🏷️</span>
                 <span className="truncate min-w-0">
@@ -791,7 +773,7 @@ export function CheckoutScreen({
                   localStorage.removeItem('bakealley_pos_custom_deposit');
                 }}
                 disabled={cart.length === 0}
-                className="w-full min-w-0 rounded-lg bg-red-50 py-2 px-1 text-[11px] sm:text-xs font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex flex-row items-center justify-center gap-0.5"
+                className="w-full min-w-0 rounded-lg bg-red-50 py-2.5 px-2 text-xs sm:text-sm font-bold text-red-700 hover:bg-red-100 transition disabled:opacity-40 flex flex-row items-center justify-center gap-1.5"
               >
                 <span>🗑️</span>
                 <span>Clear</span>
@@ -1463,162 +1445,163 @@ export function CheckoutScreen({
                         ? `Confirm & Complete payment (Change Due: ${money.format(changeDue)})`
                         : 'Confirm & Complete payment'}
               </button>
-              {/* DISCOUNT MODAL WINDOW */}
-              {discountModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-                  <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
-                    <div className="flex items-start justify-between border-b border-amber-100 pb-3">
-                      <div>
-                        <h3 className="font-bakery text-lg font-bold text-amber-950">🏷️ Apply Order Discount</h3>
-                        <p className="text-xs text-amber-700 mt-0.5">Select discount type, enter value, and record traceable reason.</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setDiscountModalOpen(false)}
-                        className="text-amber-600 hover:text-amber-900 text-xl font-bold"
-                      >
-                        ×
-                      </button>
-                    </div>
-
-                    {/* Discount Type Toggle */}
-                    <div className="grid grid-cols-2 gap-2 bg-amber-100/50 p-1 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setDiscountType('percentage')}
-                        className={`py-2 text-xs font-bold rounded-lg transition ${discountType === 'percentage' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'}`}
-                      >
-                        Percentage (%)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDiscountType('fixed')}
-                        className={`py-2 text-xs font-bold rounded-lg transition ${discountType === 'fixed' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'}`}
-                      >
-                        Fixed Amount (₱)
-                      </button>
-                    </div>
-
-                    {/* Quick Presets */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1.5">
-                        Quick Discount Presets
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => { setDiscountType('percentage'); setDiscountValueInput('20'); setDiscountReason('Senior Citizen / PWD 20%'); }}
-                          className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-left hover:bg-amber-100/80 transition"
-                        >
-                          <strong className="block text-xs text-amber-950">👴 Senior / PWD</strong>
-                          <span className="text-[10px] text-amber-700 font-semibold">20% Off Subtotal</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setDiscountType('percentage'); setDiscountValueInput('10'); setDiscountReason('VIP / Loyalty Discount 10%'); }}
-                          className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-left hover:bg-amber-100/80 transition"
-                        >
-                          <strong className="block text-xs text-amber-950">⭐ VIP Loyalty</strong>
-                          <span className="text-[10px] text-amber-700 font-semibold">10% Off Subtotal</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setDiscountType('percentage'); setDiscountValueInput('5'); setDiscountReason('Store Promo 5%'); }}
-                          className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-left hover:bg-amber-100/80 transition"
-                        >
-                          <strong className="block text-xs text-amber-950">🎁 Store Promo</strong>
-                          <span className="text-[10px] text-amber-700 font-semibold">5% Off Subtotal</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setDiscountType('fixed'); setDiscountValueInput('50'); setDiscountReason('Manager Special Discretion'); }}
-                          className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-left hover:bg-amber-100/80 transition"
-                        >
-                          <strong className="block text-xs text-amber-950">👔 Manager Special</strong>
-                          <span className="text-[10px] text-amber-700 font-semibold">₱50.00 Fixed Off</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Value Input */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                        Discount Value ({discountType === 'percentage' ? '%' : '₱'})
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max={discountType === 'percentage' ? 100 : subtotal}
-                        step={discountType === 'percentage' ? '1' : '0.01'}
-                        value={discountValueInput}
-                        onChange={(e) => setDiscountValueInput(e.target.value)}
-                        className="w-full rounded-xl border border-amber-300 bg-white px-3.5 py-2.5 text-base font-bold text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
-                      />
-                    </div>
-
-                    {/* Reason / Audit Note Input */}
-                    <div>
-                      <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
-                        Reason / Note for Audit Log <span className="text-red-600">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Senior ID #12345, Damaged Box, Manager Approval"
-                        value={discountReason}
-                        onChange={(e) => setDiscountReason(e.target.value)}
-                        className="w-full rounded-xl border border-amber-300 bg-white px-3.5 py-2 text-xs text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30 font-medium"
-                      />
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-2 pt-2 border-t border-amber-100">
-                      {appliedDiscount && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAppliedDiscount(null);
-                            setDiscountValueInput('0');
-                            setDiscountReason('');
-                            setDiscountModalOpen(false);
-                          }}
-                          className="rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-700 hover:bg-red-100"
-                        >
-                          Remove
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setDiscountModalOpen(false)}
-                        className="flex-1 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        disabled={Number(discountValueInput) <= 0}
-                        onClick={() => {
-                          const rate = Number(discountValueInput) || 0;
-                          const amt = discountType === 'percentage'
-                            ? Number(((subtotal * rate) / 100).toFixed(2))
-                            : Math.min(subtotal, Math.max(0, rate));
-                          setAppliedDiscount({
-                            type: discountType,
-                            rate,
-                            amount: amt,
-                            reason: discountReason.trim() || (discountType === 'percentage' ? `${rate}% Discount` : `₱${rate} Discount`),
-                          });
-                          setDiscountModalOpen(false);
-                        }}
-                        className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 transition shadow-sm"
-                      >
-                        Apply Discount
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              
             </div>
           </section>
+        </div>
+      )}
+      {/* DISCOUNT MODAL WINDOW - PLACED AT TOP-LEVEL */}
+      {discountModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-amber-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between border-b border-amber-100 pb-3">
+              <div>
+                <h3 className="font-bakery text-lg font-bold text-amber-950">🏷️ Apply Order Discount</h3>
+                <p className="text-xs text-amber-700 mt-0.5">Select discount type, enter value, and record traceable reason.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDiscountModalOpen(false)}
+                className="text-amber-600 hover:text-amber-900 text-xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Discount Type Toggle */}
+            <div className="grid grid-cols-2 gap-2 bg-amber-100/50 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setDiscountType('percentage')}
+                className={`py-2 text-xs font-bold rounded-lg transition ${discountType === 'percentage' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'}`}
+              >
+                Percentage (%)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDiscountType('fixed')}
+                className={`py-2 text-xs font-bold rounded-lg transition ${discountType === 'fixed' ? 'bg-amber-800 text-white shadow-sm' : 'text-amber-900 hover:bg-white/60'}`}
+              >
+                Fixed Amount (₱)
+              </button>
+            </div>
+
+            {/* Quick Presets */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1.5">
+                Quick Discount Presets
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setDiscountType('percentage'); setDiscountValueInput('20'); setDiscountReason('Senior Citizen / PWD 20%'); }}
+                  className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-left hover:bg-amber-100/80 transition"
+                >
+                  <strong className="block text-xs text-amber-950">👴 Senior / PWD</strong>
+                  <span className="text-[10px] text-amber-700 font-semibold">20% Off Subtotal</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setDiscountType('percentage'); setDiscountValueInput('10'); setDiscountReason('VIP / Loyalty Discount 10%'); }}
+                  className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-left hover:bg-amber-100/80 transition"
+                >
+                  <strong className="block text-xs text-amber-950">⭐ VIP Loyalty</strong>
+                  <span className="text-[10px] text-amber-700 font-semibold">10% Off Subtotal</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setDiscountType('percentage'); setDiscountValueInput('5'); setDiscountReason('Store Promo 5%'); }}
+                  className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-left hover:bg-amber-100/80 transition"
+                >
+                  <strong className="block text-xs text-amber-950">🎁 Store Promo</strong>
+                  <span className="text-[10px] text-amber-700 font-semibold">5% Off Subtotal</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setDiscountType('fixed'); setDiscountValueInput('50'); setDiscountReason('Manager Special Discretion'); }}
+                  className="rounded-xl border border-amber-200 bg-amber-50/60 p-2 text-left hover:bg-amber-100/80 transition"
+                >
+                  <strong className="block text-xs text-amber-950">👔 Manager Special</strong>
+                  <span className="text-[10px] text-amber-700 font-semibold">₱50.00 Fixed Off</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Value Input */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Discount Value ({discountType === 'percentage' ? '%' : '₱'})
+              </label>
+              <input
+                type="number"
+                min="0"
+                max={discountType === 'percentage' ? 100 : subtotal}
+                step={discountType === 'percentage' ? '1' : '0.01'}
+                value={discountValueInput}
+                onChange={(e) => setDiscountValueInput(e.target.value)}
+                className="w-full rounded-xl border border-amber-300 bg-white px-3.5 py-2.5 text-base font-bold text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
+              />
+            </div>
+
+            {/* Reason / Audit Note Input */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-1">
+                Reason / Note for Audit Log <span className="text-red-600">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Senior ID #12345, Damaged Box, Manager Approval"
+                value={discountReason}
+                onChange={(e) => setDiscountReason(e.target.value)}
+                className="w-full rounded-xl border border-amber-300 bg-white px-3.5 py-2 text-xs text-amber-950 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30 font-medium"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-2 border-t border-amber-100">
+              {appliedDiscount && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAppliedDiscount(null);
+                    setDiscountValueInput('0');
+                    setDiscountReason('');
+                    setDiscountModalOpen(false);
+                  }}
+                  className="rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-700 hover:bg-red-100"
+                >
+                  Remove
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setDiscountModalOpen(false)}
+                className="flex-1 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={Number(discountValueInput) <= 0}
+                onClick={() => {
+                  const rate = Number(discountValueInput) || 0;
+                  const amt = discountType === 'percentage'
+                    ? Number(((subtotal * rate) / 100).toFixed(2))
+                    : Math.min(subtotal, Math.max(0, rate));
+                  setAppliedDiscount({
+                    type: discountType,
+                    rate,
+                    amount: amt,
+                    reason: discountReason.trim() || (discountType === 'percentage' ? `${rate}% Discount` : `₱${rate} Discount`),
+                  });
+                  setDiscountModalOpen(false);
+                }}
+                className="flex-1 rounded-xl bg-amber-800 px-4 py-2.5 text-xs font-bold text-white hover:bg-amber-900 disabled:opacity-50 transition shadow-sm"
+              >
+                Apply Discount
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>
