@@ -10,12 +10,15 @@ permissions:
   pages: write
   id-token: write
 
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as that can leave artifacts in an inconsistent state.
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  # Build job
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -35,14 +38,22 @@ jobs:
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run cloud:build
 
-      - name: Verify Build Output 
-        run: ls -la dist/cloud  
+      - name: Verify Build Output
+        run: ls -la dist/cloud
 
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist/cloud
 
+  # Deployment job
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
