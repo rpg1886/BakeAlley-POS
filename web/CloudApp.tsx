@@ -13,8 +13,8 @@ const api = new CloudPosApi({
 const retailTierId = import.meta.env.VITE_RETAIL_TIER_ID ?? '2f8c8d4e-8d28-4d4d-9f41-7a52c5f2e101';
 
 // Unified Inactivity Timeout - 5 minutes for all users
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;   // 15 Minutes total idle timeout
-const INACTIVITY_WARNING_MS = 14 * 60 * 1000;   // 14 Minutes (triggers 60-second warning)
+const INACTIVITY_TIMEOUT_MS = 7 * 60 * 1000;   // 15 Minutes total idle timeout
+const INACTIVITY_WARNING_MS = 6 * 60 * 1000;   // 14 Minutes (triggers 60-second warning)
 
 const LOW_STOCK_THRESHOLD = 10;
 const CARD_FEE_RATE = 0.025; // 2.5% estimated card fee
@@ -63,14 +63,8 @@ async function clockOutWithCount(closingCashCount: number | null, notes?: string
   return response.json();
 }
 
-
-
-
-
-
-
 function getInactivityTimeout(): number {
-  return INACTIVITY_TIMEOUT_MS;  // 15 minutes for all users
+  return INACTIVITY_TIMEOUT_MS;  // 7 minutes for all users
 }
 
 function errorText(error: unknown, fallback: string): string {
@@ -3931,7 +3925,7 @@ export function CloudApp(): JSX.Element {
     }
   };
 
-  // Activity Monitor & 15-Minute Inactivity Warning/Logout Manager
+  // Activity Monitor & 7-Minute Inactivity Warning/Logout Manager
   useEffect(() => {
     if (!session) return;
 
@@ -3961,7 +3955,7 @@ export function CloudApp(): JSX.Element {
       const idleTime = Date.now() - lastActiveTime;
 
       if (idleTime >= INACTIVITY_TIMEOUT_MS) {
-        console.warn('Inactivity limit of 15 minutes reached. Destroying session token.');
+        console.warn('Inactivity limit of 7 minutes reached. Destroying session token.');
         setIdleWarningOpen(false);
         void api.logout().catch(() => undefined);
         clearSessionStorage();
@@ -4282,7 +4276,7 @@ export function CloudApp(): JSX.Element {
             <div>
               <h3 className="font-bakery text-xl font-bold text-amber-950">Inactivity Warning</h3>
               <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                You have been inactive for 14 minutes. For security, your session will automatically log out and destroy your token in:
+                You have been inactive for 6 minutes. For security, your session will automatically log out and destroy your token in:
               </p>
             </div>
 
