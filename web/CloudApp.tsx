@@ -2060,7 +2060,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
 
   const handleDeleteProduct = async (): Promise<void> => {
     if (!editingRow) return;
-    if (!window.confirm(`Are you sure you want to delete "\${editingRow.variantName}"? This action cannot be undone.`)) return;
+    if (!window.confirm(`Are you sure you want to archive "${editingRow.variantName}"? It will be hidden from cashiers and active inventory.`)) return;
 
     setIsSubmitting(true);
     setFormError(null);
@@ -2069,7 +2069,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
       await refresh();
       closeEditModal();
     } catch (reason) {
-      setFormError(errorText(reason, 'Failed to delete inventory item'));
+      setFormError(errorText(reason, 'Failed to archive inventory item'));
     } finally {
       setIsSubmitting(false);
     }
@@ -2322,7 +2322,7 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                   className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 transition"
                   disabled={isSubmitting}
                 >
-                  🗑️ Delete
+                  📦 Archive Item
                 </button>
                 <button
                   type="submit"

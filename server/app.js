@@ -166,6 +166,7 @@ app.get('/api/v1/products/search', auth.requireSession, async (request, response
 
     // Filter by Category ID (UUID) or Category Name String
     if (categoryId) {
+      whereConditions.push('(v.is_active IS TRUE OR v.is_active IS NULL)');
       params.push(categoryId);
       if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId)) {
         whereConditions.push(`p.category_id = $${params.length}`);
@@ -300,6 +301,7 @@ app.get('/api/v1/inventory', auth.requireSession, async (_request, response, nex
       JOIN products p ON p.product_id=v.product_id 
       LEFT JOIN categories c ON c.category_id=p.category_id
       LEFT JOIN inventory_lots l ON l.variant_id=v.variant_id 
+      WHERE (v.is_active IS TRUE OR v.is_active IS NULL)
       GROUP BY v.variant_id, v.sku, v.variant_name, p.category_id, c.name, p.initial_cost 
       ORDER BY v.variant_name
     `);
@@ -563,7 +565,7 @@ app.delete('/api/v1/inventory/products/:variantId', auth.requireSession, auth.re
     try {
       await client.query('BEGIN');
 
-      // Case-insensitive lookup by variant_id or sku to find the target product variant
+      // Case-insensitive lookup by variant_id or sku to find target product variant
       const variantRes = await client.query(
         'SELECT variant_id, product_id FROM product_variants WHERE lower(variant_id::text) = lower($1) OR lower(sku) = lower($1) OR variant_id::text = $1 LIMIT 1',
         [cleanVariantId]
@@ -575,38 +577,22 @@ app.delete('/api/v1/inventory/products/:variantId', auth.requireSession, auth.re
       }
 
       const actualVariantId = variantRes.rows[0].variant_id;
-      const productId = variantRes.rows[0].product_id;
 
-      // Safety check: Block deletion if item has existing sales transaction history
-      const hasOrders = await client.query(
-        'SELECT 1 FROM order_items WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1 LIMIT 1',
+      // Perform Soft Delete (Archive) by setting is_active = FALSE and zeroing available stock
+      await client.query(
+        'UPDATE product_variants SET is_active = FALSE, updated_at = now() WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1',
         [actualVariantId]
       );
-      if (hasOrders.rowCount > 0) {
-        await client.query('ROLLBACK');
-        logger.warn('Inventory deletion blocked - has sales history', { variantId: actualVariantId });
-        return response.status(409).json({ error: 'ITEM_HAS_ORDERS', message: 'This item cannot be deleted because it has completed sales transactions.' });
-      }
 
-      // Delete associated inventory records using canonical variant_id
-      await client.query('DELETE FROM inventory_lots WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1', [actualVariantId]);
-      await client.query('DELETE FROM product_prices WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1', [actualVariantId]);
-      await client.query('DELETE FROM product_variants WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1', [actualVariantId]);
-
-      // If no remaining variants exist for the parent product, clean up the product record
-      if (productId) {
-        const remainingVariants = await client.query(
-          'SELECT 1 FROM product_variants WHERE lower(product_id::text) = lower($1) OR product_id::text = $1 LIMIT 1',
-          [productId]
-        );
-        if (remainingVariants.rowCount === 0) {
-          await client.query('DELETE FROM products WHERE lower(product_id::text) = lower($1) OR product_id::text = $1', [productId]);
-        }
-      }
+      // Zero out available quantity in inventory_lots
+      await client.query(
+        'UPDATE inventory_lots SET quantity_on_hand = 0, updated_at = now() WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1',
+        [actualVariantId]
+      );
 
       await client.query('COMMIT');
-      logger.info('Inventory item deleted successfully', { variantId: actualVariantId });
-      response.status(200).json({ variantId: actualVariantId, deleted: true });
+      logger.info('Inventory item soft deleted (archived)', { variantId: actualVariantId });
+      response.status(200).json({ variantId: actualVariantId, deleted: true, archived: true });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
@@ -1528,6 +1514,7 @@ async function autoCloseOvernightShifts() {
 async function ensureShiftColumns() {
   try {
     await pool.query(`
+      ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS opening_float NUMERIC(12,2) DEFAULT 1500.00;
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS closing_cash_count NUMERIC(12,2);
       ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS expected_cash NUMERIC(12,2);
