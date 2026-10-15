@@ -560,7 +560,7 @@ app.delete('/api/v1/inventory/products/:variantId', auth.requireSession, auth.re
     const cleanVariantId = variantId.trim();
 
     // Safety check: Block deletion if item has existing sales transaction history
-    const hasOrders = await pool.query('SELECT 1 FROM order_items WHERE variant_id::text =  LIMIT 1', [cleanVariantId]);
+    const hasOrders = await pool.query('SELECT 1 FROM order_items WHERE variant_id::text = $1 LIMIT 1', [cleanVariantId]);
     if (hasOrders.rowCount > 0) {
       logger.warn('Inventory deletion blocked - has sales history', { variantId: cleanVariantId });
       return response.status(409).json({ error: 'ITEM_HAS_ORDERS', message: 'This item cannot be deleted because it has completed sales transactions.' });
@@ -570,21 +570,21 @@ app.delete('/api/v1/inventory/products/:variantId', auth.requireSession, auth.re
     try {
       await client.query('BEGIN');
 
-      const variantRes = await client.query('SELECT product_id FROM product_variants WHERE variant_id::text = ', [cleanVariantId]);
+      const variantRes = await client.query('SELECT product_id FROM product_variants WHERE variant_id::text = $1', [cleanVariantId]);
       if (variantRes.rowCount === 0) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'ITEM_NOT_FOUND', message: 'Inventory item not found' });
       }
       const productId = variantRes.rows[0].product_id;
 
-      await client.query('DELETE FROM inventory_lots WHERE variant_id::text = ', [cleanVariantId]);
-      await client.query('DELETE FROM product_prices WHERE variant_id::text = ', [cleanVariantId]);
-      await client.query('DELETE FROM product_variants WHERE variant_id::text = ', [cleanVariantId]);
+      await client.query('DELETE FROM inventory_lots WHERE variant_id::text = $1', [cleanVariantId]);
+      await client.query('DELETE FROM product_prices WHERE variant_id::text = $1', [cleanVariantId]);
+      await client.query('DELETE FROM product_variants WHERE variant_id::text = $1', [cleanVariantId]);
 
       // If no remaining variants exist for the parent product, clean up the product record
-      const remainingVariants = await client.query('SELECT 1 FROM product_variants WHERE product_id::text =  LIMIT 1', [productId]);
+      const remainingVariants = await client.query('SELECT 1 FROM product_variants WHERE product_id::text = $1 LIMIT 1', [productId]);
       if (remainingVariants.rowCount === 0) {
-        await client.query('DELETE FROM products WHERE product_id::text = ', [productId]);
+        await client.query('DELETE FROM products WHERE product_id::text = $1', [productId]);
       }
 
       await client.query('COMMIT');
