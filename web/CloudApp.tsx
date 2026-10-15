@@ -975,7 +975,7 @@ function FinancialsView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
    ========================================================================== */
 function BiView(): JSX.Element {
   const [timeframe, setTimeframe] = useState<VelocityTimeframe>('monthly');
-  const [channelTimeframe, setChannelTimeframe] = useState<'month' | 'last30'>('month');
+  const [channelTimeframe, setChannelTimeframe] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedDate] = useState<string>(today());
   const [report, setReport] = useState<CloudSalesReport | null>(null);
   const [inventory, setInventory] = useState<CloudInventoryRow[]>([]);
@@ -1160,23 +1160,23 @@ function BiView(): JSX.Element {
                   <div className="flex gap-1 rounded-lg bg-amber-100/60 p-1">
                     <button
                       type="button"
-                      onClick={() => setChannelTimeframe('month')}
-                      className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${channelTimeframe === 'month'
-                          ? 'bg-amber-800 text-white shadow-sm'
-                          : 'text-amber-900 hover:bg-white/60'
+                      onClick={() => setChannelTimeframe('monthly')}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${channelTimeframe === 'monthly'
+                        ? 'bg-amber-800 text-white shadow-sm'
+                        : 'text-amber-900 hover:bg-white/60'
                         }`}
                     >
-                      Current Month
+                      🗓️ Monthly (30 Days)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setChannelTimeframe('last30')}
-                      className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${channelTimeframe === 'last30'
-                          ? 'bg-amber-800 text-white shadow-sm'
-                          : 'text-amber-900 hover:bg-white/60'
+                      onClick={() => setChannelTimeframe('yearly')}
+                      className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${channelTimeframe === 'yearly'
+                        ? 'bg-amber-800 text-white shadow-sm'
+                        : 'text-amber-900 hover:bg-white/60'
                         }`}
                     >
-                      Last 30 Days
+                      📅 Yearly (365 Days)
                     </button>
                   </div>
                 </div>

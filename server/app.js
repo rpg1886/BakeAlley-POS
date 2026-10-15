@@ -1213,14 +1213,11 @@ app.get('/api/v1/sales/report', auth.requireSession, async (request, response, n
     let whereClause = "o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < ($1::timestamptz + interval '1 day')";
     let queryParams = [start];
 
-    if (range === 'month' || range === 'monthly') {
-      const monthStartStr = `${selected.getUTCFullYear()}-${String(selected.getUTCMonth() + 1).padStart(2, '0')}-01T00:00:00+08:00`;
-      const nextMonthObj = new Date(Date.UTC(selected.getUTCFullYear(), selected.getUTCMonth() + 1, 1));
-      const nextMonthStr = `${nextMonthObj.getUTCFullYear()}-${String(nextMonthObj.getUTCMonth() + 1).padStart(2, '0')}-01T00:00:00+08:00`;
-      whereClause = "o.status='completed' AND o.created_at >= $1::timestamptz AND o.created_at < $2::timestamptz";
-      queryParams = [monthStartStr, nextMonthStr];
-    } else if (range === 'last30' || range === '30days' || range === '30') {
+    if (range === 'month' || range === 'monthly' || range === 'last30' || range === '30days' || range === '30') {
       whereClause = "o.status='completed' AND o.created_at >= ($1::timestamptz - interval '29 days') AND o.created_at < ($1::timestamptz + interval '1 day')";
+      queryParams = [start];
+    } else if (range === 'year' || range === 'yearly' || range === 'last365' || range === '365days' || range === '365') {
+      whereClause = "o.status='completed' AND o.created_at >= ($1::timestamptz - interval '364 days') AND o.created_at < ($1::timestamptz + interval '1 day')";
       queryParams = [start];
     }
 
