@@ -210,7 +210,7 @@ export class CloudApiClient {
   }
 
   public async deleteInventoryProduct(variantId: string): Promise<void> {
-    await this.request(`/api/v1/inventory/products/\${variantId}`, { method: 'DELETE' });
+    await this.request(`/api/v1/inventory/products/${variantId}`, { method: 'DELETE' });
   }
 
   public async employees(): Promise<CloudEmployee[]> { return this.request('/api/v1/employees'); }
