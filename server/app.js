@@ -559,37 +559,54 @@ app.delete('/api/v1/inventory/products/:variantId', auth.requireSession, auth.re
 
     const cleanVariantId = variantId.trim();
 
-    // Safety check: Block deletion if item has existing sales transaction history
-    const hasOrders = await pool.query('SELECT 1 FROM order_items WHERE variant_id::text = $1 LIMIT 1', [cleanVariantId]);
-    if (hasOrders.rowCount > 0) {
-      logger.warn('Inventory deletion blocked - has sales history', { variantId: cleanVariantId });
-      return response.status(409).json({ error: 'ITEM_HAS_ORDERS', message: 'This item cannot be deleted because it has completed sales transactions.' });
-    }
-
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
-      const variantRes = await client.query('SELECT product_id FROM product_variants WHERE variant_id::text = $1', [cleanVariantId]);
+      // Case-insensitive lookup by variant_id or sku to find the target product variant
+      const variantRes = await client.query(
+        'SELECT variant_id, product_id FROM product_variants WHERE lower(variant_id::text) = lower($1) OR lower(sku) = lower($1) OR variant_id::text = $1 LIMIT 1',
+        [cleanVariantId]
+      );
+
       if (variantRes.rowCount === 0) {
         await client.query('ROLLBACK');
         return response.status(404).json({ error: 'ITEM_NOT_FOUND', message: 'Inventory item not found' });
       }
+
+      const actualVariantId = variantRes.rows[0].variant_id;
       const productId = variantRes.rows[0].product_id;
 
-      await client.query('DELETE FROM inventory_lots WHERE variant_id::text = $1', [cleanVariantId]);
-      await client.query('DELETE FROM product_prices WHERE variant_id::text = $1', [cleanVariantId]);
-      await client.query('DELETE FROM product_variants WHERE variant_id::text = $1', [cleanVariantId]);
+      // Safety check: Block deletion if item has existing sales transaction history
+      const hasOrders = await client.query(
+        'SELECT 1 FROM order_items WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1 LIMIT 1',
+        [actualVariantId]
+      );
+      if (hasOrders.rowCount > 0) {
+        await client.query('ROLLBACK');
+        logger.warn('Inventory deletion blocked - has sales history', { variantId: actualVariantId });
+        return response.status(409).json({ error: 'ITEM_HAS_ORDERS', message: 'This item cannot be deleted because it has completed sales transactions.' });
+      }
+
+      // Delete associated inventory records using canonical variant_id
+      await client.query('DELETE FROM inventory_lots WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1', [actualVariantId]);
+      await client.query('DELETE FROM product_prices WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1', [actualVariantId]);
+      await client.query('DELETE FROM product_variants WHERE lower(variant_id::text) = lower($1) OR variant_id::text = $1', [actualVariantId]);
 
       // If no remaining variants exist for the parent product, clean up the product record
-      const remainingVariants = await client.query('SELECT 1 FROM product_variants WHERE product_id::text = $1 LIMIT 1', [productId]);
-      if (remainingVariants.rowCount === 0) {
-        await client.query('DELETE FROM products WHERE product_id::text = $1', [productId]);
+      if (productId) {
+        const remainingVariants = await client.query(
+          'SELECT 1 FROM product_variants WHERE lower(product_id::text) = lower($1) OR product_id::text = $1 LIMIT 1',
+          [productId]
+        );
+        if (remainingVariants.rowCount === 0) {
+          await client.query('DELETE FROM products WHERE lower(product_id::text) = lower($1) OR product_id::text = $1', [productId]);
+        }
       }
 
       await client.query('COMMIT');
-      logger.info('Inventory item deleted', { variantId: cleanVariantId });
-      response.status(200).json({ variantId: cleanVariantId, deleted: true });
+      logger.info('Inventory item deleted successfully', { variantId: actualVariantId });
+      response.status(200).json({ variantId: actualVariantId, deleted: true });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
