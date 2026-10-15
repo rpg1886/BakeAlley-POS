@@ -71,6 +71,7 @@ function errorText(error: unknown, fallback: string): string {
   if (!(error instanceof Error)) return fallback;
   const messages: Record<string, string> = {
     CUSTOMER_HAS_ORDERS: 'This customer cannot be deleted because they have completed orders.',
+    ITEM_HAS_ORDERS: 'This inventory item cannot be deleted because it has completed sales transactions.',
     INVALID_CUSTOMER: 'Enter a contact name and pricing tier.',
     INVALID_EMPLOYEE: 'Enter all employee fields.',
     PASSWORD_TOO_SHORT: 'Employee passwords must be at least 12 characters.',
@@ -2057,6 +2058,23 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
     }
   };
 
+  const handleDeleteProduct = async (): Promise<void> => {
+    if (!editingRow) return;
+    if (!window.confirm(`Are you sure you want to delete "\${editingRow.variantName}"? This action cannot be undone.`)) return;
+
+    setIsSubmitting(true);
+    setFormError(null);
+    try {
+      await api.deleteInventoryProduct(editingRow.variantId);
+      await refresh();
+      closeEditModal();
+    } catch (reason) {
+      setFormError(errorText(reason, 'Failed to delete inventory item'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateAddForm()) return;
@@ -2296,6 +2314,31 @@ function InventoryView({ isAdmin }: { isAdmin: boolean }): JSX.Element {
                   className="mt-1 w-full rounded-lg border border-amber-200 px-3 py-2"
                   disabled={isSubmitting}
                 />
+              </div>
+              <div className="flex gap-2 pt-4">
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteProduct()}
+                  className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 transition"
+                  disabled={isSubmitting}
+                >
+                  🗑️ Delete
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50 transition"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="flex-1 rounded-lg bg-gray-300 px-3 py-2 text-xs font-bold text-gray-900 hover:bg-gray-400 disabled:opacity-50 transition"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
               </div>
               <div className="flex gap-2 pt-4">
                 <button

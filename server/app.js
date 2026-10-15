@@ -550,6 +550,56 @@ app.put('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requi
   }
 });
 
+app.delete('/api/v1/inventory/products/:variantId', auth.requireSession, auth.requireAdmin, async (request, response, next) => {
+  try {
+    const { variantId } = request.params;
+    if (!variantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(variantId)) {
+      return response.status(400).json({ error: 'INVALID_VARIANT_ID', message: 'Variant ID must be a valid UUID' });
+    }
+
+    // Safety check: Block deletion if item has existing sales transaction history
+    const hasOrders = await pool.query('SELECT 1 FROM order_items WHERE variant_id = $1 LIMIT 1', [variantId]);
+    if (hasOrders.rowCount > 0) {
+      logger.warn('Inventory deletion blocked - has sales history', { variantId });
+      return response.status(409).json({ error: 'ITEM_HAS_ORDERS', message: 'This item cannot be deleted because it has completed sales transactions.' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const variantRes = await client.query('SELECT product_id FROM product_variants WHERE variant_id = $1', [variantId]);
+      if (variantRes.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return response.status(404).json({ error: 'ITEM_NOT_FOUND', message: 'Inventory item not found' });
+      }
+      const productId = variantRes.rows[0].product_id;
+
+      await client.query('DELETE FROM inventory_lots WHERE variant_id = $1', [variantId]);
+      await client.query('DELETE FROM product_prices WHERE variant_id = $1', [variantId]);
+      await client.query('DELETE FROM product_variants WHERE variant_id = $1', [variantId]);
+
+      // If no remaining variants exist for the parent product, clean up the product record
+      const remainingVariants = await client.query('SELECT 1 FROM product_variants WHERE product_id = $1 LIMIT 1', [productId]);
+      if (remainingVariants.rowCount === 0) {
+        await client.query('DELETE FROM products WHERE product_id = $1', [productId]);
+      }
+
+      await client.query('COMMIT');
+      logger.info('Inventory item deleted', { variantId });
+      response.status(200).json({ variantId, deleted: true });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    logger.error('Inventory item deletion failed', { error: error.message });
+    next(error);
+  }
+});
+
 // Employee Roster List Endpoint (Date-Filtered Sales Totals)
 app.get('/api/v1/employees', auth.requireSession, async (request, response, next) => {
   try {

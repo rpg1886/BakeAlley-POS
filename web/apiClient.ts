@@ -209,6 +209,10 @@ export class CloudApiClient {
     await this.request(`/api/v1/inventory/products/${variantId}`, { method: 'PUT', body: JSON.stringify(update) });
   }
 
+  public async deleteInventoryProduct(variantId: string): Promise<void> {
+    await this.request(`/api/v1/inventory/products/\${variantId}`, { method: 'DELETE' });
+  }
+
   public async employees(): Promise<CloudEmployee[]> { return this.request('/api/v1/employees'); }
 
   public async createEmployee(employee: { username: string; displayName: string; role: 'admin' | 'cashier'; password: string }): Promise<CloudEmployee> {
